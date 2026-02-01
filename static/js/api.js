@@ -2,7 +2,7 @@
 
 export async function apiGet(endpoint) {
     try {
-        const response = await fetch(endpoint);
+        const response = await fetch(endpoint, { credentials: 'include' });
         if (!response.ok) {
             if (response.status === 401) {
                 return { error: 'Unauthorized', status: 401 };
@@ -21,7 +21,8 @@ export async function apiPost(endpoint, data) {
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
+            credentials: 'include'
         });
         if (!response.ok) {
             if (response.status === 401) {
@@ -41,7 +42,8 @@ export async function apiPut(endpoint, data) {
         const response = await fetch(endpoint, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
+            credentials: 'include'
         });
         if (!response.ok) {
             if (response.status === 401) {
@@ -58,7 +60,7 @@ export async function apiPut(endpoint, data) {
 
 export async function apiDelete(endpoint) {
     try {
-        const response = await fetch(endpoint, { method: 'DELETE' });
+        const response = await fetch(endpoint, { method: 'DELETE', credentials: 'include' });
         if (!response.ok) {
             if (response.status === 401) {
                 return { error: 'Unauthorized', status: 401 };

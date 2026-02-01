@@ -83,11 +83,22 @@ function setupReaderInteraction() {
 }
 
 export async function startReading(comicId, page = 0) {
-    const comic = state.comics.find(c => c.id === comicId);
-    if (!comic) return;
-
+    // Fetch latest metadata from server to handle lazy-counted pages
+    const comicData = await apiGet(`/api/read/${comicId}`);
+    if (comicData.error) {
+        showToast('Failed to load comic metadata', 'error');
+        return;
+    }
+    
+    const comic = comicData;
     state.currentComic = comic;
-    state.totalPages = comic.pages;
+    state.totalPages = comic.pages || 0;
+    
+    // Update state.comics with latest pages count if it changed
+    const localComic = state.comics.find(c => c.id === comicId);
+    if (localComic && localComic.pages !== comic.pages) {
+        localComic.pages = comic.pages;
+    }
     
     // Find prev/next comics in the series
     const seriesComics = state.comics.filter(c => c.series === comic.series).sort((a, b) => {

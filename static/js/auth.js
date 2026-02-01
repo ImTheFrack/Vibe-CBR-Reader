@@ -106,6 +106,18 @@ export function updateAuthUI() {
                 <span class="menu-icon">🚪</span>
                 <span>Logout</span>
             </div>
+            ${state.currentUser.role === 'admin' ? `
+            <div class="menu-divider"></div>
+            <div class="menu-item" onclick="scanLibrary(event); toggleHamburger()">
+                <span class="menu-icon">🔄</span>
+                <span>Scan Library</span>
+                <span style="margin-left: auto; font-size: 0.8em; opacity: 0.6;">🔒</span>
+            </div>
+            <div class="menu-item" onclick="showScanStatus(); toggleHamburger()">
+                <span class="menu-icon">📊</span>
+                <span>Scan Status</span>
+            </div>
+            ` : ''}
         `;
     } else {
         if (headerInfo) headerInfo.textContent = '';

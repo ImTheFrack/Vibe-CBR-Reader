@@ -11,6 +11,7 @@ export const state = {
         subcategory: null,
         title: null
     },
+    libraryRoot: null,
     folderTree: null, // Hierarchical structure
     viewMode: 'grid', // 'grid', 'list', 'detailed'
     sidebarVisible: window.innerWidth > 1024,

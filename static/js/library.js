@@ -9,7 +9,22 @@ import { sortItems, parseFileSize, TITLE_SORT_ACCESSORS, COMIC_SORT_ACCESSORS, F
 // Library Loading
 export async function loadLibrary() {
     try {
-        const response = await fetch('/api/books');
+        // Fetch library config first
+        const configResponse = await fetch('/api/config', { credentials: 'include' });
+        if (configResponse.ok) {
+            const config = await configResponse.json();
+            state.libraryRoot = config.comics_dir;
+        }
+
+        const response = await fetch('/api/books', { credentials: 'include' });
+        if (!response.ok) {
+            if (response.status === 401) {
+                // Not authenticated, don't show error
+                state.comics = [];
+                return;
+            }
+            throw new Error(`HTTP ${response.status}`);
+        }
         state.comics = await response.json();
         
         // Parse file paths to build folder structure
@@ -20,6 +35,7 @@ export async function loadLibrary() {
     } catch (error) {
         showToast('Failed to load library', 'error');
         console.error(error);
+        state.comics = [];
     }
 }
 
@@ -48,7 +64,7 @@ export async function scanLibrary(e) {
         
         try {
             showToast('Starting full wipe and rescan...', 'info');
-            const response = await fetch('/api/rescan', { method: 'POST' });
+            const response = await fetch('/api/rescan', { method: 'POST', credentials: 'include' });
             if (!response.ok) throw new Error(`Rescan failed: ${response.status} ${response.statusText}`);
             
             // Wait longer for rescan as it wipes DB
@@ -74,17 +90,16 @@ export async function scanLibrary(e) {
 
     try {
         showToast('Scanning... please wait', 'info');
-        const response = await fetch('/api/scan', { method: 'POST' });
+        const response = await fetch('/api/scan', { method: 'POST', credentials: 'include' });
         if (!response.ok) throw new Error('Scan failed');
         const result = await response.json();
         
-        // Wait 4 seconds for background scan to process
-        await new Promise(resolve => setTimeout(resolve, 4000));
+        showToast('Scan started! Check Scan Status page for progress.', 'success');
         
-        showToast(`Scan complete! Found ${result.added || 0} new comics.`, 'success');
-        
-        // Reload library to show new comics
-        await loadLibrary();
+        // Reload library after a short delay to show new comics
+        setTimeout(async () => {
+            await loadLibrary();
+        }, 5000);
     } catch (error) {
         showToast('Failed to scan library: ' + error.message, 'error');
     }
@@ -98,101 +113,135 @@ export function buildFolderTree() {
         count: 0 
     };
     
+    // Ensure comics is an array
+    if (!Array.isArray(state.comics)) {
+        state.comics = [];
+    }
+    
+    // Normalize library root for comparison
+    const normRoot = state.libraryRoot ? state.libraryRoot.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() : '';
+    
     state.comics.forEach(comic => {
-        // Parse path - remove leading ./comics/ and split
-        let relativePath = comic.path;
-        if (relativePath.includes('comics/')) {
-            relativePath = relativePath.split('comics/')[1];
-        } else if (relativePath.includes('comics\\')) {
-            relativePath = relativePath.split('comics\\')[1];
+        let fullPath = comic.path.replace(/\\/g, '/');
+        let relPath = '';
+        
+        const lowerPath = fullPath.toLowerCase();
+        
+        // Strategy 1: Subtraction of library root
+        if (normRoot && lowerPath.includes(normRoot)) {
+            const index = lowerPath.indexOf(normRoot);
+            relPath = fullPath.substring(index + normRoot.length);
+        } else {
+            // Strategy 2: Fallback if subtraction fails
+            const fallbackMarkers = ['/manga/', '/comics/', '/media/'];
+            for (const marker of fallbackMarkers) {
+                if (lowerPath.includes(marker)) {
+                    const index = lowerPath.lastIndexOf(marker);
+                    relPath = fullPath.substring(index + marker.length);
+                    break;
+                }
+            }
         }
         
-        const parts = relativePath.split(/[\\/]/).filter(p => p && !p.endsWith('.cbz') && !p.endsWith('.cbr'));
-        
-        // Logic for categorization (same as original)
-        // ... (abbreviated for brevity, assuming same logic)
-        // I will copy the exact logic from app.js
-        if (parts.length >= 3) {
-            const categoryName = parts[0];
-            const subcategoryName = parts[1];
-            const titleName = parts[2];
-            
-            if (!root.categories[categoryName]) {
-                root.categories[categoryName] = { name: categoryName, subcategories: {}, count: 0 };
-            }
-            const category = root.categories[categoryName];
-            category.count++;
-            
-            if (!category.subcategories[subcategoryName]) {
-                category.subcategories[subcategoryName] = { name: subcategoryName, titles: {}, count: 0 };
-            }
-            const subcategory = category.subcategories[subcategoryName];
-            subcategory.count++;
-            
-            if (!subcategory.titles[titleName]) {
-                subcategory.titles[titleName] = { name: titleName, comics: [], count: 0 };
-            }
-            const title = subcategory.titles[titleName];
-            title.comics.push(comic);
-            title.count++;
-            
-            root.count++;
-        } else if (parts.length === 2) {
-            const categoryName = parts[0];
-            const subcategoryName = parts[1];
-            
-            if (!root.categories[categoryName]) {
-                root.categories[categoryName] = { name: categoryName, subcategories: {}, count: 0 };
-            }
-            const category = root.categories[categoryName];
-            category.count++;
-            
-            if (!category.subcategories[subcategoryName]) {
-                category.subcategories[subcategoryName] = { name: subcategoryName, titles: {}, count: 0 };
-            }
-            const subcategory = category.subcategories[subcategoryName];
-            subcategory.count++;
-            
-            const titleName = comic.title || comic.series || 'Unknown';
-            if (!subcategory.titles[titleName]) {
-                subcategory.titles[titleName] = { name: titleName, comics: [], count: 0 };
-            }
-            subcategory.titles[titleName].comics.push(comic);
-            subcategory.titles[titleName].count++;
-            
-            root.count++;
-        } else if (parts.length === 1) {
-            const categoryName = parts[0];
-            
-            if (!root.categories[categoryName]) {
-                root.categories[categoryName] = { name: categoryName, subcategories: {}, count: 0 };
-            }
-            root.categories[categoryName].count++;
-            root.count++;
-            
-            const subcategoryKey = '_direct';
-            if (!root.categories[categoryName].subcategories[subcategoryKey]) {
-                root.categories[categoryName].subcategories[subcategoryKey] = { name: 'Uncategorized', titles: {}, count: 0 };
-            }
-            const subcategory = root.categories[categoryName].subcategories[subcategoryKey];
-            subcategory.count++;
-            
-            const titleName = comic.title || 'Unknown';
-            if (!subcategory.titles[titleName]) {
-                subcategory.titles[titleName] = { name: titleName, comics: [], count: 0 };
-            }
-            subcategory.titles[titleName].comics.push(comic);
-            subcategory.titles[titleName].count++;
+        // Strategy 3: Heuristic skip if still absolute
+        if (!relPath || relPath.includes(':/')) {
+            const pathSegments = fullPath.split('/').filter(s => s && !s.includes(':') && s !== 'ArrData' && s !== 'media' && s !== 'comics' && s !== 'manga');
+            const parts = pathSegments.filter(p => !p.toLowerCase().endsWith('.cbz') && !p.toLowerCase().endsWith('.cbr'));
+            buildTreeFromParts(root, parts, comic);
+            return;
         }
+
+        // Clean up leading/trailing slashes
+        relPath = relPath.replace(/^\/+|\/+$/g, '');
+        const parts = relPath.split('/').filter(p => p && !p.toLowerCase().endsWith('.cbz') && !p.toLowerCase().endsWith('.cbr'));
+        
+        buildTreeFromParts(root, parts, comic);
     });
     
     state.folderTree = root;
 }
 
+// Helper to build tree from path parts
+function buildTreeFromParts(root, parts, comic) {
+    if (parts.length >= 3) {
+        const categoryName = parts[0];
+        const subcategoryName = parts[1];
+        const titleName = parts[2];
+        
+        if (!root.categories[categoryName]) {
+            root.categories[categoryName] = { name: categoryName, subcategories: {}, count: 0 };
+        }
+        const category = root.categories[categoryName];
+        category.count++;
+        
+        if (!category.subcategories[subcategoryName]) {
+            category.subcategories[subcategoryName] = { name: subcategoryName, titles: {}, count: 0 };
+        }
+        const subcategory = category.subcategories[subcategoryName];
+        subcategory.count++;
+        
+        if (!subcategory.titles[titleName]) {
+            subcategory.titles[titleName] = { name: titleName, comics: [], count: 0 };
+        }
+        const title = subcategory.titles[titleName];
+        title.comics.push(comic);
+        title.count++;
+        
+        root.count++;
+    } else if (parts.length === 2) {
+        const categoryName = parts[0];
+        const subcategoryName = parts[1];
+        
+        if (!root.categories[categoryName]) {
+            root.categories[categoryName] = { name: categoryName, subcategories: {}, count: 0 };
+        }
+        const category = root.categories[categoryName];
+        category.count++;
+        
+        if (!category.subcategories[subcategoryName]) {
+            category.subcategories[subcategoryName] = { name: subcategoryName, titles: {}, count: 0 };
+        }
+        const subcategory = category.subcategories[subcategoryName];
+        subcategory.count++;
+        
+        const titleName = comic.title || comic.series || 'Unknown';
+        if (!subcategory.titles[titleName]) {
+            subcategory.titles[titleName] = { name: titleName, comics: [], count: 0 };
+        }
+        subcategory.titles[titleName].comics.push(comic);
+        subcategory.titles[titleName].count++;
+        
+        root.count++;
+    } else if (parts.length === 1) {
+        const categoryName = parts[0];
+        
+        if (!root.categories[categoryName]) {
+            root.categories[categoryName] = { name: categoryName, subcategories: {}, count: 0 };
+        }
+        root.categories[categoryName].count++;
+        root.count++;
+        
+        const subcategoryKey = '_direct';
+        if (!root.categories[categoryName].subcategories[subcategoryKey]) {
+            root.categories[categoryName].subcategories[subcategoryKey] = { name: 'Uncategorized', titles: {}, count: 0 };
+        }
+        const subcategory = root.categories[categoryName].subcategories[subcategoryKey];
+        subcategory.count++;
+        
+        const titleName = comic.title || 'Unknown';
+        if (!subcategory.titles[titleName]) {
+            subcategory.titles[titleName] = { name: titleName, comics: [], count: 0 };
+        }
+        subcategory.titles[titleName].comics.push(comic);
+        subcategory.titles[titleName].count++;
+    }
+}
+
 export function getFoldersAtLevel() {
     const tree = state.folderTree;
+    if (!tree) return []; // Guard against null folderTree
     switch (state.currentLevel) {
-        case 'root': return Object.values(tree.categories);
+        case 'root': return Object.values(tree.categories || {});
         case 'category':
             const category = tree.categories[state.currentLocation.category];
             return category ? Object.values(category.subcategories) : [];
@@ -208,10 +257,11 @@ export function getFoldersAtLevel() {
 
 export function getTitlesInLocation() {
     const tree = state.folderTree;
+    if (!tree) return []; // Guard against null folderTree
     let titles = [];
     
     if (state.currentLevel === 'root') {
-        Object.values(tree.categories).forEach(category => {
+        Object.values(tree.categories || {}).forEach(category => {
             Object.values(category.subcategories).forEach(subcategory => {
                 titles = titles.concat(Object.values(subcategory.titles));
             });
@@ -246,6 +296,7 @@ export function getTitlesInLocation() {
 
 export function getComicsInTitle() {
     const tree = state.folderTree;
+    if (!tree) return []; // Guard against null folderTree
     if (state.currentLevel === 'title') {
         const category = tree.categories[state.currentLocation.category];
         if (category) {
@@ -281,8 +332,8 @@ export function navigateToFolder(type, name) {
         state.currentLocation.title = name;
         
         if (state.currentLocation.subcategory === null) {
-            if (state.currentLocation.category === null) {
-                for (const [catName, category] of Object.entries(state.folderTree.categories)) {
+            if (state.currentLocation.category === null && state.folderTree) {
+                for (const [catName, category] of Object.entries(state.folderTree.categories || {})) {
                     let found = false;
                     for (const [subName, subcategory] of Object.entries(category.subcategories)) {
                         if (subcategory.titles[name]) {
@@ -294,10 +345,10 @@ export function navigateToFolder(type, name) {
                     }
                     if (found) break;
                 }
-            } else {
+            } else if (state.folderTree) {
                 const category = state.folderTree.categories[state.currentLocation.category];
                 if (category) {
-                    for (const [subName, subcategory] of Object.entries(category.subcategories)) {
+                    for (const [subName, subcategory] of Object.entries(category.subcategories || {})) {
                         if (subcategory.titles[name]) {
                             state.currentLocation.subcategory = subcategory.name;
                             break;
@@ -928,11 +979,12 @@ export function navigateTitleComic(direction) {
 export function renderFolderSidebar() {
     const container = document.getElementById('folder-tree');
     const tree = state.folderTree;
+    if (!tree || !container) return; // Guard against null
     let html = '';
     
     if (state.currentLevel === 'root') {
         html += `<div class="sidebar-section-title">Categories</div>`;
-        Object.values(tree.categories).forEach(category => {
+        Object.values(tree.categories || {}).forEach(category => {
             html += `
                 <div class="folder-item">
                     <div class="folder-header" onclick="navigateToFolder('category', '${category.name}')">
@@ -1094,8 +1146,9 @@ export function getSearchResults() {
     const seenTitles = new Set();
     
     let categoriesToSearch;
+    if (!state.folderTree) return []; // Guard against null folderTree
     if (state.searchScope === 'current') {
-        if (state.currentLevel === 'root') categoriesToSearch = Object.keys(state.folderTree.categories);
+        if (state.currentLevel === 'root') categoriesToSearch = Object.keys(state.folderTree.categories || {});
         else if (state.currentLevel === 'category') categoriesToSearch = [state.currentLocation.category];
         else if (state.currentLevel === 'subcategory') {
             const cat = state.folderTree.categories[state.currentLocation.category];
@@ -1121,7 +1174,7 @@ export function getSearchResults() {
             return [];
         }
     } else {
-        categoriesToSearch = Object.keys(state.folderTree.categories);
+        categoriesToSearch = Object.keys(state.folderTree.categories || {});
     }
     
     categoriesToSearch.forEach(catName => {

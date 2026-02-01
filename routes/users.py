@@ -58,7 +58,14 @@ async def get_comic_progress(comic_id: str, current_user: dict = Depends(get_cur
     progress = get_reading_progress(current_user['id'], comic_id)
     if progress:
         return progress
-    raise HTTPException(status_code=404, detail="No progress found for this comic")
+    # Return a default progress object instead of 404
+    return {
+        "comic_id": comic_id,
+        "current_page": 0,
+        "total_pages": 0,
+        "completed": False,
+        "last_read": None
+    }
 
 @router.post("/progress")
 async def update_progress(progress_data: ReadingProgressUpdate, current_user: dict = Depends(get_current_user)):

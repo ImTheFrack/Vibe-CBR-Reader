@@ -19,17 +19,18 @@ router = APIRouter(prefix="/api", tags=["library"])
 
 # Cleanup stuck scans on startup
 def cleanup_stuck_scans():
-    """Mark any scan_jobs with status='running' and started_at < 1 hour ago as 'failed'"""
-    conn = get_db_connection()
-    one_hour_ago = datetime.now() - timedelta(hours=1)
-    conn.execute(
-        '''UPDATE scan_jobs 
-           SET status = 'failed', errors = 'Scan interrupted (server restart or crash)'
-           WHERE status = 'running' AND started_at < ?''',
-        (one_hour_ago,)
-    )
-    conn.commit()
-    conn.close()
+    """Mark any scan_jobs with status='running' as 'failed' (since they were interrupted by restart)"""
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            '''UPDATE scan_jobs 
+               SET status = 'failed', errors = 'Scan interrupted (server restart or crash)'
+               WHERE status = 'running' '''
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Note: Could not cleanup stuck scans: {e}")
 
 # Call cleanup on module load
 cleanup_stuck_scans()
@@ -142,6 +143,12 @@ def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int
 # Create placeholder on module load
 create_placeholder_image()
 
+@router.get("/config")
+async def get_config():
+    # Normalize to ensure consistency with scanner and database paths
+    norm_path = os.path.normpath(os.path.abspath(COMICS_DIR))
+    return {"comics_dir": norm_path}
+
 @router.post("/scan")
 async def scan_library(background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
     if not os.path.exists(COMICS_DIR):
@@ -177,6 +184,15 @@ async def get_scan_status():
         "status": latest_job['status'],
         "total_comics": latest_job['total_comics'],
         "processed_comics": latest_job['processed_comics'],
+        "current_file": latest_job.get('current_file'),
+        "phase": latest_job.get('phase'),
+        "new_comics": latest_job.get('new_comics', 0),
+        "deleted_comics": latest_job.get('deleted_comics', 0),
+        "changed_comics": latest_job.get('changed_comics', 0),
+        "processed_pages": latest_job.get('processed_pages', 0),
+        "page_errors": latest_job.get('page_errors', 0),
+        "processed_thumbnails": latest_job.get('processed_thumbnails', 0),
+        "thumbnail_errors": latest_job.get('thumbnail_errors', 0),
         "started_at": latest_job['started_at'],
         "completed_at": latest_job['completed_at'],
         "errors": latest_job.get('errors')
@@ -252,12 +268,32 @@ async def read_comic(comic_id: str, current_user: dict = Depends(get_current_use
     """Returns metadata for the reader, including user's progress if logged in"""
     conn = get_db_connection()
     book = conn.execute("SELECT * FROM comics WHERE id = ?", (comic_id,)).fetchone()
-    conn.close()
     
     if not book:
+        conn.close()
         raise HTTPException(status_code=404, detail="Book not found")
     
     result = dict(book)
+    
+    # On-demand page counting if missing
+    if result.get('pages') is None or result.get('pages') == 0:
+        filepath = result['path']
+        try:
+            pages = 0
+            if filepath.lower().endswith('.cbz'):
+                with zipfile.ZipFile(filepath, 'r') as z:
+                    pages = len([n for n in z.namelist() if n.lower().endswith(IMG_EXTENSIONS)])
+            elif filepath.lower().endswith('.cbr'):
+                with rarfile.RarFile(filepath) as r:
+                    pages = len([n for n in r.namelist() if n.lower().endswith(IMG_EXTENSIONS)])
+            
+            if pages > 0:
+                conn.execute("UPDATE comics SET pages = ? WHERE id = ?", (pages, comic_id))
+                conn.commit()
+                result['pages'] = pages
+                print(f"Lazy-counted {pages} pages for {comic_id}")
+        except Exception as e:
+            print(f"Error lazy-counting pages for {comic_id}: {e}")
     
     # Add user's reading progress if logged in
     if current_user:
@@ -265,6 +301,7 @@ async def read_comic(comic_id: str, current_user: dict = Depends(get_current_use
         if progress:
             result['user_progress'] = progress
     
+    conn.close()
     return result
 
 @router.get("/read/{comic_id}/page/{page_num}")

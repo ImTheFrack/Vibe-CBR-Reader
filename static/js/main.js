@@ -1,8 +1,9 @@
+import { state } from './state.js';
 import { initTheme, toggleTheme } from './theme.js';
-import { 
-    checkAuthStatus, setupAuthEventListeners, toggleUserMenu, 
-    showLoginModal, closeLoginModal, handleLogin, handleRegister, 
-    logout, showRegisterForm, showLoginForm 
+import {
+    checkAuthStatus, setupAuthEventListeners, toggleUserMenu,
+    showLoginModal, closeLoginModal, handleLogin, handleRegister,
+    logout, showRegisterForm, showLoginForm
 } from './auth.js';
 import { 
     loadLibrary, scanLibrary, navigateToRoot, navigateToFolder, 
@@ -21,6 +22,7 @@ import {
 } from './preferences.js';
 import { showToast } from './utils.js';
 import { initTagsView } from './tags.js';
+import { showScanStatus } from './scan-status.js';
 
 // Hamburger Menu
 export function toggleHamburger() {
@@ -84,12 +86,16 @@ window.showPreferences = showPreferences;
 window.closePreferencesModal = closePreferencesModal;
 window.setPreference = setPreference;
 window.showToast = showToast;
+window.showScanStatus = showScanStatus;
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
-    checkAuthStatus();
-    loadLibrary();
+    await checkAuthStatus();
+    // Only load library if authenticated
+    if (state.isAuthenticated) {
+        await loadLibrary();
+    }
     setupKeyboardShortcuts();
     setupAuthEventListeners();
     

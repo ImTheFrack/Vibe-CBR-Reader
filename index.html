@@ -59,11 +59,6 @@
 
             <div class="menu-divider"></div>
 
-            <div class="menu-item" onclick="scanLibrary(event)">
-                <span class="menu-icon">🔄</span>
-                <span>Scan Library</span>
-            </div>
-
             <label class="menu-item flatten-toggle-menu">
                 <input type="checkbox" id="flatten-checkbox" onchange="toggleFlattenMode()">
                 <span class="menu-icon">📄</span>
@@ -211,6 +206,51 @@
             <!-- Results Grid (Hidden by default) -->
             <div id="tags-results" class="comics-grid" style="display: none;">
                 <!-- Matching series will appear here -->
+            </div>
+        </div>
+
+        <!-- Scan Status View -->
+        <div id="view-scan-status" class="view">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>🔄</span>
+                    Scan Status
+                </h2>
+                <p class="section-subtitle" id="scan-status-subtitle">No active scan</p>
+            </div>
+            
+            <div class="scan-progress-container" style="padding: 2rem; max-width: 600px;">
+                <div class="progress-bar" style="width: 100%; height: 30px; background: var(--bg-tertiary); border-radius: 15px; overflow: hidden; margin-bottom: 1rem;">
+                    <div class="progress-fill" id="scan-progress-fill" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.3s;"></div>
+                </div>
+                <div class="scan-stats" style="text-align: center; margin-bottom: 1rem;">
+                    <span id="scan-processed">0</span> of <span id="scan-total">0</span> comics processed
+                </div>
+                <div id="scan-current-file-container" style="text-align: center; margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    Current: <span id="scan-current-file">-</span>
+                </div>
+                
+                <div id="scan-metrics" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                    <div style="background: var(--bg-secondary); padding: 0.75rem; border-radius: 8px;">
+                        <p style="margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Phase 1: Syncing</p>
+                        <div style="display: flex; justify-content: space-between;"><span>New:</span> <span id="metric-new" style="color: var(--success);">0</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span>Changed:</span> <span id="metric-changed" style="color: var(--accent);">0</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span>Deleted:</span> <span id="metric-deleted" style="color: var(--danger);">0</span></div>
+                    </div>
+                    <div style="background: var(--bg-secondary); padding: 0.75rem; border-radius: 8px;">
+                        <p style="margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Phase 2: Processing</p>
+                        <div style="display: flex; justify-content: space-between;"><span>Pages:</span> <span id="metric-pages">0</span> <small id="metric-page-err" style="color: var(--danger);">(0 err)</small></div>
+                        <div style="display: flex; justify-content: space-between;"><span>Thumbs:</span> <span id="metric-thumbs">0</span> <small id="metric-thumb-err" style="color: var(--danger);">(0 err)</small></div>
+                    </div>
+                </div>
+
+                <div class="scan-details" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px;">
+                    <p>Status: <span id="scan-status-text">Idle</span></p>
+                    <p>Started: <span id="scan-started">-</span></p>
+                    <p id="scan-completed-container" style="display: none;">
+                        Completed: <span id="scan-completed">-</span>
+                    </p>
+                </div>
             </div>
         </div>
 

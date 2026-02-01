@@ -1,7 +1,7 @@
 import os
 
 # --- CONFIGURATION ---
-COMICS_DIR = "C:/comics"
+COMICS_DIR = "Z:/ArrData/media/comics/manga"
 CACHE_DIR = "./cache"
 DB_PATH = "comics.db"
 

@@ -5,8 +5,10 @@ from datetime import datetime
 from config import DB_PATH
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    # Ensure WAL mode is active for this connection
+    conn.execute('PRAGMA journal_mode=WAL')
     return conn
 
 def init_db():
@@ -25,12 +27,21 @@ def init_db():
             category TEXT,
             filename TEXT,
             size_str TEXT,
+            size_bytes INTEGER,
+            mtime INTEGER,
             pages INTEGER,
             processed BOOLEAN DEFAULT 0,
             volume REAL,
             chapter REAL
         )
     ''')
+    
+    # Add new columns to comics table if they don't exist
+    for col, col_type in [('size_bytes', 'INTEGER'), ('mtime', 'INTEGER')]:
+        try:
+            conn.execute(f'ALTER TABLE comics ADD COLUMN {col} {col_type}')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
     
     # Users table
     conn.execute('''
@@ -154,10 +165,32 @@ def init_db():
             status TEXT DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed')),
             total_comics INTEGER DEFAULT 0,
             processed_comics INTEGER DEFAULT 0,
+            current_file TEXT,
+            phase TEXT,
+            new_comics INTEGER DEFAULT 0,
+            deleted_comics INTEGER DEFAULT 0,
+            changed_comics INTEGER DEFAULT 0,
+            processed_pages INTEGER DEFAULT 0,
+            page_errors INTEGER DEFAULT 0,
+            processed_thumbnails INTEGER DEFAULT 0,
+            thumbnail_errors INTEGER DEFAULT 0,
             errors TEXT,
             scan_type TEXT DEFAULT 'fast'
         )
     ''')
+    
+    # Add columns if not exists
+    metric_cols = [
+        ('current_file', 'TEXT'), ('phase', 'TEXT'),
+        ('new_comics', 'INTEGER'), ('deleted_comics', 'INTEGER'), ('changed_comics', 'INTEGER'),
+        ('processed_pages', 'INTEGER'), ('page_errors', 'INTEGER'),
+        ('processed_thumbnails', 'INTEGER'), ('thumbnail_errors', 'INTEGER')
+    ]
+    for col, col_type in metric_cols:
+        try:
+            conn.execute(f'ALTER TABLE scan_jobs ADD COLUMN {col} {col_type} DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
     
     # Index on scan_jobs.status for fast polling queries
     conn.execute('CREATE INDEX IF NOT EXISTS idx_scan_jobs_status ON scan_jobs(status)')
@@ -168,6 +201,40 @@ def init_db():
     except sqlite3.OperationalError:
         pass  # Migration already done or column doesn't exist yet
     
+    conn.commit()
+    conn.close()
+
+def delete_comics_by_ids(comic_ids):
+    """Delete multiple comics by their IDs"""
+    if not comic_ids:
+        return
+    conn = get_db_connection()
+    # SQLite has a limit on parameters, so we do it in chunks if necessary
+    # but for typical cases, a single IN clause is fine if not thousands
+    placeholders = ','.join(['?'] * len(comic_ids))
+    conn.execute(f'DELETE FROM comics WHERE id IN ({placeholders})', comic_ids)
+    conn.commit()
+    conn.close()
+
+def get_pending_comics(limit=100):
+    """Get comics that need page counting or thumbnail extraction"""
+    conn = get_db_connection()
+    comics = conn.execute('''
+        SELECT id, path FROM comics 
+        WHERE pages IS NULL OR pages = 0 OR processed = 0 
+        LIMIT ?
+    ''', (limit,)).fetchall()
+    conn.close()
+    return [dict(c) for c in comics]
+
+def update_comic_metadata(comic_id, pages, processed):
+    """Update comic with counted pages and processed (thumbnail) status"""
+    conn = get_db_connection()
+    conn.execute('''
+        UPDATE comics 
+        SET pages = ?, processed = ?, has_thumbnail = ?
+        WHERE id = ?
+    ''', (pages, processed, processed, comic_id))
     conn.commit()
     conn.close()
 
@@ -759,18 +826,30 @@ def create_scan_job(scan_type='fast', total_comics=0):
     conn.close()
     return job_id
 
-def update_scan_progress(job_id, processed_comics, errors=None):
-    """Update scan job progress"""
+def update_scan_progress(job_id, processed_comics, errors=None, **kwargs):
+    """Update scan job progress with flexible metrics"""
     conn = get_db_connection()
     import json
     errors_json = json.dumps(errors) if errors else None
     
-    conn.execute(
-        '''UPDATE scan_jobs 
-           SET processed_comics = ?, errors = ?
-           WHERE id = ?''',
-        (processed_comics, errors_json, job_id)
-    )
+    updates = ["processed_comics = ?", "errors = ?"]
+    params = [processed_comics, errors_json]
+    
+    # Map of allowed metric columns
+    allowed_metrics = [
+        'current_file', 'phase', 'new_comics', 'deleted_comics', 'changed_comics',
+        'processed_pages', 'page_errors', 'processed_thumbnails', 'thumbnail_errors'
+    ]
+    
+    for key, value in kwargs.items():
+        if key in allowed_metrics and value is not None:
+            updates.append(f"{key} = ?")
+            params.append(value)
+        
+    params.append(job_id)
+    
+    sql = f"UPDATE scan_jobs SET {', '.join(updates)} WHERE id = ?"
+    conn.execute(sql, params)
     conn.commit()
     conn.close()
 
@@ -793,7 +872,10 @@ def get_scan_status(job_id):
     """Get status of a specific scan job"""
     conn = get_db_connection()
     job = conn.execute(
-        '''SELECT id, started_at, completed_at, status, total_comics, processed_comics, errors, scan_type
+                    '''SELECT id, started_at, completed_at, status, total_comics, processed_comics, 
+                  current_file, phase, new_comics, deleted_comics, changed_comics,
+                  processed_pages, page_errors, processed_thumbnails, thumbnail_errors,
+                  errors, scan_type
            FROM scan_jobs WHERE id = ?''',
         (job_id,)
     ).fetchone()
@@ -815,7 +897,10 @@ def get_latest_scan_job():
     """Get the most recent scan job"""
     conn = get_db_connection()
     job = conn.execute(
-        '''SELECT id, started_at, completed_at, status, total_comics, processed_comics, errors, scan_type
+                    '''SELECT id, started_at, completed_at, status, total_comics, processed_comics, 
+                  current_file, phase, new_comics, deleted_comics, changed_comics,
+                  processed_pages, page_errors, processed_thumbnails, thumbnail_errors,
+                  errors, scan_type
            FROM scan_jobs ORDER BY started_at DESC LIMIT 1'''
     ).fetchone()
     conn.close()
@@ -836,7 +921,10 @@ def get_running_scan_job():
     """Get the currently running scan job, if any"""
     conn = get_db_connection()
     job = conn.execute(
-        '''SELECT id, started_at, completed_at, status, total_comics, processed_comics, errors, scan_type
+                    '''SELECT id, started_at, completed_at, status, total_comics, processed_comics, 
+                  current_file, phase, new_comics, deleted_comics, changed_comics,
+                  processed_pages, page_errors, processed_thumbnails, thumbnail_errors,
+                  errors, scan_type
            FROM scan_jobs WHERE status = 'running' ORDER BY started_at DESC LIMIT 1'''
     ).fetchone()
     conn.close()

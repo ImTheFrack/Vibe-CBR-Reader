@@ -41,7 +41,7 @@ async def get_series_detail(series_name: str, current_user: dict = Depends(get_c
             comic['next_comic'] = {'id': comics[i+1]['id'], 'title': comics[i+1]['title']}
     
     # Calculate series statistics
-    total_pages = sum(c.get('pages', 0) for c in comics)
+    total_pages = sum((c.get('pages') or 0) for c in comics)
     read_pages = 0
     completed_count = 0
     in_progress_count = 0
