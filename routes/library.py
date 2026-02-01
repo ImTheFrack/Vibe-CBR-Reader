@@ -12,7 +12,7 @@ from database import (
     get_db_connection, get_reading_progress, create_scan_job, 
     get_latest_scan_job, get_running_scan_job, complete_scan_job
 )
-from scanner import scan_library_task, rescan_library_task, natural_sort_key, extract_cover_image
+from scanner import scan_library_task, fast_scan_library_task, rescan_library_task, natural_sort_key, extract_cover_image
 from dependencies import get_current_user
 
 router = APIRouter(prefix="/api", tags=["library"])
@@ -152,12 +152,9 @@ async def scan_library(background_tasks: BackgroundTasks):
     if running_job:
         raise HTTPException(status_code=409, detail="A scan is already in progress")
     
-    # Create scan job entry
-    job_id = create_scan_job(scan_type='fast')
-    
-    # Start background task with job_id
-    background_tasks.add_task(scan_library_task, job_id)
-    return {"message": "Scan started", "job_id": job_id}
+    # Start fast scan (no job_id needed - it creates its own)
+    background_tasks.add_task(fast_scan_library_task)
+    return {"message": "Fast scan started"}
 
 @router.get("/scan/status")
 async def get_scan_status():
