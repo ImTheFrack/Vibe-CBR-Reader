@@ -13,7 +13,7 @@ from database import (
     get_latest_scan_job, get_running_scan_job, complete_scan_job
 )
 from scanner import scan_library_task, fast_scan_library_task, rescan_library_task, natural_sort_key, extract_cover_image
-from dependencies import get_current_user
+from dependencies import get_current_user, get_admin_user
 
 router = APIRouter(prefix="/api", tags=["library"])
 
@@ -143,7 +143,7 @@ def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int
 create_placeholder_image()
 
 @router.post("/scan")
-async def scan_library(background_tasks: BackgroundTasks):
+async def scan_library(background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
     if not os.path.exists(COMICS_DIR):
         raise HTTPException(status_code=404, detail="Comics directory not found")
     
@@ -183,7 +183,7 @@ async def get_scan_status():
     }
 
 @router.post("/rescan")
-async def rescan_library(background_tasks: BackgroundTasks):
+async def rescan_library(background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
     if not os.path.exists(COMICS_DIR):
         raise HTTPException(status_code=404, detail="Comics directory not found")
     
@@ -191,14 +191,14 @@ async def rescan_library(background_tasks: BackgroundTasks):
     return {"message": "Full rescan started in background"}
 
 @router.get("/books")
-async def list_books():
+async def list_books(current_user: dict = Depends(get_current_user)):
     conn = get_db_connection()
     books = conn.execute("SELECT * FROM comics ORDER BY category, series, volume, chapter, filename").fetchall()
     conn.close()
     return [dict(row) for row in books]
 
 @router.get("/cover/{comic_id}")
-async def get_cover(comic_id: str):
+async def get_cover(comic_id: str, current_user: dict = Depends(get_current_user)):
     cache_path = os.path.join(CACHE_DIR, f"{comic_id}.jpg")
     
     # If thumbnail exists in cache, serve it immediately
@@ -268,7 +268,7 @@ async def read_comic(comic_id: str, current_user: dict = Depends(get_current_use
     return result
 
 @router.get("/read/{comic_id}/page/{page_num}")
-async def get_comic_page(comic_id: str, page_num: int):
+async def get_comic_page(comic_id: str, page_num: int, current_user: dict = Depends(get_current_user)):
     conn = get_db_connection()
     book = conn.execute("SELECT path FROM comics WHERE id = ?", (comic_id,)).fetchone()
     conn.close()

@@ -18,7 +18,7 @@ class TagFilterRequest(BaseModel):
     selected_tags: List[str] = []
 
 @router.post("/tags/filter")
-async def filter_series_by_tags(request: TagFilterRequest):
+async def filter_series_by_tags(request: TagFilterRequest, current_user: dict = Depends(get_current_user)):
     """Filter series by tags and return stats/results"""
     from database import get_series_by_tags
     return get_series_by_tags(request.selected_tags)
