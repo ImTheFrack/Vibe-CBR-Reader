@@ -8,7 +8,7 @@ import {
     loadLibrary, scanLibrary, navigateToRoot, navigateToFolder, 
     navigateUp, toggleFlattenMode, setViewMode, handleSort, 
     handleSearch, toggleSearchScope, showView, openComic, 
-    toggleMobileSidebar, navigateTitleComic, renderTitleFan, toggleSynopsis 
+    toggleMobileSidebar, navigateTitleComic, renderTitleFan, toggleSynopsis, toggleMeta 
 } from './library.js';
 import { 
     setupKeyboardShortcuts, startReading, closeReader, 
@@ -64,6 +64,7 @@ window.openComic = openComic;
 window.toggleMobileSidebar = toggleMobileSidebar;
 window.navigateTitleComic = navigateTitleComic;
 window.toggleSynopsis = toggleSynopsis;
+window.toggleMeta = toggleMeta;
 window.startReading = startReading;
 window.closeReader = closeReader;
 window.prevPage = prevPage;

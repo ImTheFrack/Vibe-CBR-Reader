@@ -1,5 +1,7 @@
 import { apiPost } from './api.js';
-import { navigateToFolder, showView, renderTitleFan } from './library.js';
+import { navigateToFolder, showView } from './library.js';
+import { state } from './state.js';
+import { renderItems, renderFan, getTitleCoverIds } from './components/index.js';
 
 // State for tags view
 const tagsState = {
@@ -96,7 +98,7 @@ function renderSelectedTags() {
     
     const tagsHtml = tagsState.selectedTags.map(tag => {
         // Escape single quotes for the onclick handler
-        const escapedTag = tag.replace(/'/g, "\\'");
+        const escapedTag = tag.replace(/'/g, "\'");
         return `
         <div class="tag-chip" onclick="window.removeTag('${escapedTag}')">
             <span>${tag}</span>
@@ -105,7 +107,7 @@ function renderSelectedTags() {
     }).join('');
 
     container.innerHTML = tagsHtml + `
-        <button class="clear-tags-btn" onclick="window.clearAllTags()">Clear All</button>
+        <button class=\"clear-tags-btn\" onclick=\"window.clearAllTags()\">Clear All</button>
     `;
 }
 
@@ -116,37 +118,18 @@ function renderTagsGrid() {
     
     if (tagsState.availableTags.length === 0) {
         container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">🏷️</div>
-                <div class="empty-title">No tags available</div>
+            <div class=\"empty-state\">
+                <div class=\"empty-icon\">🏷️</div>
+                <div class=\"empty-title\">No tags available</div>
                 <p>Try clearing some filters or searching for something else.</p>
             </div>
         `;
         return;
     }
 
-    container.innerHTML = tagsState.availableTags.map(tag => {
-        const escapedName = tag.name.replace(/'/g, "\\'");
+    const items = tagsState.availableTags.map(tag => {
+        const escapedName = tag.name.replace(/'/g, "\'");
         
-        // Build fan HTML from cover IDs
-        let fanHtml = '';
-        if (tag.covers && tag.covers.length > 0) {
-            fanHtml = `<div class="folder-fan">
-`;
-            if (tag.covers[0]) fanHtml += `<img src="/api/cover/${tag.covers[0]}" class="folder-fan-img fan-main" loading="lazy" alt="Cover">
-`;
-            if (tag.covers[1]) fanHtml += `<img src="/api/cover/${tag.covers[1]}" class="folder-fan-img fan-left" loading="lazy" alt="Cover">
-`;
-            if (tag.covers[2]) fanHtml += `<img src="/api/cover/${tag.covers[2]}" class="folder-fan-img fan-right" loading="lazy" alt="Cover">
-`;
-            fanHtml += `</div>`;
-        }
-        
-        // Use fan if available, otherwise icon
-        const iconContent = (tag.covers && tag.covers.length > 0)
-            ? fanHtml 
-            : `<span class="folder-icon" style="font-size: 2.5rem;">🏷️</span>`;
-
         let metaText = `${tag.count} series`;
         const names = tag.series_names || [];
         
@@ -158,18 +141,38 @@ function renderTagsGrid() {
             metaText = `${names[0]}, ${names[1]} and ${tag.count - 2} more`;
         }
 
-        return `
-            <div class="folder-card tag-card" onclick="window.selectTag('${escapedName}')">
-                <div class="folder-card-icon">
-                    ${iconContent}
-                </div>
-                <div class="folder-card-info">
-                    <div class="folder-card-name">${tag.name}</div>
-                    <div class="folder-card-meta">${metaText}</div>
-                </div>
-            </div>
-        `;
-    }).join('');
+        const coverHtml = (tag.covers && tag.covers.length > 0)
+            ? renderFan(tag.covers)
+            : `<span class="folder-icon" style="font-size: 2.5rem;">🏷️</span>`;
+            
+        const onClick = `window.selectTag('${escapedName}')`;
+
+        return {
+            title: tag.name,
+            coverHtml: coverHtml,
+            isFolder: true,
+            
+            metaText: metaText,
+            
+            // For list view compatibility
+            metaItems: [metaText],
+            statValue: tag.count,
+            statLabel: 'Series',
+            actionText: 'Filter',
+            onAction: onClick,
+            
+            // For detailed view compatibility
+            subtitle: 'Tag',
+            badges: [{ text: `${tag.count} Series` }],
+            stats: [{ value: tag.count, label: 'Series' }],
+            description: `Filter by tag "${tag.name}". Contains ${metaText}.`,
+            buttons: [{ text: 'Select Tag', class: 'primary', onClick: onClick }],
+            
+            onClick: onClick
+        };
+    });
+    
+    renderItems(container, items, state.viewMode || 'grid');
 }
 
 // Render the matching series results
@@ -179,40 +182,50 @@ function renderResults() {
     
     if (tagsState.matchingSeries.length === 0) {
         container.innerHTML = `
-             <div class="empty-state">
-                <div class="empty-icon">🔍</div>
-                <div class="empty-title">No series found</div>
+             <div class=\"empty-state\">
+                <div class=\"empty-icon\">🔍</div>
+                <div class=\"empty-title\">No series found</div>
             </div>
         `;
         return;
     }
 
-    container.innerHTML = tagsState.matchingSeries.map(series => {
+    const items = tagsState.matchingSeries.map(series => {
         const seriesName = series.name || 'Unknown Series';
         const seriesTitle = series.title || seriesName;
         
         // Escape for HTML attributes
-        const escapedName = seriesName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        const displayTitle = seriesTitle.replace(/"/g, '&quot;');
+        const escapedName = seriesName.replace(/'/g, "\'").replace(/'/g, '&quot;');
+        const displayTitle = seriesTitle.replace(/'/g, '&quot;');
         
-        // Use the library's renderTitleFan to get the fan look
-        const fanHtml = renderTitleFan(series);
+        const coverIds = getTitleCoverIds(series);
+        const onClick = `navigateToFolder('title', '${escapedName}'); showView('library');`;
 
-        return `
-            <div class="comic-card title-card" onclick="navigateToFolder('title', '${escapedName}'); showView('library');" data-title-name="${displayTitle}">
-                <div class="comic-cover">
-                    ${fanHtml}
-                    <div class="comic-badge">${series.count || 0} ch</div>
-                </div>
-                <div class="comic-info">
-                    <div class="comic-title">${seriesTitle}</div>
-                    <div class="comic-meta">
-                        <span class="comic-chapter">${series.count || 0} chapters</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
+        return {
+            title: seriesTitle,
+            coverIds: coverIds,
+            
+            badgeText: `${series.count || 0} ch`,
+            metaText: `<span class="comic-chapter">${series.count || 0} chapters</span>`,
+            extraClasses: 'title-card',
+            dataAttrs: `data-title-name="${displayTitle}"`,
+            
+            // List view compatibility
+            metaItems: [`${series.count || 0} chapters`],
+            actionText: 'View',
+            
+            // Detailed view compatibility
+            subtitle: 'Series',
+            badges: [{ text: `${series.count || 0} Chapters`, class: 'accent' }],
+            stats: [{ value: series.count || 0, label: 'Chapters' }],
+            description: series.synopsis || `Series containing ${series.count || 0} chapters.`,
+            buttons: [{ text: '▶ View Series', class: 'primary', onClick: onClick }],
+            
+            onClick: onClick
+        };
+    });
+
+    renderItems(container, items, state.viewMode || 'grid');
 }
 
 // Global functions attached to window for HTML event access
