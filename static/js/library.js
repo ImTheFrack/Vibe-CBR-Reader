@@ -346,7 +346,6 @@ export function updateLibraryView() {
     const folderGrid = document.getElementById('folder-grid');
     const comicsContainer = document.getElementById('comics-container');
     const statsSummary = document.getElementById('stats-summary');
-    const toolbar = document.querySelector('.toolbar');
     const sidebar = document.getElementById('folder-sidebar');
     const libraryLayout = document.getElementById('library-layout');
     
@@ -355,10 +354,11 @@ export function updateLibraryView() {
         return;
     }
     
+    const shouldHideSidebar = state.currentLevel === 'title' || !state.sidebarVisible;
+    sidebar.style.display = shouldHideSidebar ? 'none' : 'block';
+    libraryLayout.classList.toggle('sidebar-hidden', shouldHideSidebar);
+
     if (state.currentLevel === 'title') {
-        toolbar.style.display = 'none';
-        sidebar.style.display = 'none';
-        libraryLayout.classList.add('full-width');
         statsSummary.style.display = 'flex';
         statsSummary.classList.add('compact');
         updateStatsForCurrentView();
@@ -367,9 +367,6 @@ export function updateLibraryView() {
         comicsContainer.style.display = 'block';
         renderTitleDetailView();
     } else {
-        toolbar.style.display = 'flex';
-        sidebar.style.display = 'block';
-        libraryLayout.classList.remove('full-width');
         statsSummary.classList.remove('compact');
         comicsContainer.className = 'comics-grid';
         
@@ -1148,7 +1145,8 @@ export function renderSearchResults() {
 }
 
 export function toggleMobileSidebar() {
-    document.getElementById('folder-sidebar').classList.toggle('mobile-visible');
+    state.sidebarVisible = !state.sidebarVisible;
+    updateLibraryView();
 }
 
 export async function loadRecentProgressFromAPI() {

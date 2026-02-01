@@ -65,6 +65,14 @@
     font-size: 1rem;
 }
 
+.user-header-info {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    font-weight: 400;
+    margin-left: 4px;
+    opacity: 0.8;
+}
+
 .header-nav {
     display: flex;
     align-items: center;
@@ -597,29 +605,21 @@
     font-size: 0.875rem;
 }
 
+/* Sidebar Toggling (Unified) */
+.library-layout.sidebar-hidden {
+    grid-template-columns: 1fr;
+}
+
 /* Responsive Layout */
 @media (max-width: 1024px) {
     .library-layout {
         grid-template-columns: 1fr;
     }
-    .folder-sidebar {
-        display: none;
-    }
-    .folder-sidebar.mobile-visible {
-        display: block;
-        position: fixed;
-        left: 0;
-        top: 64px;
-        bottom: 0;
-        width: 280px;
-        z-index: 100;
-        background: var(--bg-secondary);
-        border-right: 1px solid var(--border-color);
-        overflow-y: auto;
-    }
+    
     .sidebar-toggle {
         display: flex;
     }
+    
     .flatten-label {
         font-size: 0.8rem;
         padding: 5px 10px;

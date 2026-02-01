@@ -57,9 +57,12 @@ export async function loadUserData() {
 
 export function updateAuthUI() {
     const authSection = document.getElementById('auth-section');
+    const headerInfo = document.getElementById('user-header-info');
     if (!authSection) return;
 
     if (state.isAuthenticated && state.currentUser) {
+        if (headerInfo) headerInfo.textContent = `(User: ${state.currentUser.username})`;
+        
         authSection.innerHTML = `
             <div class="menu-item" style="cursor: default; opacity: 0.8;">
                 <span class="menu-icon">👤</span>
@@ -75,6 +78,8 @@ export function updateAuthUI() {
             </div>
         `;
     } else {
+        if (headerInfo) headerInfo.textContent = '';
+        
         authSection.innerHTML = `
             <div class="menu-item" onclick="showLoginModal(); toggleHamburger()">
                 <span class="menu-icon">🔑</span>

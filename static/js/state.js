@@ -12,6 +12,7 @@ export const state = {
     },
     folderTree: null, // Hierarchical structure
     viewMode: 'grid', // 'grid', 'list', 'detailed'
+    sidebarVisible: window.innerWidth > 1024,
     currentComic: null,
     currentPage: 0,
     totalPages: 0,
