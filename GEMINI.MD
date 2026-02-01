@@ -20,9 +20,10 @@ This file provides the technical context for AI agents and developers working on
 - **static/js/main.js**: Application entry point and window function exposure.
 - **static/js/components/**: Unified UI components (card-renderers, fan-renderer).
 - **static/js/utils/**: Specialized logic (progress, sorting, api helpers).
-- **static/js/state.js**: Global state management (centralized `state` object).
-- **static/js/library.js**: Core library browsing and navigation logic.
-- **static/js/reader.js**: Reader engine and display logic.
+- **static/js/state.js**: Global state management (centralized `state` object, including navigation history).
+- **static/js/library.js**: Core library browsing and navigation logic (including `handleBack`).
+- **static/js/reader.js**: Reader engine and display logic (Single, Double Page, and Long Strip modes).
+- **static/css/**: Modularized CSS files (base, components, layout, tags, variables, views).
 
 ## Database Schema
 
@@ -83,6 +84,18 @@ CREATE TABLE series (
 - **Backend**: FastAPI with type hints. Parameterized queries via SQLAlchemy.
 - **Naming**: `snake_case` for Python, `camelCase` for JavaScript.
 - **Folder Structure**: `Root → Category → Subcategory → Title → Comics`.
+
+## Navigation System
+- **Hierarchical Browsing**: Root → Category → Subcategory → Title.
+- **Contextual Back Button**: Smart "Back" button in series detail view that tracks whether the user came from Library, Recent, Tags, or Search.
+- **Search Persistence**: Navigating back from a series detail view restores the previous search query and results.
+
+## Recent Changes
+- **2026-02-01**: IMPLEMENTED - Functional Double Page and Long Strip (Webtoon) display modes in reader.
+- **2026-02-01**: IMPLEMENTED - Contextual "Back" button in series detail view.
+- **2026-02-01**: IMPLEMENTED - Search persistence when navigating back from titles.
+- **2026-02-01**: FIXED - `ReferenceError` for `continueReading` in Recent view.
+- **2026-02-01**: ENHANCED - Centralized state tracking for navigation history (`previousView`, `previousSearchQuery`).
 
 ## Code Quality Goals
 - ✅ Modularized JS/CSS components

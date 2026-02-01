@@ -2,6 +2,7 @@
 export const state = {
     comics: [],
     currentView: 'library',
+    previousView: null,
     // New navigation state
     currentLevel: 'root', // 'root', 'category', 'subcategory', 'title'
     flattenMode: false,
@@ -25,6 +26,7 @@ export const state = {
     sortBy: 'alpha-asc',
     // Search state
     searchQuery: '',
+    previousSearchQuery: '',
     searchScope: 'current', // 'current' or 'everywhere'
     // Authentication state
     currentUser: null,

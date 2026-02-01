@@ -307,6 +307,9 @@ export function navigateToFolder(type, name) {
             }
         }
     }
+    if (state.searchQuery) {
+        state.previousSearchQuery = state.searchQuery;
+    }
     state.searchQuery = '';
     updateLibraryView();
 }
@@ -849,8 +852,13 @@ export async function renderTitleDetailView() {
             <p class="series-synopsis-text" id="synopsis-${uniqueId}">${seriesData.synopsis}</p>
         </div>` : '';
 
+    const backLabel = getBackLabel();
+
     container.innerHTML = `
         <div class="title-detail-container">
+            <button class="back-btn-inline" onclick="handleBack()">
+                <span>←</span> Back to ${backLabel}
+            </button>
             <div class="title-details-grid">
                 <div class="title-details-left">
                     ${synopsisHtml}
@@ -1336,8 +1344,8 @@ export function openComic(comicId) {
                     <button class="btn-primary" onclick="startReading('${comicId}')">
                         <span>▶</span> Read Now
                     </button>
-                    <button class="btn-secondary" onclick="showView('library')">
-                        Back to Library
+                    <button class="btn-secondary" onclick="handleBack()">
+                        <span>←</span> Back to ${getBackLabel()}
                     </button>
                 </div>
             </div>
@@ -1399,8 +1407,38 @@ export function toggleMeta(id) {
     }
 }
 
+export function handleBack() {
+    if (state.previousSearchQuery && state.currentLevel === 'title') {
+        state.searchQuery = state.previousSearchQuery;
+        state.previousSearchQuery = '';
+        updateLibraryView();
+    } else if (state.previousView && state.previousView !== 'library') {
+        const targetView = state.previousView;
+        showView(targetView);
+    } else {
+        navigateUp();
+    }
+}
+
+function getBackLabel() {
+    if (state.previousView && state.previousView !== 'library') {
+        return state.previousView.charAt(0).toUpperCase() + state.previousView.slice(1);
+    }
+    if (state.currentLevel === 'title') {
+        if (state.currentLocation.subcategory) {
+             return state.currentLocation.subcategory === '_direct' ? 'Category' : state.currentLocation.subcategory;
+        }
+        if (state.currentLocation.category) return state.currentLocation.category;
+    }
+    return 'Library';
+}
+
 // Helper to show view (needs to be exported or available)
 export function showView(viewName) {
+    if (state.currentView !== viewName) {
+        state.previousView = state.currentView;
+    }
+    
     document.querySelectorAll('.header-btn').forEach(btn => btn.classList.remove('active'));
     if (viewName === 'library') document.getElementById('nav-library').classList.add('active');
     if (viewName === 'recent') document.getElementById('nav-recent').classList.add('active');

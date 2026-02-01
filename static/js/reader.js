@@ -3,6 +3,85 @@ import { apiGet, apiPost, apiDelete } from './api.js';
 import { showToast } from './utils.js';
 import { setPreference } from './preferences.js';
 
+let uiTimer = null;
+let isUIVisible = true;
+let lastMouseY = 0;
+let lastShowX = 0;
+let lastShowY = 0;
+
+function showReaderUI() {
+    const reader = document.getElementById('reader');
+    if (!reader) return;
+    reader.classList.remove('ui-hidden');
+    isUIVisible = true;
+    resetReaderUITimer();
+}
+
+function hideReaderUI() {
+    const reader = document.getElementById('reader');
+    if (!reader) return;
+    
+    // Don't hide if mouse is in the top/bottom 10%
+    const threshold = window.innerHeight * 0.1;
+    if (lastMouseY < threshold || lastMouseY > window.innerHeight - threshold) {
+        return;
+    }
+    
+    reader.classList.add('ui-hidden');
+    isUIVisible = false;
+    
+    // Also close settings if UI hides
+    const settings = document.getElementById('settings-panel');
+    if (settings) settings.classList.remove('open');
+}
+
+function resetReaderUITimer() {
+    if (uiTimer) clearTimeout(uiTimer);
+    uiTimer = setTimeout(hideReaderUI, 2000);
+}
+
+function setupReaderInteraction() {
+    const reader = document.getElementById('reader');
+    if (!reader) return;
+
+    // Use pointermove to handle mouse and touch
+    reader.addEventListener('pointermove', (e) => {
+        lastMouseY = e.clientY;
+        const threshold = window.innerHeight * 0.1;
+        const isControlZone = e.clientY < threshold || e.clientY > window.innerHeight - threshold;
+        
+        if (isControlZone) {
+            // Hovering/moving in 10% zone - always show
+            showReaderUI();
+            if (uiTimer) clearTimeout(uiTimer);
+        } else {
+            // Middle zone logic
+            // 1. Ignore if it's a touch move (touch shouldn't show UI in middle)
+            if (e.pointerType === 'touch') return;
+            
+            // 2. Only show if movement is significant (threshold 10px)
+            const dist = Math.sqrt(Math.pow(e.clientX - lastShowX, 2) + Math.pow(e.clientY - lastShowY, 2));
+            if (dist > 10) {
+                if (!isUIVisible) showReaderUI();
+                else resetReaderUITimer();
+                lastShowX = e.clientX;
+                lastShowY = e.clientY;
+            }
+        }
+    });
+
+    // Pointerdown handles both click and tap
+    reader.addEventListener('pointerdown', (e) => {
+        const threshold = window.innerHeight * 0.1;
+        if (e.clientY < threshold || e.clientY > window.innerHeight - threshold) {
+            showReaderUI();
+        }
+        // Save position to prevent immediate pointermove trigger
+        lastShowX = e.clientX;
+        lastShowY = e.clientY;
+    });
+}
+
 export async function startReading(comicId, page = 0) {
     const comic = state.comics.find(c => c.id === comicId);
     if (!comic) return;
@@ -34,6 +113,10 @@ export async function startReading(comicId, page = 0) {
 
     document.getElementById('reader-title').textContent = `${comic.title} - ${comic.chapter ? `Ch. ${comic.chapter}` : (comic.volume ? `Vol. ${comic.volume}` : '')}`;
     document.getElementById('reader').classList.add('active');
+    
+    // Initialize interaction
+    setupReaderInteraction();
+    showReaderUI();
     
     await loadBookmarks(comicId);
     ensureBookmarkButton();
@@ -252,17 +335,116 @@ function ensureBookmarkButton() {
 }
 
 async function loadPage(pageNum) {
-    const comicId = state.currentComic.id;
-    const img = document.getElementById('reader-image');
-    if (pageNum < state.totalPages - 1) {
-        const nextImg = new Image();
-        nextImg.src = `/api/read/${comicId}/page/${pageNum + 1}`;
+    if (state.settings.display === 'long') {
+        await loadLongStrip();
+        return;
     }
-    img.src = `/api/read/${comicId}/page/${pageNum}`;
+
+    const comicId = state.currentComic.id;
+    const container = document.getElementById('reader-pages');
+    if (!container) return;
+    
+    container.innerHTML = ''; // Clear existing images
+    
+    pageNum = parseInt(pageNum);
+    state.currentPage = pageNum;
+
+    if (state.settings.display === 'double') {
+        // Double page logic: page 0 is usually single, then pairs
+        if (pageNum === 0) {
+            const img = createReaderImage(`/api/read/${comicId}/page/0`);
+            container.appendChild(img);
+        } else {
+            // Ensure we are on an odd page for double (1, 3, 5...)
+            const firstPage = pageNum % 2 === 0 ? pageNum - 1 : pageNum;
+            state.currentPage = firstPage;
+            
+            const img1 = createReaderImage(`/api/read/${comicId}/page/${firstPage}`);
+            container.appendChild(img1);
+            
+            if (firstPage + 1 < state.totalPages) {
+                const img2 = createReaderImage(`/api/read/${comicId}/page/${firstPage + 1}`);
+                container.appendChild(img2);
+            }
+        }
+    } else {
+        // Single page
+        const img = createReaderImage(`/api/read/${comicId}/page/${pageNum}`);
+        container.appendChild(img);
+        
+        // Preload next
+        if (pageNum < state.totalPages - 1) {
+            const nextImg = new Image();
+            nextImg.src = `/api/read/${comicId}/page/${pageNum + 1}`;
+        }
+    }
+    
+    updateReaderUI();
+}
+
+function createReaderImage(src) {
+    const img = document.createElement('img');
+    img.src = src;
+    img.className = 'reader-image';
+    img.alt = 'Comic page';
+    
+    // Apply current zoom settings
+    applyImageZoom(img, state.settings.zoom);
+    
+    return img;
+}
+
+function applyImageZoom(img, zoom) {
+    if (zoom === 'width') {
+        img.style.width = '100%';
+        img.style.height = 'auto';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = 'none';
+        img.style.objectFit = 'contain';
+    } else if (zoom === 'height') {
+        img.style.width = 'auto';
+        img.style.height = '100%';
+        img.style.maxWidth = 'none';
+        img.style.maxHeight = '100%';
+        img.style.objectFit = 'contain';
+    } else {
+        // 'fit' - Fit to Screen
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        img.style.objectFit = 'contain';
+    }
+}
+
+async function loadLongStrip() {
+    const comicId = state.currentComic.id;
+    const container = document.getElementById('reader-pages');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    for (let i = 0; i < state.totalPages; i++) {
+        const img = createReaderImage(`/api/read/${comicId}/page/${i}`);
+        img.loading = 'lazy';
+        container.appendChild(img);
+    }
+    
+    // Reset scroll position
+    document.getElementById('reader-viewport').scrollTop = 0;
+    updateReaderUI();
 }
 
 function updateReaderUI() {
-    document.getElementById('page-indicator').textContent = `${state.currentPage + 1} / ${state.totalPages}`;
+    let indicatorText = `${state.currentPage + 1} / ${state.totalPages}`;
+    
+    if (state.settings.display === 'double' && state.currentPage > 0 && state.currentPage + 1 < state.totalPages) {
+        indicatorText = `${state.currentPage + 1}-${state.currentPage + 2} / ${state.totalPages}`;
+    } else if (state.settings.display === 'long') {
+        indicatorText = `Long Strip / ${state.totalPages} Pages`;
+    }
+    
+    document.getElementById('page-indicator').textContent = indicatorText;
     const slider = document.getElementById('progress-slider');
     slider.max = state.totalPages - 1;
     slider.value = state.currentPage;
@@ -271,24 +453,37 @@ function updateReaderUI() {
 }
 
 export function nextPage() {
-    const increment = state.settings.direction === 'rtl' ? -1 : 1;
+    if (state.settings.display === 'long') return;
+    
+    let increment = 1;
+    if (state.settings.display === 'double' && state.currentPage > 0) {
+        increment = 2;
+    } else if (state.settings.display === 'double' && state.currentPage === 0) {
+        increment = 1;
+    }
+    
+    // Note: state.settings.direction only affects layout, not logical page order
     const newPage = state.currentPage + increment;
-    if (newPage >= 0 && newPage < state.totalPages) {
-        state.currentPage = newPage;
-        loadPage(state.currentPage);
-        updateReaderUI();
-    } else if (newPage >= state.totalPages) {
+    if (newPage < state.totalPages) {
+        loadPage(newPage);
+    } else {
         completeReading();
     }
 }
 
 export function prevPage() {
-    const increment = state.settings.direction === 'rtl' ? 1 : -1;
-    const newPage = state.currentPage + increment;
-    if (newPage >= 0 && newPage < state.totalPages) {
-        state.currentPage = newPage;
-        loadPage(state.currentPage);
-        updateReaderUI();
+    if (state.settings.display === 'long') return;
+    
+    let decrement = 1;
+    if (state.settings.display === 'double' && state.currentPage > 1) {
+        decrement = 2;
+    } else if (state.settings.display === 'double' && state.currentPage === 1) {
+        decrement = 1;
+    }
+    
+    const newPage = Math.max(0, state.currentPage - decrement);
+    if (newPage !== state.currentPage) {
+        loadPage(newPage);
     }
 }
 
@@ -356,6 +551,8 @@ function saveProgress() {
 
 export function closeReader() {
     document.getElementById('reader').classList.remove('active');
+    document.getElementById('reader').classList.remove('ui-hidden');
+    if (uiTimer) clearTimeout(uiTimer);
     state.currentComic = null;
     state.currentBookmarks = [];
     saveProgress();
@@ -370,16 +567,31 @@ export function setSetting(type, value) {
     document.querySelectorAll(`[data-setting="${type}"]`).forEach(btn => {
         btn.classList.toggle('active', btn.dataset.value === value);
     });
-    const img = document.getElementById('reader-image');
+    
+    const reader = document.getElementById('reader');
     if (type === 'display') {
-        if (value === 'double') img.classList.add('double-page');
-        else img.classList.remove('double-page');
+        reader.setAttribute('data-display', value);
+        if (value === 'long') {
+            loadLongStrip();
+        } else {
+            loadPage(state.currentPage);
+        }
     }
+    if (type === 'direction') {
+        reader.setAttribute('data-direction', value);
+        if (state.settings.display === 'double') {
+            loadPage(state.currentPage);
+        }
+    }
+    
     if (type === 'zoom') {
-        img.style.maxWidth = value === 'height' ? 'none' : '100%';
-        img.style.maxHeight = value === 'width' ? 'none' : '100%';
-        img.style.width = value === 'width' ? '100%' : 'auto';
-        img.style.height = value === 'height' ? '100%' : 'auto';
+        // Refresh images to apply zoom
+        if (state.settings.display === 'long') {
+            const images = document.querySelectorAll('.reader-image');
+            images.forEach(img => applyImageZoom(img, value));
+        } else {
+            loadPage(state.currentPage);
+        }
     }
     if (state.isAuthenticated) {
         const prefMap = { 'direction': 'reader_direction', 'display': 'reader_display', 'zoom': 'reader_zoom' };
