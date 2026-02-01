@@ -1,0 +1,17 @@
+/* Vibe CBR Reader Styles */
+/* Modularized Structure */
+
+/* 1. Variables & Themes */
+@import 'css/variables.css';
+
+/* 2. Base & Reset */
+@import 'css/base.css';
+
+/* 3. Layout & App Shell */
+@import 'css/layout.css';
+
+/* 4. UI Components */
+@import 'css/components.css';
+
+/* 5. View-Specific Styles */
+@import 'css/views.css';

@@ -1,0 +1,2688 @@
+// State management
+const state = {
+    comics: [],
+    currentView: 'library',
+    // New navigation state
+    currentLevel: 'root', // 'root', 'category', 'subcategory', 'title'
+    flattenMode: false,
+    currentLocation: {
+        category: null,
+        subcategory: null,
+        title: null
+    },
+    folderTree: null, // Hierarchical structure
+    viewMode: 'grid', // 'grid', 'list', 'detailed'
+    currentComic: null,
+    currentPage: 0,
+    totalPages: 0,
+    settings: {
+        direction: 'ltr',
+        display: 'single',
+        zoom: 'fit'
+    },
+    theme: localStorage.getItem('theme') || 'dark',
+    sortBy: 'alpha-asc',
+    // Search state
+    searchQuery: '',
+    searchScope: 'current', // 'current' or 'everywhere'
+    // Authentication state
+    currentUser: null,
+    isAuthenticated: false,
+    // Progress data (loaded from API)
+    readingProgress: {},
+    // User preferences (loaded from API)
+    userPreferences: null,
+    // Bookmarks for current comic
+    currentBookmarks: [],
+    // Current series data (for title detail view)
+    currentSeries: null,
+    // Reader navigation state
+    readerNavigation: {
+        prevComic: null,
+        nextComic: null
+    }
+};
+
+// API Helpers
+async function apiGet(endpoint) {
+    try {
+        const response = await fetch(endpoint);
+        if (!response.ok) {
+            if (response.status === 401) {
+                return { error: 'Unauthorized', status: 401 };
+            }
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`API GET ${endpoint} failed:`, error);
+        return { error: error.message };
+    }
+}
+
+async function apiPost(endpoint, data) {
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            if (response.status === 401) {
+                return { error: 'Unauthorized', status: 401 };
+            }
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`API POST ${endpoint} failed:`, error);
+        return { error: error.message };
+    }
+}
+
+async function apiPut(endpoint, data) {
+    try {
+        const response = await fetch(endpoint, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            if (response.status === 401) {
+                return { error: 'Unauthorized', status: 401 };
+            }
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`API PUT ${endpoint} failed:`, error);
+        return { error: error.message };
+    }
+}
+
+async function apiDelete(endpoint) {
+    try {
+        const response = await fetch(endpoint, { method: 'DELETE' });
+        if (!response.ok) {
+            if (response.status === 401) {
+                return { error: 'Unauthorized', status: 401 };
+            }
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`API DELETE ${endpoint} failed:`, error);
+        return { error: error.message };
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    checkAuthStatus();
+    loadLibrary();
+    setupKeyboardShortcuts();
+    setupAuthEventListeners();
+});
+
+// Authentication Functions
+async function checkAuthStatus() {
+    const result = await apiGet('/api/auth/check');
+    if (result.error) {
+        state.isAuthenticated = false;
+        state.currentUser = null;
+    } else {
+        state.isAuthenticated = result.authenticated;
+        state.currentUser = result.user || null;
+        if (state.isAuthenticated) {
+            await loadUserData();
+        }
+    }
+    updateAuthUI();
+}
+
+async function loadUserData() {
+    // Load progress from API
+    const progressResult = await apiGet('/api/progress');
+    if (!progressResult.error && Array.isArray(progressResult)) {
+        state.readingProgress = {};
+        progressResult.forEach(p => {
+            state.readingProgress[p.comic_id] = {
+                page: p.current_page,
+                lastRead: new Date(p.last_read).getTime(),
+                completed: p.completed
+            };
+        });
+    }
+
+    // Load preferences from API
+    const prefsResult = await apiGet('/api/preferences');
+    if (!prefsResult.error) {
+        state.userPreferences = prefsResult;
+        // Apply preferences if they exist
+        if (prefsResult.reader_direction) {
+            state.settings.direction = prefsResult.reader_direction;
+        }
+        if (prefsResult.reader_display) {
+            state.settings.display = prefsResult.reader_display;
+        }
+        if (prefsResult.reader_zoom) {
+            state.settings.zoom = prefsResult.reader_zoom;
+        }
+        if (prefsResult.default_theme && prefsResult.default_theme !== state.theme) {
+            state.theme = prefsResult.default_theme;
+            initTheme();
+        }
+    }
+}
+
+function updateAuthUI() {
+    const authSection = document.getElementById('auth-section');
+    if (!authSection) return;
+
+    if (state.isAuthenticated && state.currentUser) {
+        authSection.innerHTML = `
+            <div class="user-menu">
+                <button class="header-btn user-btn" onclick="toggleUserMenu()">
+                    <span>👤</span>
+                    <span>${state.currentUser.username}</span>
+                </button>
+                <div class="user-dropdown" id="user-dropdown">
+                    <div class="user-dropdown-item" onclick="showPreferences()">
+                        <span>⚙️</span> Preferences
+                    </div>
+                    <div class="user-dropdown-divider"></div>
+                    <div class="user-dropdown-item" onclick="logout()">
+                        <span>🚪</span> Logout
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        authSection.innerHTML = `
+            <button class="header-btn" onclick="showLoginModal()">
+                <span>🔑</span>
+                <span>Login</span>
+            </button>
+        `;
+    }
+}
+
+function toggleUserMenu() {
+    const dropdown = document.getElementById('user-dropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('open');
+    }
+}
+
+function showLoginModal() {
+    // Remove existing modal if any
+    closeLoginModal();
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'login-modal-overlay';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" id="login-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Login</h3>
+                <button class="modal-close" onclick="closeLoginModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="login-form" onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="login-username">Username</label>
+                        <input type="text" id="login-username" class="form-input" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="login-password">Password</label>
+                        <input type="password" id="login-password" class="form-input" required>
+                    </div>
+                    <div class="modal-footer" style="padding: 0; border: none;">
+                        <button type="submit" class="btn-primary">Login</button>
+                        <button type="button" class="btn-secondary" onclick="showRegisterForm()">Create Account</button>
+                    </div>
+                </form>
+                <form id="register-form" style="display: none;" onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="register-username">Username</label>
+                        <input type="text" id="register-username" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="register-password">Password</label>
+                        <input type="password" id="register-password" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="register-password-confirm">Confirm Password</label>
+                        <input type="password" id="register-password-confirm" class="form-input" required>
+                    </div>
+                    <div class="modal-footer" style="padding: 0; border: none;">
+                        <button type="submit" class="btn-primary">Register</button>
+                        <button type="button" class="btn-secondary" onclick="showLoginForm()">Back to Login</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    // Trigger animation
+    setTimeout(() => overlay.classList.add('active'), 10);
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeLoginModal();
+    });
+}
+
+function closeLoginModal() {
+    const overlay = document.getElementById('login-modal-overlay');
+    if (overlay) {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 300);
+    }
+}
+
+function showRegisterForm() {
+    document.getElementById('login-form').style.display = 'none';
+    document.getElementById('register-form').style.display = 'block';
+}
+
+function showLoginForm() {
+    document.getElementById('register-form').style.display = 'none';
+    document.getElementById('login-form').style.display = 'block';
+}
+
+async function handleLogin(event) {
+    event.preventDefault();
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+
+    const result = await apiPost('/api/auth/login', { username, password });
+    
+    if (result.error) {
+        showToast(result.error === 'Unauthorized' ? 'Invalid credentials' : 'Login failed', 'error');
+    } else {
+        state.isAuthenticated = true;
+        state.currentUser = result.user;
+        closeLoginModal();
+        updateAuthUI();
+        await loadUserData();
+        showToast('Logged in successfully!', 'success');
+        // Refresh the view to show progress
+        if (state.currentView === 'library') {
+            navigateToRoot();
+        } else if (state.currentView === 'recent') {
+            loadRecentReads();
+        }
+    }
+}
+
+async function handleRegister(event) {
+    event.preventDefault();
+    const username = document.getElementById('register-username').value;
+    const password = document.getElementById('register-password').value;
+    const passwordConfirm = document.getElementById('register-password-confirm').value;
+
+    if (password !== passwordConfirm) {
+        showToast('Passwords do not match', 'error');
+        return;
+    }
+
+    const result = await apiPost('/api/auth/register', { username, password });
+    
+    if (result.error) {
+        showToast(result.error === 'Unauthorized' ? 'Registration failed' : result.error, 'error');
+    } else {
+        showToast('Registration successful! Please log in.', 'success');
+        showLoginForm();
+    }
+}
+
+async function logout() {
+    const result = await apiPost('/api/auth/logout', {});
+    state.isAuthenticated = false;
+    state.currentUser = null;
+    state.readingProgress = {};
+    state.userPreferences = null;
+    updateAuthUI();
+    showToast('Logged out successfully', 'success');
+    // Refresh view
+    if (state.currentView === 'library') {
+        navigateToRoot();
+    } else if (state.currentView === 'recent') {
+        loadRecentReads();
+    }
+}
+
+function showPreferences() {
+    // Close user menu
+    toggleUserMenu();
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'preferences-modal-overlay';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" id="preferences-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Preferences</h3>
+                <button class="modal-close" onclick="closePreferencesModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Default Theme</label>
+                    <div class="setting-options">
+                        <button class="setting-btn ${state.theme === 'dark' ? 'active' : ''}" onclick="setPreference('default_theme', 'dark')">🌙 Dark</button>
+                        <button class="setting-btn ${state.theme === 'light' ? 'active' : ''}" onclick="setPreference('default_theme', 'light')">☀️ Light</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Reading Direction</label>
+                    <div class="setting-options">
+                        <button class="setting-btn ${state.settings.direction === 'ltr' ? 'active' : ''}" onclick="setPreference('reader_direction', 'ltr')">➡️ Left to Right</button>
+                        <button class="setting-btn ${state.settings.direction === 'rtl' ? 'active' : ''}" onclick="setPreference('reader_direction', 'rtl')">⬅️ Right to Left (Manga)</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Display Mode</label>
+                    <div class="setting-options">
+                        <button class="setting-btn ${state.settings.display === 'single' ? 'active' : ''}" onclick="setPreference('reader_display', 'single')">📄 Single Page</button>
+                        <button class="setting-btn ${state.settings.display === 'double' ? 'active' : ''}" onclick="setPreference('reader_display', 'double')">📖 Double Page</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Zoom Mode</label>
+                    <div class="setting-options">
+                        <button class="setting-btn ${state.settings.zoom === 'fit' ? 'active' : ''}" onclick="setPreference('reader_zoom', 'fit')">🔲 Fit to Screen</button>
+                        <button class="setting-btn ${state.settings.zoom === 'width' ? 'active' : ''}" onclick="setPreference('reader_zoom', 'width')">↔️ Fit Width</button>
+                        <button class="setting-btn ${state.settings.zoom === 'height' ? 'active' : ''}" onclick="setPreference('reader_zoom', 'height')">↕️ Fit Height</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.classList.add('active'), 10);
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closePreferencesModal();
+    });
+}
+
+function closePreferencesModal() {
+    const overlay = document.getElementById('preferences-modal-overlay');
+    if (overlay) {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 300);
+    }
+}
+
+async function setPreference(key, value) {
+    if (!state.isAuthenticated) {
+        // Store locally if not authenticated
+        if (key === 'default_theme') {
+            state.theme = value;
+            localStorage.setItem('theme', value);
+            initTheme();
+        } else if (key === 'reader_direction') {
+            state.settings.direction = value;
+        } else if (key === 'reader_display') {
+            state.settings.display = value;
+        } else if (key === 'reader_zoom') {
+            state.settings.zoom = value;
+        }
+        // Update UI
+        showPreferences();
+        return;
+    }
+
+    const updates = { [key]: value };
+    const result = await apiPut('/api/preferences', updates);
+    
+    if (result.error) {
+        showToast('Failed to save preferences', 'error');
+    } else {
+        // Update local state
+        if (key === 'default_theme') {
+            state.theme = value;
+            state.userPreferences.default_theme = value;
+            initTheme();
+        } else if (key === 'reader_direction') {
+            state.settings.direction = value;
+            state.userPreferences.reader_direction = value;
+        } else if (key === 'reader_display') {
+            state.settings.display = value;
+            state.userPreferences.reader_display = value;
+        } else if (key === 'reader_zoom') {
+            state.settings.zoom = value;
+            state.userPreferences.reader_zoom = value;
+        }
+        showToast('Preferences saved', 'success');
+        // Refresh modal to show updated state
+        closePreferencesModal();
+        showPreferences();
+    }
+}
+
+function setupAuthEventListeners() {
+    // Close user menu when clicking outside
+    document.addEventListener('click', (e) => {
+        const userMenu = document.querySelector('.user-menu');
+        const dropdown = document.getElementById('user-dropdown');
+        if (userMenu && dropdown && dropdown.classList.contains('open')) {
+            if (!userMenu.contains(e.target)) {
+                dropdown.classList.remove('open');
+            }
+        }
+    });
+}
+
+// Progress API Functions
+async function saveProgressToAPI() {
+    if (!state.isAuthenticated || !state.currentComic) return;
+    
+    const progressData = {
+        comic_id: state.currentComic.id,
+        current_page: state.currentPage,
+        total_pages: state.totalPages,
+        completed: state.currentPage >= state.totalPages - 1
+    };
+    
+    const result = await apiPost('/api/progress', progressData);
+    if (result.error && result.status !== 401) {
+        console.error('Failed to save progress:', result.error);
+    }
+}
+
+async function loadProgressFromAPI(comicId) {
+    if (!state.isAuthenticated) return null;
+    
+    const result = await apiGet(`/api/progress/${comicId}`);
+    if (!result.error) {
+        return {
+            page: result.current_page,
+            completed: result.completed,
+            lastRead: new Date(result.last_read).getTime()
+        };
+    }
+    return null;
+}
+
+async function loadRecentProgressFromAPI() {
+    if (!state.isAuthenticated) return [];
+    
+    const result = await apiGet('/api/progress/recent');
+    if (!result.error && Array.isArray(result)) {
+        return result;
+    }
+    return [];
+}
+
+// Bookmark Functions
+async function loadBookmarks(comicId) {
+    if (!state.isAuthenticated) {
+        state.currentBookmarks = [];
+        return;
+    }
+    
+    const result = await apiGet('/api/bookmarks');
+    if (!result.error && Array.isArray(result)) {
+        state.currentBookmarks = result.filter(b => b.comic_id === comicId);
+    } else {
+        state.currentBookmarks = [];
+    }
+    updateBookmarkUI();
+}
+
+async function addBookmark() {
+    if (!state.isAuthenticated) {
+        showToast('Please log in to add bookmarks', 'error');
+        return;
+    }
+    
+    if (!state.currentComic) return;
+    
+    const result = await apiPost('/api/bookmarks', {
+        comic_id: state.currentComic.id,
+        page_number: state.currentPage,
+        note: `Page ${state.currentPage + 1}`
+    });
+    
+    if (result.error) {
+        showToast('Failed to add bookmark', 'error');
+    } else {
+        showToast('Bookmark added!', 'success');
+        await loadBookmarks(state.currentComic.id);
+    }
+}
+
+async function removeBookmark(pageNumber) {
+    if (!state.isAuthenticated || !state.currentComic) return;
+    
+    const result = await apiDelete(`/api/bookmarks/${state.currentComic.id}/${pageNumber}`);
+    
+    if (result.error) {
+        showToast('Failed to remove bookmark', 'error');
+    } else {
+        showToast('Bookmark removed', 'success');
+        await loadBookmarks(state.currentComic.id);
+    }
+}
+
+function toggleBookmark() {
+    if (!state.isAuthenticated) {
+        showToast('Please log in to use bookmarks', 'error');
+        return;
+    }
+    
+    const existingBookmark = state.currentBookmarks.find(b => b.page_number === state.currentPage);
+    if (existingBookmark) {
+        removeBookmark(state.currentPage);
+    } else {
+        addBookmark();
+    }
+}
+
+function updateBookmarkUI() {
+    const bookmarkBtn = document.getElementById('bookmark-btn');
+    if (!bookmarkBtn) return;
+    
+    const hasBookmark = state.currentBookmarks.some(b => b.page_number === state.currentPage);
+    bookmarkBtn.innerHTML = hasBookmark ? '🔖' : '🔖';
+    bookmarkBtn.classList.toggle('active', hasBookmark);
+    bookmarkBtn.title = hasBookmark ? 'Remove bookmark' : 'Add bookmark';
+}
+
+function showBookmarksList() {
+    if (!state.isAuthenticated || state.currentBookmarks.length === 0) {
+        showToast('No bookmarks for this comic', 'info');
+        return;
+    }
+    
+    const sorted = [...state.currentBookmarks].sort((a, b) => a.page_number - b.page_number);
+    const list = sorted.map(b => `
+        <div class="bookmark-item" onclick="jumpToPage(${b.page_number}); closeBookmarksModal();">
+            <span>🔖 Page ${b.page_number + 1}</span>
+            <button onclick="event.stopPropagation(); removeBookmark(${b.page_number});" class="bookmark-delete">&times;</button>
+        </div>
+    `).join('');
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'bookmarks-modal-overlay';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" id="bookmarks-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Bookmarks</h3>
+                <button class="modal-close" onclick="closeBookmarksModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                ${list}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.classList.add('active'), 10);
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeBookmarksModal();
+    });
+}
+
+function closeBookmarksModal() {
+    const overlay = document.getElementById('bookmarks-modal-overlay');
+    if (overlay) {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 300);
+    }
+}
+
+// Theme
+function initTheme() {
+    document.documentElement.setAttribute('data-theme', state.theme);
+    const themeIcon = document.getElementById('theme-icon');
+    if (themeIcon) {
+        themeIcon.textContent = state.theme === 'dark' ? '☀️' : '🌙';
+    }
+}
+
+function toggleTheme() {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('theme', state.theme);
+    initTheme();
+    
+    // Save to API if authenticated
+    if (state.isAuthenticated) {
+        setPreference('default_theme', state.theme);
+    }
+}
+
+// Navigation Views
+function showView(viewName) {
+    document.querySelectorAll('.header-btn').forEach(btn => btn.classList.remove('active'));
+    if (viewName === 'library') document.getElementById('nav-library').classList.add('active');
+    if (viewName === 'recent') document.getElementById('nav-recent').classList.add('active');
+
+    document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+    document.getElementById(`view-${viewName}`).classList.add('active');
+    state.currentView = viewName;
+
+    if (viewName === 'recent') {
+        loadRecentReads();
+    }
+}
+
+// Library Loading
+async function loadLibrary() {
+    try {
+        const response = await fetch('/api/books');
+        state.comics = await response.json();
+        
+        // Parse file paths to build folder structure
+        buildFolderTree();
+        
+        // Start at root
+        navigateToRoot();
+    } catch (error) {
+        showToast('Failed to load library', 'error');
+        console.error(error);
+    }
+}
+
+async function scanLibrary() {
+    try {
+        showToast('Scanning... please wait', 'info');
+        const response = await fetch('/api/scan', { method: 'POST' });
+        if (!response.ok) throw new Error('Scan failed');
+        const result = await response.json();
+        
+        // Wait 4 seconds for background scan to process
+        await new Promise(resolve => setTimeout(resolve, 4000));
+        
+        showToast(`Scan complete! Found ${result.added || 0} new comics.`, 'success');
+        
+        // Reload library to show new comics
+        await loadLibrary();
+    } catch (error) {
+        showToast('Failed to scan library: ' + error.message, 'error');
+    }
+}
+
+// Build folder tree from comic paths
+// Structure: Category > Subcategory > Title > Comics
+function buildFolderTree() {
+    const root = { 
+        name: 'Library', 
+        categories: {},
+        count: 0 
+    };
+    
+    state.comics.forEach(comic => {
+        // Parse path - remove leading ./comics/ and split
+        let relativePath = comic.path;
+        if (relativePath.includes('comics/')) {
+            relativePath = relativePath.split('comics/')[1];
+        } else if (relativePath.includes('comics\\')) {
+            relativePath = relativePath.split('comics\\')[1];
+        }
+        
+        const parts = relativePath.split(/[\\/]/).filter(p => p && !p.endsWith('.cbz') && !p.endsWith('.cbr'));
+        
+        // We expect: category/subcategory/title/comicfile
+        if (parts.length >= 3) {
+            const categoryName = parts[0];
+            const subcategoryName = parts[1];
+            const titleName = parts[2];
+            
+            // Initialize category
+            if (!root.categories[categoryName]) {
+                root.categories[categoryName] = {
+                    name: categoryName,
+                    subcategories: {},
+                    count: 0
+                };
+            }
+            const category = root.categories[categoryName];
+            category.count++;
+            
+            // Initialize subcategory
+            if (!category.subcategories[subcategoryName]) {
+                category.subcategories[subcategoryName] = {
+                    name: subcategoryName,
+                    titles: {},
+                    count: 0
+                };
+            }
+            const subcategory = category.subcategories[subcategoryName];
+            subcategory.count++;
+            
+            // Initialize title
+            if (!subcategory.titles[titleName]) {
+                subcategory.titles[titleName] = {
+                    name: titleName,
+                    comics: [],
+                    count: 0
+                };
+            }
+            const title = subcategory.titles[titleName];
+            title.comics.push(comic);
+            title.count++;
+            
+            root.count++;
+        } else if (parts.length === 2) {
+            // Handle case: category/subcategory/comic (comics directly in subcategory, no title folder)
+            const categoryName = parts[0];
+            const subcategoryName = parts[1];
+            
+            // Initialize category
+            if (!root.categories[categoryName]) {
+                root.categories[categoryName] = {
+                    name: categoryName,
+                    subcategories: {},
+                    count: 0
+                };
+            }
+            const category = root.categories[categoryName];
+            category.count++;
+            
+            // Use the actual subcategory name
+            if (!category.subcategories[subcategoryName]) {
+                category.subcategories[subcategoryName] = {
+                    name: subcategoryName,
+                    titles: {},
+                    count: 0
+                };
+            }
+            const subcategory = category.subcategories[subcategoryName];
+            subcategory.count++;
+            
+            // Use the comic's title field (which should be extracted from filename by scanner)
+            const titleName = comic.title || comic.series || 'Unknown';
+            if (!subcategory.titles[titleName]) {
+                subcategory.titles[titleName] = {
+                    name: titleName,
+                    comics: [],
+                    count: 0
+                };
+            }
+            subcategory.titles[titleName].comics.push(comic);
+            subcategory.titles[titleName].count++;
+            
+            root.count++;
+        } else if (parts.length === 1) {
+            // Comics directly in category
+            const categoryName = parts[0];
+            
+            if (!root.categories[categoryName]) {
+                root.categories[categoryName] = {
+                    name: categoryName,
+                    subcategories: {},
+                    count: 0
+                };
+            }
+            root.categories[categoryName].count++;
+            root.count++;
+            
+            // Add to uncategorized
+            const subcategoryKey = '_direct';
+            if (!root.categories[categoryName].subcategories[subcategoryKey]) {
+                root.categories[categoryName].subcategories[subcategoryKey] = {
+                    name: 'Uncategorized',
+                    titles: {},
+                    count: 0
+                };
+            }
+            const subcategory = root.categories[categoryName].subcategories[subcategoryKey];
+            subcategory.count++;
+            
+            // The comic filename becomes the title
+            const titleName = comic.title || 'Unknown';
+            if (!subcategory.titles[titleName]) {
+                subcategory.titles[titleName] = {
+                    name: titleName,
+                    comics: [],
+                    count: 0
+                };
+            }
+            subcategory.titles[titleName].comics.push(comic);
+            subcategory.titles[titleName].count++;
+        }
+    });
+    
+    state.folderTree = root;
+}
+
+// Get folders at current level
+function getFoldersAtLevel() {
+    const tree = state.folderTree;
+    
+    switch (state.currentLevel) {
+        case 'root':
+            return Object.values(tree.categories);
+        case 'category':
+            const category = tree.categories[state.currentLocation.category];
+            return category ? Object.values(category.subcategories) : [];
+        case 'subcategory':
+            const cat = tree.categories[state.currentLocation.category];
+            if (!cat) return [];
+            const subcategory = cat.subcategories[state.currentLocation.subcategory];
+            return subcategory ? Object.values(subcategory.titles) : [];
+        case 'title':
+            return []; // At title level, we show comics, not folders
+        default:
+            return [];
+    }
+}
+
+// Get all titles under current path (respects flatten mode)
+function getTitlesInLocation() {
+    const tree = state.folderTree;
+    let titles = [];
+    
+    if (state.currentLevel === 'root') {
+        // At root: get all titles from all categories and subcategories
+        Object.values(tree.categories).forEach(category => {
+            Object.values(category.subcategories).forEach(subcategory => {
+                titles = titles.concat(Object.values(subcategory.titles));
+            });
+        });
+    } else if (state.currentLevel === 'category') {
+        // Get all titles in this category (respects flatten mode)
+        const category = tree.categories[state.currentLocation.category];
+        if (category) {
+            Object.values(category.subcategories).forEach(subcategory => {
+                titles = titles.concat(Object.values(subcategory.titles));
+            });
+        }
+    } else if (state.currentLevel === 'subcategory') {
+        // Get titles in this subcategory only (respects flatten mode)
+        const category = tree.categories[state.currentLocation.category];
+        if (category) {
+            const subcategory = category.subcategories[state.currentLocation.subcategory];
+            if (subcategory) {
+                titles = Object.values(subcategory.titles);
+            }
+        }
+    } else if (state.currentLevel === 'title') {
+        // Return just the current title
+        const category = tree.categories[state.currentLocation.category];
+        if (category) {
+            const subcategory = category.subcategories[state.currentLocation.subcategory];
+            if (subcategory) {
+                const title = subcategory.titles[state.currentLocation.title];
+                if (title) {
+                    titles = [title];
+                }
+            }
+        }
+    }
+    
+    return titles;
+}
+
+// Get comics in current title
+function getComicsInTitle() {
+    const tree = state.folderTree;
+    
+    if (state.currentLevel === 'title') {
+        const category = tree.categories[state.currentLocation.category];
+        if (category) {
+            const subcategory = category.subcategories[state.currentLocation.subcategory];
+            if (subcategory) {
+                const title = subcategory.titles[state.currentLocation.title];
+                if (title) {
+                    return title.comics;
+                }
+            }
+        }
+    }
+    
+    return [];
+}
+
+// Navigate to root
+function navigateToRoot() {
+    state.currentLevel = 'root';
+    state.currentLocation = { category: null, subcategory: null, title: null };
+    state.searchQuery = '';
+    updateLibraryView();
+}
+
+// Navigate into a folder
+function navigateToFolder(type, name) {
+    if (type === 'category') {
+        state.currentLevel = 'category';
+        state.currentLocation.category = name;
+        state.currentLocation.subcategory = null;
+        state.currentLocation.title = null;
+    } else if (type === 'subcategory') {
+        state.currentLevel = 'subcategory';
+        state.currentLocation.subcategory = name;
+        state.currentLocation.title = null;
+    } else if (type === 'title') {
+        state.currentLevel = 'title';
+        state.currentLocation.title = name;
+        
+        // If we're at category level or flattening from higher level, we need to find the subcategory
+        if (state.currentLocation.subcategory === null) {
+            // If category is also null (at root), search all categories
+            if (state.currentLocation.category === null) {
+                // Search through all categories to find this title
+                for (const [catName, category] of Object.entries(state.folderTree.categories)) {
+                    let found = false;
+                    for (const [subName, subcategory] of Object.entries(category.subcategories)) {
+                        if (subcategory.titles[name]) {
+                            state.currentLocation.category = category.name;
+                            state.currentLocation.subcategory = subcategory.name;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (found) break;
+                }
+            } else {
+                // Original logic: Find which subcategory contains this title in current category
+                const category = state.folderTree.categories[state.currentLocation.category];
+                if (category) {
+                    for (const [subName, subcategory] of Object.entries(category.subcategories)) {
+                        if (subcategory.titles[name]) {
+                            state.currentLocation.subcategory = subcategory.name;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    state.searchQuery = '';
+    updateLibraryView();
+}
+
+// Navigate up one level
+function navigateUp() {
+    switch (state.currentLevel) {
+        case 'title':
+            state.currentLevel = 'subcategory';
+            state.currentLocation.title = null;
+            break;
+        case 'subcategory':
+            state.currentLevel = 'category';
+            state.currentLocation.subcategory = null;
+            state.currentLocation.title = null;
+            break;
+        case 'category':
+            state.currentLevel = 'root';
+            state.currentLocation.category = null;
+            state.currentLocation.subcategory = null;
+            state.currentLocation.title = null;
+            break;
+        default:
+            // Already at root
+            return;
+    }
+    
+    updateLibraryView();
+}
+
+// Toggle flatten mode
+function toggleFlattenMode() {
+    state.flattenMode = !state.flattenMode;
+    
+    // Update UI
+    const flattenCheckbox = document.getElementById('flatten-checkbox');
+    if (flattenCheckbox) {
+        flattenCheckbox.checked = state.flattenMode;
+    }
+    
+    // Re-render
+    updateLibraryView();
+    showToast(state.flattenMode ? 'Flatten mode enabled' : 'Flatten mode disabled', 'info');
+}
+
+// Update library view based on current state
+function updateLibraryView() {
+    updateBreadcrumbs();
+    renderFolderSidebar();
+    
+    const container = document.getElementById('content-area');
+    const folderGrid = document.getElementById('folder-grid');
+    const comicsContainer = document.getElementById('comics-container');
+    const statsSummary = document.getElementById('stats-summary');
+    const toolbar = document.querySelector('.toolbar');
+    const sidebar = document.getElementById('folder-sidebar');
+    const libraryLayout = document.getElementById('library-layout');
+    
+    // Check if we're searching
+    if (state.searchQuery) {
+        renderSearchResults();
+        return;
+    }
+    
+    if (state.currentLevel === 'title') {
+        // At title level: hide toolbar and sidebar, full-width content
+        toolbar.style.display = 'none';
+        sidebar.style.display = 'none';
+        libraryLayout.classList.add('full-width');
+        
+        // Show compact stats at bottom
+        statsSummary.style.display = 'flex';
+        statsSummary.classList.add('compact');
+        updateStatsForCurrentView();
+        
+        folderGrid.style.display = 'none';
+        // For title view, use block display instead of grid to allow full-width content
+        comicsContainer.className = 'title-view-container';
+        comicsContainer.style.display = 'block';
+        renderTitleDetailView();
+    } else {
+        // Normal browsing mode: show toolbar and sidebar
+        toolbar.style.display = 'flex';
+        sidebar.style.display = 'block';
+        libraryLayout.classList.remove('full-width');
+        statsSummary.classList.remove('compact');
+        
+        // Reset comics container class for normal browsing
+        comicsContainer.className = 'comics-grid';
+        
+        // Show/hide stats summary based on flatten mode
+        if (state.flattenMode) {
+            statsSummary.style.display = 'grid';
+            updateStatsForCurrentView();
+        } else {
+            statsSummary.style.display = 'none';
+        }
+    }
+    
+    if (state.currentLevel === 'title') {
+        // Already handled above - skip other conditions
+    } else if (state.flattenMode) {
+        // Flatten mode: show all titles as cards
+        folderGrid.style.display = 'none';
+        comicsContainer.className = 'comics-grid';
+        comicsContainer.style.display = 'grid';
+        renderTitleCards();
+    } else {
+        // Normal mode: show folders at current level
+        const folders = getFoldersAtLevel();
+        if (folders.length > 0) {
+            folderGrid.style.display = 'grid';
+            comicsContainer.style.display = 'none';
+            renderFolderGrid(folders);
+        } else {
+            // No folders, show message
+            folderGrid.style.display = 'none';
+            comicsContainer.className = 'comics-grid';
+            comicsContainer.style.display = 'grid';
+            comicsContainer.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📂</div>
+                    <div class="empty-title">No items found</div>
+                    <p>This location is empty.</p>
+                </div>
+            `;
+        }
+    }
+    
+    // Update title and subtitle
+    updateLibraryHeader();
+}
+
+// Update library header with icon and title
+function updateLibraryHeader() {
+    const titleEl = document.getElementById('library-title');
+    const subtitleEl = document.getElementById('library-subtitle');
+    const iconEl = document.getElementById('section-icon');
+    
+    if (state.searchQuery) {
+        iconEl.textContent = '🔍';
+        titleEl.textContent = 'Search Results';
+        const resultsCount = getSearchResults().length;
+        subtitleEl.textContent = `Found ${resultsCount} result${resultsCount !== 1 ? 's' : ''} for "${state.searchQuery}"`;
+    } else if (state.currentLevel === 'root') {
+        iconEl.textContent = '📚';
+        titleEl.textContent = 'Categories';
+        subtitleEl.textContent = state.flattenMode 
+            ? 'All titles in your library' 
+            : 'Select a category to browse';
+    } else if (state.currentLevel === 'category') {
+        iconEl.textContent = '📁';
+        titleEl.textContent = state.currentLocation.category;
+        subtitleEl.textContent = state.flattenMode 
+            ? 'All titles in this category' 
+            : 'Select a subcategory';
+    } else if (state.currentLevel === 'subcategory') {
+        iconEl.textContent = '📂';
+        const subcategoryName = state.currentLocation.subcategory === '_direct' 
+            ? 'Uncategorized' 
+            : state.currentLocation.subcategory;
+        titleEl.textContent = subcategoryName;
+        subtitleEl.textContent = state.flattenMode 
+            ? 'All titles' 
+            : 'Select a title to read';
+    } else if (state.currentLevel === 'title') {
+        iconEl.textContent = '📖';
+        titleEl.textContent = state.currentLocation.title;
+        const comics = getComicsInTitle();
+        subtitleEl.textContent = `${comics.length} chapter${comics.length !== 1 ? 's' : ''} available`;
+    }
+}
+
+// Update breadcrumbs - simple inline format above the title
+function updateBreadcrumbs() {
+    const container = document.getElementById('breadcrumbs');
+    const parts = ['<span class="breadcrumb-link" onclick="navigateToRoot()">Library</span>'];
+    
+    if (state.currentLevel === 'category') {
+        parts.push(`<span class="breadcrumb-current">${state.currentLocation.category}</span>`);
+    } else if (state.currentLevel === 'subcategory') {
+        parts.push(`<span class="breadcrumb-link" onclick="navigateToFolder('category', '${state.currentLocation.category}')">${state.currentLocation.category}</span>`);
+        const subName = state.currentLocation.subcategory === '_direct' ? 'Uncategorized' : state.currentLocation.subcategory;
+        parts.push(`<span class="breadcrumb-current">${subName}</span>`);
+    } else if (state.currentLevel === 'title') {
+        if (state.currentLocation.category) {
+            parts.push(`<span class="breadcrumb-link" onclick="navigateToFolder('category', '${state.currentLocation.category}')">${state.currentLocation.category}</span>`);
+        }
+        if (state.currentLocation.subcategory) {
+            const subName = state.currentLocation.subcategory === '_direct' ? 'Uncategorized' : state.currentLocation.subcategory;
+            parts.push(`<span class="breadcrumb-link" onclick="navigateToFolder('subcategory', '${state.currentLocation.subcategory}')">${subName}</span>`);
+        }
+        parts.push(`<span class="breadcrumb-current">${state.currentLocation.title}</span>`);
+    }
+    
+    container.innerHTML = parts.join(' <span class="breadcrumb-separator">›</span> ');
+}
+
+// Render folder grid (categories, subcategories, or titles)
+function renderFolderGrid(folders) {
+    const container = document.getElementById('folder-grid');
+    
+    if (folders.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.innerHTML = folders.map(folder => {
+        let icon, clickHandler, meta;
+        
+        if (state.currentLevel === 'root') {
+            // Categories
+            icon = '📁';
+            clickHandler = `navigateToFolder('category', '${folder.name}')`;
+            const subcatCount = Object.keys(folder.subcategories).length;
+            let titleCount = 0;
+            Object.values(folder.subcategories).forEach(sub => {
+                titleCount += Object.keys(sub.titles).length;
+            });
+            meta = `${subcatCount} subcategor${subcatCount === 1 ? 'y' : 'ies'}, ${titleCount} title${titleCount === 1 ? '' : 's'}`;
+        } else if (state.currentLevel === 'category') {
+            // Subcategories
+            icon = folder.name === '_direct' ? '📂' : '📁';
+            clickHandler = `navigateToFolder('subcategory', '${folder.name}')`;
+            const titleCount = Object.keys(folder.titles).length;
+            meta = `${titleCount} title${titleCount === 1 ? '' : 's'}`;
+        } else if (state.currentLevel === 'subcategory') {
+            // Titles
+            icon = '📚';
+            clickHandler = `navigateToFolder('title', '${folder.name}')`;
+            const comicCount = folder.comics.length;
+            meta = `${comicCount} chapter${comicCount === 1 ? '' : 's'}`;
+        }
+        
+        const folderName = folder.name === '_direct' ? 'Uncategorized' : folder.name;
+        
+        return `
+            <div class="folder-card" onclick="${clickHandler}">
+                <div class="folder-card-icon">${icon}</div>
+                <div class="folder-card-info">
+                    <div class="folder-card-name">${folderName}</div>
+                    <div class="folder-card-meta">${meta}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Render title cards (for flatten mode)
+function renderTitleCards() {
+    const container = document.getElementById('comics-container');
+    const titles = getTitlesInLocation();
+    
+    if (titles.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📂</div>
+                <div class="empty-title">No titles found</div>
+                <p>No titles available at this location.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Sort titles
+    const sortedTitles = [...titles].sort((a, b) => a.name.localeCompare(b.name));
+    
+    container.className = 'comics-grid';
+    container.innerHTML = sortedTitles.map(title => {
+        const firstComic = title.comics[0];
+        const comicCount = title.comics.length;
+        
+        // Calculate total progress across all comics in title
+        let totalPages = 0;
+        let readPages = 0;
+        title.comics.forEach(comic => {
+            totalPages += comic.pages || 0;
+            const progress = state.readingProgress[comic.id];
+            if (progress) {
+                readPages += progress.page;
+            }
+        });
+        const progressPercent = totalPages > 0 ? (readPages / totalPages * 100) : 0;
+        const hasProgress = readPages > 0;
+        
+        // Escape title name for use in HTML attribute
+        const escapedName = title.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        
+        return `
+            <div class="comic-card title-card" onclick="navigateToFolder('title', '${escapedName}')" data-title-name="${title.name.replace(/"/g, '&quot;')}">
+                <div class="comic-cover">
+                    <img src="/api/cover/${firstComic.id}" alt="${title.name.replace(/"/g, '&quot;')}" loading="lazy">
+                    ${hasProgress ? `<div class="comic-progress"><div class="comic-progress-bar" style="width: ${progressPercent}%"></div></div>` : ''}
+                    <div class="comic-badge">${comicCount} ch</div>
+                </div>
+                <div class="comic-info">
+                    <div class="comic-title">${title.name}</div>
+                    <div class="comic-meta">
+                        <span class="comic-chapter">${comicCount} chapter${comicCount !== 1 ? 's' : ''}</span>
+                        ${state.currentLevel === 'root' ? `<span>${firstComic.category || 'Uncategorized'}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Render comics view (when inside a title)
+function renderComicsView() {
+    const container = document.getElementById('comics-container');
+    const comics = getComicsInTitle();
+    
+    // Apply sorting
+    const sortedComics = sortComicsForDisplay(comics);
+    
+    // Use current view mode
+    container.className = state.viewMode === 'grid' ? 'comics-grid' : 
+                          state.viewMode === 'list' ? 'comics-list' : 
+                          'comics-detailed';
+    
+    if (sortedComics.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📚</div>
+                <div class="empty-title">No comics found</div>
+                <p>This title is empty.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    if (state.viewMode === 'grid') {
+        container.innerHTML = sortedComics.map(comic => renderGridCard(comic)).join('');
+    } else if (state.viewMode === 'list') {
+        container.innerHTML = sortedComics.map(comic => renderListItem(comic)).join('');
+    } else {
+        container.innerHTML = sortedComics.map(comic => renderDetailedCard(comic)).join('');
+    }
+}
+
+// Render rich title detail view with metadata
+async function renderTitleDetailView() {
+    const container = document.getElementById('comics-container');
+    const titleName = state.currentLocation.title;
+    
+    if (!titleName) return;
+    
+    // Show loading state
+    container.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading series information...</p>
+        </div>
+    `;
+    
+    // Fetch series data from API
+    const seriesData = await apiGet(`/api/series/${encodeURIComponent(titleName)}`);
+    
+    if (seriesData.error) {
+        // Show error message if API fails
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">⚠️</div>
+                <div class="empty-title">Error Loading Series</div>
+                <p>Could not load series information. Please try again later.</p>
+                <button class="btn-secondary" onclick="showView('library')" style="margin-top: 16px;">
+                    Back to Library
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    state.currentSeries = seriesData;
+    
+    // Build the rich title view HTML
+    const title = seriesData.title || seriesData.name || titleName;
+    const coverId = seriesData.cover_comic_id || (seriesData.comics && seriesData.comics[0] && seriesData.comics[0].id);
+    const synopsis = seriesData.synopsis || 'No synopsis available.';
+    
+    // Parse array fields
+    const authors = Array.isArray(seriesData.authors) ? seriesData.authors : (seriesData.authors ? [seriesData.authors] : []);
+    const genres = Array.isArray(seriesData.genres) ? seriesData.genres : (seriesData.genres ? [seriesData.genres] : []);
+    const tags = Array.isArray(seriesData.tags) ? seriesData.tags : (seriesData.tags ? [seriesData.tags] : []);
+    const demographics = Array.isArray(seriesData.demographics) ? seriesData.demographics : (seriesData.demographics ? [seriesData.demographics] : []);
+    
+    // Build metadata tags HTML
+    const statusTag = seriesData.status ? `<span class="meta-tag status ${seriesData.status.toLowerCase().replace(/\s+/g, '-')}">${seriesData.status}</span>` : '';
+    const yearTag = seriesData.release_year ? `<span class="meta-tag year">${seriesData.release_year}</span>` : '';
+    const genreTags = genres.map(g => `<span class="meta-tag genre">${g}</span>`).join('');
+    const demoTags = demographics.map(d => `<span class="meta-tag demographic">${d}</span>`).join('');
+    
+    // Authors display
+    const authorsDisplay = authors.length > 0 
+        ? `<div class="meta-section"><span class="meta-label">Authors:</span> ${authors.join(', ')}</div>` 
+        : '';
+    
+    // External IDs
+    const malLink = seriesData.mal_id ? `<a href="https://myanimelist.net/manga/${seriesData.mal_id}" target="_blank" class="external-link mal">MAL</a>` : '';
+    const anilistLink = seriesData.anilist_id ? `<a href="https://anilist.co/manga/${seriesData.anilist_id}" target="_blank" class="external-link anilist">AniList</a>` : '';
+    const externalLinks = malLink || anilistLink ? `<div class="external-links">${malLink}${anilistLink}</div>` : '';
+    
+    // Stats
+    const stats = seriesData.stats || {};
+    const progressPercent = Math.round(stats.progress_percentage || 0);
+    
+    // Quick action buttons
+    let quickActions = '';
+    if (seriesData.continue_reading) {
+        const cr = seriesData.continue_reading;
+        const actionText = cr.page > 0 ? 'Continue Reading' : 'Start Reading';
+        const chapterText = cr.chapter ? `Ch. ${cr.chapter}` : (cr.volume ? `Vol. ${cr.volume}` : '');
+        quickActions = `
+            <button class="btn-primary btn-large" onclick="startReading('${cr.comic_id}', ${cr.page})">
+                <span>▶</span> ${actionText} ${chapterText ? `- ${chapterText}` : ''}
+            </button>
+        `;
+    } else if (seriesData.comics && seriesData.comics.length > 0) {
+        quickActions = `
+            <button class="btn-primary btn-large" onclick="startReading('${seriesData.comics[0].id}')">
+                <span>▶</span> Start Reading
+            </button>
+        `;
+    }
+    
+    // Read first/read latest buttons
+    const readFirstBtn = seriesData.comics && seriesData.comics.length > 0 ? `
+        <button class="btn-secondary" onclick="startReading('${seriesData.comics[0].id}')">
+            Read First
+        </button>
+    ` : '';
+    
+    const lastComic = seriesData.comics && seriesData.comics[seriesData.comics.length - 1];
+    const readLatestBtn = lastComic ? `
+        <button class="btn-secondary" onclick="startReading('${lastComic.id}')">
+            Read Latest
+        </button>
+    ` : '';
+    
+    // Navigation between comics in the title view
+    const navButtons = `
+        <div class="title-nav-buttons">
+            <button class="nav-btn prev" onclick="navigateTitleComic(-1)" title="Previous chapter/volume">
+                ← Prev
+            </button>
+            <button class="nav-btn next" onclick="navigateTitleComic(1)" title="Next chapter/volume">
+                Next →
+            </button>
+        </div>
+    `;
+    
+    // Comics/chapters grid
+    const comicsHtml = seriesData.comics ? seriesData.comics.map((comic, index) => {
+        const progress = comic.user_progress;
+        const progressPercent = progress ? Math.round((progress.current_page / comic.pages) * 100) : 0;
+        const isCompleted = progress && progress.completed;
+        const isInProgress = progress && !progress.completed && progress.current_page > 0;
+        
+        const chapterText = comic.chapter ? `Chapter ${comic.chapter}` : (comic.volume ? `Volume ${comic.volume}` : comic.filename);
+        const readStatus = isCompleted ? 'completed' : isInProgress ? 'in-progress' : '';
+        const statusIcon = isCompleted ? '✓' : isInProgress ? '⏸' : '';
+        
+        // Prev/next navigation for this comic
+        const prevBtn = comic.prev_comic ? `<button class="chapter-nav prev" onclick="event.stopPropagation(); startReading('${comic.prev_comic.id}')" title="Previous: ${comic.prev_comic.title}">←</button>` : '';
+        const nextBtn = comic.next_comic ? `<button class="chapter-nav next" onclick="event.stopPropagation(); startReading('${comic.next_comic.id}')" title="Next: ${comic.next_comic.title}">→</button>` : '';
+        
+        return `
+            <div class="chapter-card ${readStatus}" onclick="startReading('${comic.id}')">
+                <div class="chapter-nav-buttons">
+                    ${prevBtn}
+                    ${nextBtn}
+                </div>
+                <div class="chapter-cover">
+                    <img src="/api/cover/${comic.id}" alt="${chapterText}" loading="lazy">
+                    ${progress ? `<div class="chapter-progress"><div class="progress-bar" style="width: ${progressPercent}%"></div></div>` : ''}
+                    ${statusIcon ? `<div class="chapter-status">${statusIcon}</div>` : ''}
+                </div>
+                <div class="chapter-info">
+                    <div class="chapter-title">${chapterText}</div>
+                    <div class="chapter-meta">
+                        ${comic.pages} pages
+                        ${progress ? `• ${progressPercent}% read` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('') : '';
+    
+    // Tags (if any, shown at bottom)
+    const tagsHtml = tags.length > 0 ? `
+        <div class="meta-section tags-section">
+            <span class="meta-label">Tags:</span>
+            ${tags.map(t => `<span class="meta-tag tag">${t}</span>`).join('')}
+        </div>
+    ` : '';
+    
+    // Synonyms (if any)
+    const synonyms = seriesData.synonyms || [];
+    const synonymsHtml = synonyms.length > 0 ? `
+        <div class="synonyms">Also known as: ${synonyms.join(', ')}</div>
+    ` : '';
+    
+    // Compact metadata section (no hero, title is in section-header)
+    const metadataSection = `
+        <div class="title-metadata-compact">
+            ${synonymsHtml}
+            <div class="title-meta-row-compact">
+                ${statusTag}
+                ${yearTag}
+                ${genreTags}
+                ${demoTags}
+            </div>
+            ${authorsDisplay}
+            ${externalLinks}
+        </div>
+    `;
+    
+    container.innerHTML = `
+        <div class="title-detail-container">
+            <!-- Quick Actions & Metadata -->
+            <div class="title-actions-bar">
+                ${quickActions}
+                ${readFirstBtn}
+                ${readLatestBtn}
+            </div>
+            
+            ${metadataSection}
+            ${navButtons}
+            ${tagsHtml}
+            
+            <!-- Chapters Grid -->
+            <div class="chapters-section">
+                <div class="chapters-grid">
+                    ${comicsHtml || '<p>No chapters available.</p>'}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Navigate to previous/next comic in title view
+function navigateTitleComic(direction) {
+    if (!state.currentSeries || !state.currentSeries.comics) return;
+    
+    // Find the first comic that is not completed
+    const comics = state.currentSeries.comics;
+    let targetComic = null;
+    
+    if (direction === -1) {
+        // Find the previous unread/completed comic from the end
+        for (let i = comics.length - 1; i >= 0; i--) {
+            const progress = comics[i].user_progress;
+            if (progress && !progress.completed) {
+                targetComic = comics[i];
+                break;
+            }
+        }
+        // If none found, just go to the last comic
+        if (!targetComic && comics.length > 0) {
+            targetComic = comics[comics.length - 1];
+        }
+    } else {
+        // Find the first unread comic
+        for (let i = 0; i < comics.length; i++) {
+            const progress = comics[i].user_progress;
+            if (!progress || (!progress.completed && progress.current_page === 0)) {
+                targetComic = comics[i];
+                break;
+            }
+        }
+        // If none found, find first in-progress
+        if (!targetComic) {
+            for (let i = 0; i < comics.length; i++) {
+                const progress = comics[i].user_progress;
+                if (progress && !progress.completed) {
+                    targetComic = comics[i];
+                    break;
+                }
+            }
+        }
+        // If still none, go to first
+        if (!targetComic && comics.length > 0) {
+            targetComic = comics[0];
+        }
+    }
+    
+    if (targetComic) {
+        const progress = targetComic.user_progress;
+        const page = progress && !progress.completed ? progress.current_page : 0;
+        startReading(targetComic.id, page);
+    }
+}
+
+// Sort comics for display
+function sortComicsForDisplay(comics) {
+    const sorted = [...comics];
+    
+    switch(state.sortBy) {
+        case 'alpha-asc':
+            sorted.sort((a, b) => a.title.localeCompare(b.title));
+            break;
+        case 'alpha-desc':
+            sorted.sort((a, b) => b.title.localeCompare(a.title));
+            break;
+        case 'date-added':
+            sorted.sort((a, b) => a.id.localeCompare(b.id));
+            break;
+        case 'page-count':
+            sorted.sort((a, b) => (b.pages || 0) - (a.pages || 0));
+            break;
+        case 'file-size':
+            sorted.sort((a, b) => parseFileSize(b.size_str) - parseFileSize(a.size_str));
+            break;
+        case 'recent-read':
+            sorted.sort((a, b) => {
+                const progressA = state.readingProgress[a.id];
+                const progressB = state.readingProgress[b.id];
+                if (!progressA && !progressB) return 0;
+                if (!progressA) return 1;
+                if (!progressB) return -1;
+                return progressB.lastRead - progressA.lastRead;
+            });
+            break;
+    }
+    
+    return sorted;
+}
+
+// Render grid card for a comic
+function renderGridCard(comic) {
+    const progress = state.readingProgress[comic.id];
+    const progressPercent = progress ? (progress.page / comic.pages * 100) : 0;
+    const chapterText = comic.chapter ? `Ch. ${comic.chapter}` : (comic.volume ? `Vol. ${comic.volume}` : 'One-shot');
+    
+    return `
+        <div class="comic-card" onclick="openComic('${comic.id}')">
+            <div class="comic-cover">
+                <img src="/api/cover/${comic.id}" alt="${comic.title}" loading="lazy">
+                ${progress ? `<div class="comic-progress"><div class="comic-progress-bar" style="width: ${progressPercent}%"></div></div>` : ''}
+            </div>
+            <div class="comic-info">
+                <div class="comic-title">${comic.title}</div>
+                <div class="comic-meta">
+                    <span class="comic-chapter">${chapterText}</span>
+                    <span>•</span>
+                    <span>${comic.category}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Render list item for a comic
+function renderListItem(comic) {
+    const progress = state.readingProgress[comic.id];
+    const chapterText = comic.chapter ? `Ch. ${comic.chapter}` : (comic.volume ? `Vol. ${comic.volume}` : 'One-shot');
+    const readStatus = progress?.completed ? '✓ Completed' : 
+                      progress ? `${Math.round((progress.page / comic.pages) * 100)}%` : 
+                      'Unread';
+    
+    return `
+        <div class="list-item" onclick="openComic('${comic.id}')">
+            <div class="list-cover">
+                <img src="/api/cover/${comic.id}" alt="${comic.title}" loading="lazy">
+            </div>
+            <div class="list-info">
+                <div class="list-title">${comic.title}</div>
+                <div class="list-meta">
+                    <span>${chapterText}</span>
+                    <span>•</span>
+                    <span>${comic.category}</span>
+                    <span>•</span>
+                    <span>${comic.pages} pages</span>
+                    <span>•</span>
+                    <span>${readStatus}</span>
+                </div>
+            </div>
+            <div class="list-stat">
+                <div>${comic.size_str || 'Unknown'}</div>
+                <div class="list-stat-label">Size</div>
+            </div>
+            <div class="list-actions">
+                <button class="list-btn" onclick="event.stopPropagation(); startReading('${comic.id}')">Read</button>
+            </div>
+        </div>
+    `;
+}
+
+// Render detailed card for a comic
+function renderDetailedCard(comic) {
+    const progress = state.readingProgress[comic.id];
+    const progressPercent = progress ? Math.round(progress.page / comic.pages * 100) : 0;
+    const chapterText = comic.chapter ? `Chapter ${comic.chapter}` : (comic.volume ? `Volume ${comic.volume}` : 'One-shot');
+    
+    return `
+        <div class="detailed-card" onclick="openComic('${comic.id}')">
+            <div class="detailed-cover">
+                <img src="/api/cover/${comic.id}" alt="${comic.title}" loading="lazy">
+            </div>
+            <div class="detailed-content">
+                <div class="detailed-header">
+                    <div class="detailed-title-group">
+                        <div class="detailed-title">${comic.title}</div>
+                        <div class="detailed-subtitle">${comic.series}</div>
+                    </div>
+                    <div class="detailed-badges">
+                        <span class="detailed-badge accent">${comic.category}</span>
+                        <span class="detailed-badge">${chapterText}</span>
+                        ${progress?.completed ? '<span class="detailed-badge" style="background: var(--success);">✓ Completed</span>' : ''}
+                    </div>
+                </div>
+                
+                <div class="detailed-stats">
+                    <div class="detailed-stat">
+                        <div class="detailed-stat-value">${comic.pages}</div>
+                        <div class="detailed-stat-label">Pages</div>
+                    </div>
+                    <div class="detailed-stat">
+                        <div class="detailed-stat-value">${comic.size_str || 'Unknown'}</div>
+                        <div class="detailed-stat-label">File Size</div>
+                    </div>
+                    <div class="detailed-stat">
+                        <div class="detailed-stat-value">${progressPercent}%</div>
+                        <div class="detailed-stat-label">Progress</div>
+                    </div>
+                    <div class="detailed-stat">
+                        <div class="detailed-stat-value">${comic.filename.split('.').pop().toUpperCase()}</div>
+                        <div class="detailed-stat-label">Format</div>
+                    </div>
+                </div>
+                
+                <div class="detailed-description">
+                    ${comic.series} - ${chapterText}. ${progress ? 
+                        `You've read ${progress.page + 1} of ${comic.pages} pages (${progressPercent}% complete).` : 
+                        'Not started yet. Click to begin reading.'}
+                </div>
+                
+                <div class="detailed-actions">
+                    <button class="detailed-btn primary" onclick="event.stopPropagation(); startReading('${comic.id}')">
+                        ${progress ? '▶ Continue Reading' : '▶ Start Reading'}
+                    </button>
+                    <button class="detailed-btn secondary" onclick="event.stopPropagation(); openComic('${comic.id}')">
+                        📖 View Details
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Render folder sidebar
+function renderFolderSidebar() {
+    const container = document.getElementById('folder-tree');
+    const tree = state.folderTree;
+    
+    let html = '';
+    
+    // Contextual sidebar - shows only relevant items for current location
+    if (state.currentLevel === 'root') {
+        // At root: Show all categories
+        html += `<div class="sidebar-section-title">Categories</div>`;
+        Object.values(tree.categories).forEach(category => {
+            html += `
+                <div class="folder-item">
+                    <div class="folder-header" onclick="navigateToFolder('category', '${category.name}')">
+                        <span class="folder-icon">📁</span>
+                        <span class="folder-name">${category.name}</span>
+                        <span class="folder-count">${category.count}</span>
+                    </div>
+                </div>
+            `;
+        });
+    } else if (state.currentLevel === 'category') {
+        // At category: Show back button and subcategories
+        const category = tree.categories[state.currentLocation.category];
+        if (category) {
+            html += `
+                <div class="folder-item back-item">
+                    <div class="folder-header back-button" onclick="navigateToRoot()">
+                        <span class="folder-icon">←</span>
+                        <span class="folder-name">Back to Categories</span>
+                    </div>
+                </div>
+            `;
+            html += `<div class="sidebar-section-title">${category.name}</div>`;
+            Object.values(category.subcategories).forEach(subcategory => {
+                const subName = subcategory.name === '_direct' ? 'Uncategorized' : subcategory.name;
+                html += `
+                    <div class="folder-item">
+                        <div class="folder-header" onclick="navigateToFolder('subcategory', '${subcategory.name}')">
+                            <span class="folder-icon">📁</span>
+                            <span class="folder-name">${subName}</span>
+                            <span class="folder-count">${subcategory.count}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    } else if (state.currentLevel === 'subcategory' || state.currentLevel === 'title') {
+        // At subcategory or title: Show back button and titles
+        const category = tree.categories[state.currentLocation.category];
+        if (category) {
+            const subcategory = category.subcategories[state.currentLocation.subcategory];
+            if (subcategory) {
+                const subName = subcategory.name === '_direct' ? 'Uncategorized' : subcategory.name;
+                html += `
+                    <div class="folder-item back-item">
+                        <div class="folder-header back-button" onclick="navigateToFolder('category', '${state.currentLocation.category}')">
+                            <span class="folder-icon">←</span>
+                            <span class="folder-name">Back to ${state.currentLocation.category}</span>
+                        </div>
+                    </div>
+                `;
+                html += `<div class="sidebar-section-title">${subName}</div>`;
+                Object.values(subcategory.titles).forEach(title => {
+                    const isActive = state.currentLocation.title === title.name;
+                    html += `
+                        <div class="folder-item">
+                            <div class="folder-header ${isActive ? 'active' : ''}" onclick="navigateToFolder('title', '${title.name.replace(/'/g, "\\'")}')">
+                                <span class="folder-icon">📚</span>
+                                <span class="folder-name">${title.name}</span>
+                                <span class="folder-count">${title.count}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        }
+    }
+    
+    container.innerHTML = html;
+}
+
+// Update stats for current view
+function updateStatsForCurrentView() {
+    let comics = [];
+    
+    if (state.currentLevel === 'title') {
+        // Get comics in current title
+        comics = getComicsInTitle();
+    } else if (state.flattenMode) {
+        // Get all comics in current flattened view
+        const titles = getTitlesInLocation();
+        titles.forEach(title => {
+            comics = comics.concat(title.comics);
+        });
+    }
+    
+    updateStats(comics);
+}
+
+// Update statistics
+function updateStats(comics) {
+    document.getElementById('stat-total-comics').textContent = comics.length;
+    
+    const totalPages = comics.reduce((sum, c) => sum + (c.pages || 0), 0);
+    document.getElementById('stat-total-pages').textContent = totalPages.toLocaleString();
+    
+    const totalSize = comics.reduce((sum, c) => {
+        const sizeStr = c.size_str || '0 MB';
+        const match = sizeStr.match(/([\d.]+)\s*(B|KB|MB|GB)/);
+        if (match) {
+            const val = parseFloat(match[1]);
+            const unit = match[2];
+            const multiplier = { B: 1, KB: 1024, MB: 1024**2, GB: 1024**3 }[unit];
+            return sum + (val * multiplier);
+        }
+        return sum;
+    }, 0);
+    
+    let sizeDisplay;
+    if (totalSize > 1024**3) {
+        sizeDisplay = (totalSize / 1024**3).toFixed(1) + ' GB';
+    } else if (totalSize > 1024**2) {
+        sizeDisplay = (totalSize / 1024**2).toFixed(1) + ' MB';
+    } else {
+        sizeDisplay = (totalSize / 1024).toFixed(1) + ' KB';
+    }
+    document.getElementById('stat-total-size').textContent = sizeDisplay;
+    
+    const reading = comics.filter(c => state.readingProgress[c.id] && !state.readingProgress[c.id].completed).length;
+    document.getElementById('stat-reading').textContent = reading;
+}
+
+// Set view mode
+function setViewMode(mode) {
+    state.viewMode = mode;
+    
+    // Update toggle buttons
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === mode);
+    });
+    
+    // Re-render if at title level
+    if (state.currentLevel === 'title') {
+        renderComicsView();
+    }
+}
+
+// Handle sort
+function handleSort(sortValue) {
+    state.sortBy = sortValue;
+    
+    // Re-render if at title level
+    if (state.currentLevel === 'title') {
+        renderComicsView();
+    }
+}
+
+// Parse file size
+function parseFileSize(sizeStr) {
+    if (!sizeStr) return 0;
+    const match = sizeStr.match(/([\d.]+)\s*(B|KB|MB|GB)/);
+    if (match) {
+        const val = parseFloat(match[1]);
+        const unit = match[2];
+        const multiplier = { B: 1, KB: 1024, MB: 1024**2, GB: 1024**3 }[unit];
+        return val * multiplier;
+    }
+    return 0;
+}
+
+// Search functionality
+function handleSearch(query) {
+    state.searchQuery = query.trim();
+    
+    if (!state.searchQuery) {
+        updateLibraryView();
+        return;
+    }
+    
+    updateLibraryView();
+}
+
+// Toggle search scope
+function toggleSearchScope() {
+    state.searchScope = state.searchScope === 'current' ? 'everywhere' : 'current';
+    
+    const scopeBtn = document.getElementById('search-scope-btn');
+    if (scopeBtn) {
+        scopeBtn.textContent = state.searchScope === 'current' ? '📍 Current' : '🌐 Everywhere';
+    }
+    
+    // Re-run search if there's a query
+    if (state.searchQuery) {
+        updateLibraryView();
+    }
+}
+
+// Get search results
+function getSearchResults() {
+    if (!state.searchQuery) return [];
+    
+    const lowerQuery = state.searchQuery.toLowerCase();
+    const titles = [];
+    const seenTitles = new Set();
+    
+    // Determine search scope
+    let categoriesToSearch;
+    if (state.searchScope === 'current') {
+        // Search in current location only
+        if (state.currentLevel === 'root') {
+            categoriesToSearch = Object.keys(state.folderTree.categories);
+        } else if (state.currentLevel === 'category') {
+            categoriesToSearch = [state.currentLocation.category];
+        } else if (state.currentLevel === 'subcategory') {
+            const cat = state.folderTree.categories[state.currentLocation.category];
+            if (cat) {
+                Object.values(cat.subcategories).forEach(sub => {
+                    Object.values(sub.titles).forEach(title => {
+                        if (title.name.toLowerCase().includes(lowerQuery)) {
+                            if (!seenTitles.has(title.name)) {
+                                titles.push(title);
+                                seenTitles.add(title.name);
+                            }
+                        }
+                    });
+                });
+            }
+            return titles;
+        } else if (state.currentLevel === 'title') {
+            // At title level, show that title
+            const cat = state.folderTree.categories[state.currentLocation.category];
+            if (cat) {
+                const sub = cat.subcategories[state.currentLocation.subcategory];
+                if (sub) {
+                    const title = sub.titles[state.currentLocation.title];
+                    if (title && title.name.toLowerCase().includes(lowerQuery)) {
+                        return [title];
+                    }
+                }
+            }
+            return [];
+        }
+    } else {
+        // Search everywhere - search all categories
+        categoriesToSearch = Object.keys(state.folderTree.categories);
+    }
+    
+    // Search through categories
+    categoriesToSearch.forEach(catName => {
+        const category = state.folderTree.categories[catName];
+        if (!category) return;
+        
+        Object.values(category.subcategories).forEach(subcategory => {
+            Object.values(subcategory.titles).forEach(title => {
+                // Search in title name
+                if (title.name.toLowerCase().includes(lowerQuery)) {
+                    if (!seenTitles.has(title.name)) {
+                        titles.push(title);
+                        seenTitles.add(title.name);
+                    }
+                } else {
+                    // Search in comics within title
+                    const matchingComics = title.comics.filter(comic => 
+                        comic.title.toLowerCase().includes(lowerQuery) ||
+                        (comic.series && comic.series.toLowerCase().includes(lowerQuery)) ||
+                        (comic.chapter && comic.chapter.toString().includes(lowerQuery))
+                    );
+                    
+                    if (matchingComics.length > 0 && !seenTitles.has(title.name)) {
+                        titles.push(title);
+                        seenTitles.add(title.name);
+                    }
+                }
+            });
+        });
+    });
+    
+    return titles;
+}
+
+// Render search results
+function renderSearchResults() {
+    const folderGrid = document.getElementById('folder-grid');
+    const comicsContainer = document.getElementById('comics-container');
+    const statsSummary = document.getElementById('stats-summary');
+    
+    statsSummary.style.display = 'grid';
+    
+    const results = getSearchResults();
+    
+    // Calculate stats
+    let totalComics = 0;
+    let totalPages = 0;
+    results.forEach(title => {
+        totalComics += title.comics.length;
+        totalPages += title.comics.reduce((sum, c) => sum + (c.pages || 0), 0);
+    });
+    
+    document.getElementById('stat-total-comics').textContent = totalComics;
+    document.getElementById('stat-total-pages').textContent = totalPages.toLocaleString();
+    document.getElementById('stat-total-size').textContent = '-';
+    document.getElementById('stat-reading').textContent = '-';
+    
+    folderGrid.style.display = 'none';
+    comicsContainer.style.display = 'grid';
+    comicsContainer.className = 'comics-grid';
+    
+    if (results.length === 0) {
+        comicsContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🔍</div>
+                <div class="empty-title">No results found</div>
+                <p>No titles match "${state.searchQuery}" ${state.searchScope === 'current' ? 'in the current location' : 'anywhere in the library'}.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Sort results
+    const sortedResults = [...results].sort((a, b) => a.name.localeCompare(b.name));
+    
+    comicsContainer.innerHTML = sortedResults.map(title => {
+        const firstComic = title.comics[0];
+        const comicCount = title.comics.length;
+        
+        // Calculate progress
+        let totalPages = 0;
+        let readPages = 0;
+        title.comics.forEach(comic => {
+            totalPages += comic.pages || 0;
+            const progress = state.readingProgress[comic.id];
+            if (progress) {
+                readPages += progress.page;
+            }
+        });
+        const progressPercent = totalPages > 0 ? (readPages / totalPages * 100) : 0;
+        const hasProgress = readPages > 0;
+        
+        return `
+            <div class="comic-card title-card" onclick="navigateToFolder('title', '${title.name.replace(/'/g, "\\'")}')">
+                <div class="comic-cover">
+                    <img src="/api/cover/${firstComic.id}" alt="${title.name.replace(/"/g, '&quot;')}" loading="lazy">
+                    ${hasProgress ? `<div class="comic-progress"><div class="comic-progress-bar" style="width: ${progressPercent}%"></div></div>` : ''}
+                    <div class="comic-badge">${comicCount} ch</div>
+                </div>
+                <div class="comic-info">
+                    <div class="comic-title">${title.name}</div>
+                    <div class="comic-meta">
+                        <span class="comic-chapter">${comicCount} chapter${comicCount !== 1 ? 's' : ''}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Mobile sidebar toggle
+function toggleMobileSidebar() {
+    document.getElementById('folder-sidebar').classList.toggle('mobile-visible');
+}
+
+// Recent reads
+async function loadRecentReads() {
+    let recentComics = [];
+    
+    if (state.isAuthenticated) {
+        const apiRecent = await loadRecentProgressFromAPI();
+        recentComics = apiRecent.map(item => {
+            const comic = state.comics.find(c => c.id === item.comic_id);
+            if (comic) {
+                return {
+                    ...comic,
+                    progress: {
+                        page: item.current_page,
+                        completed: item.completed,
+                        lastRead: new Date(item.last_read).getTime()
+                    }
+                };
+            }
+            return null;
+        }).filter(Boolean);
+    } else {
+        // Use local progress data
+        const recentIds = Object.keys(state.readingProgress)
+            .sort((a, b) => state.readingProgress[b].lastRead - state.readingProgress[a].lastRead)
+            .slice(0, 12);
+        
+        recentComics = recentIds.map(id => {
+            const comic = state.comics.find(c => c.id === id);
+            if (comic) {
+                return { ...comic, progress: state.readingProgress[id] };
+            }
+            return null;
+        }).filter(Boolean);
+    }
+    
+    const grid = document.getElementById('recent-grid');
+    if (recentComics.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📖</div>
+                <div class="empty-title">No recent reads</div>
+                <p>Start reading some comics to see them here!</p>
+            </div>
+        `;
+    } else {
+        grid.innerHTML = recentComics.map(comic => {
+            const progress = comic.progress;
+            const chapterText = comic.chapter ? `Ch. ${comic.chapter}` : (comic.volume ? `Vol. ${comic.volume}` : 'One-shot');
+            return `
+                <div class="comic-card" onclick="continueReading('${comic.id}')">
+                    <div class="comic-cover">
+                        <img src="/api/cover/${comic.id}" alt="${comic.title}" loading="lazy">
+                        <div class="comic-progress">
+                            <div class="comic-progress-bar" style="width: ${(progress.page / comic.pages * 100)}%"></div>
+                        </div>
+                        <div class="comic-badge">${Math.round((progress.page / comic.pages) * 100)}%</div>
+                    </div>
+                    <div class="comic-info">
+                        <div class="comic-title">${comic.title}</div>
+                        <div class="comic-meta">
+                            <span class="comic-chapter">${chapterText}</span>
+                            <span>•</span>
+                            <span>Page ${progress.page + 1}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+}
+
+// Series Detail
+function openComic(comicId) {
+    const comic = state.comics.find(c => c.id === comicId);
+    if (!comic) return;
+
+    const seriesComics = state.comics.filter(c => c.series === comic.series).sort((a, b) => {
+        if (a.volume !== b.volume) return (a.volume || 0) - (b.volume || 0);
+        return (a.chapter || 0) - (b.chapter || 0);
+    });
+
+    const detailDiv = document.getElementById('series-detail');
+    detailDiv.innerHTML = `
+        <div class="series-hero">
+            <div class="series-cover">
+                <img src="/api/cover/${comicId}" alt="${comic.title}">
+            </div>
+            <div class="series-info">
+                <h1>${comic.series}</h1>
+                <div class="series-meta">
+                    <span class="series-tag status">${comic.category}</span>
+                    ${comic.volume ? `<span class="series-tag">Vol. ${comic.volume}</span>` : ''}
+                    ${comic.chapter ? `<span class="series-tag">Ch. ${comic.chapter}</span>` : ''}
+                    <span class="series-tag">${comic.pages} pages</span>
+                </div>
+                <p class="series-synopsis">Click "Read Now" to start reading this comic. The reader supports multiple viewing modes including single page, double page, and long strip (webtoon) formats.</p>
+                <div class="series-actions">
+                    <button class="btn-primary" onclick="startReading('${comicId}')">
+                        <span>▶</span> Read Now
+                    </button>
+                    <button class="btn-secondary" onclick="showView('library')">
+                        Back to Library
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="chapter-list">
+            <div class="chapter-header">
+                <h3>All Chapters</h3>
+                <span class="chapter-count">${seriesComics.length} ${seriesComics.length === 1 ? 'chapter' : 'chapters'}</span>
+            </div>
+            ${seriesComics.map((c) => {
+                const progress = state.readingProgress[c.id];
+                const isReading = progress && progress.page > 0 && !progress.completed;
+                const chapterTitle = c.chapter ? `Chapter ${c.chapter}` : (c.volume ? `Volume ${c.volume}` : c.filename);
+                return `
+                    <div class="chapter-item ${isReading ? 'reading' : ''}" onclick="startReading('${c.id}')">
+                        <div class="chapter-info">
+                            <div class="chapter-title">${chapterTitle}</div>
+                            <div class="chapter-meta">
+                                ${progress ? `Page ${progress.page + 1} of ${c.pages}` : `${c.pages} pages`}
+                                ${progress?.completed ? ' • ✓ Completed' : ''}
+                            </div>
+                        </div>
+                        <button class="chapter-read-btn">Read</button>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+
+    showView('series');
+}
+
+// Reader
+async function startReading(comicId, page = 0) {
+    const comic = state.comics.find(c => c.id === comicId);
+    if (!comic) return;
+
+    state.currentComic = comic;
+    state.totalPages = comic.pages;
+    
+    // Find prev/next comics in the series
+    const seriesComics = state.comics.filter(c => c.series === comic.series).sort((a, b) => {
+        if (a.volume !== b.volume) return (a.volume || 0) - (b.volume || 0);
+        return (a.chapter || 0) - (b.chapter || 0);
+    });
+    
+    const currentIndex = seriesComics.findIndex(c => c.id === comicId);
+    state.readerNavigation.prevComic = currentIndex > 0 ? seriesComics[currentIndex - 1] : null;
+    state.readerNavigation.nextComic = currentIndex < seriesComics.length - 1 ? seriesComics[currentIndex + 1] : null;
+    
+    // Update reader toolbar with navigation
+    updateReaderToolbar();
+    
+    // Load progress from API if authenticated
+    let startPage = page;
+    if (state.isAuthenticated && page === 0) {
+        const savedProgress = await loadProgressFromAPI(comicId);
+        if (savedProgress) {
+            startPage = savedProgress.page;
+            state.readingProgress[comicId] = savedProgress;
+        }
+    }
+    state.currentPage = startPage;
+
+    document.getElementById('reader-title').textContent = `${comic.title} - ${comic.chapter ? `Ch. ${comic.chapter}` : (comic.volume ? `Vol. ${comic.volume}` : '')}`;
+    document.getElementById('reader').classList.add('active');
+    
+    // Load bookmarks for this comic
+    await loadBookmarks(comicId);
+    
+    // Ensure bookmark button exists
+    ensureBookmarkButton();
+    
+    await loadPage(startPage);
+    updateReaderUI();
+}
+
+// Update reader toolbar with prev/next comic buttons
+function updateReaderToolbar() {
+    const toolbar = document.querySelector('.reader-toolbar');
+    if (!toolbar) return;
+    
+    // Remove existing navigation buttons if any
+    const existingNav = toolbar.querySelector('.reader-comic-nav');
+    if (existingNav) {
+        existingNav.remove();
+    }
+    
+    // Create navigation container
+    const navContainer = document.createElement('div');
+    navContainer.className = 'reader-comic-nav';
+    
+    // Add prev comic button
+    if (state.readerNavigation.prevComic) {
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'reader-nav-btn prev-comic';
+        prevBtn.innerHTML = '← Prev Ch';
+        prevBtn.title = `Previous: ${state.readerNavigation.prevComic.title}`;
+        prevBtn.onclick = () => navigateReaderComic('prev');
+        navContainer.appendChild(prevBtn);
+    }
+    
+    // Add next comic button
+    if (state.readerNavigation.nextComic) {
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'reader-nav-btn next-comic';
+        nextBtn.innerHTML = 'Next Ch →';
+        nextBtn.title = `Next: ${state.readerNavigation.nextComic.title}`;
+        nextBtn.onclick = () => navigateReaderComic('next');
+        navContainer.appendChild(nextBtn);
+    }
+    
+    // Insert at the beginning of toolbar
+    if (navContainer.children.length > 0) {
+        toolbar.insertBefore(navContainer, toolbar.firstChild);
+    }
+}
+
+// Navigate to prev/next comic in reader
+function navigateReaderComic(direction) {
+    const targetComic = direction === 'prev' ? state.readerNavigation.prevComic : state.readerNavigation.nextComic;
+    if (!targetComic) return;
+    
+    // Check if there's progress for the target comic
+    const progress = state.readingProgress[targetComic.id];
+    const page = progress && !progress.completed ? progress.page : 0;
+    
+    startReading(targetComic.id, page);
+    showToast(`${direction === 'prev' ? 'Previous' : 'Next'} chapter loaded`, 'success');
+}
+
+function ensureBookmarkButton() {
+    let bookmarkBtn = document.getElementById('bookmark-btn');
+    if (!bookmarkBtn) {
+        const toolbar = document.querySelector('.reader-toolbar');
+        if (toolbar) {
+            bookmarkBtn = document.createElement('button');
+            bookmarkBtn.id = 'bookmark-btn';
+            bookmarkBtn.className = 'reader-btn';
+            bookmarkBtn.onclick = toggleBookmark;
+            // Insert before settings button
+            const settingsBtn = toolbar.querySelector('[onclick="toggleSettings()"]');
+            if (settingsBtn) {
+                toolbar.insertBefore(bookmarkBtn, settingsBtn);
+            } else {
+                toolbar.appendChild(bookmarkBtn);
+            }
+        }
+    }
+    
+    // Also add bookmarks list button
+    let bookmarksListBtn = document.getElementById('bookmarks-list-btn');
+    if (!bookmarksListBtn) {
+        const toolbar = document.querySelector('.reader-toolbar');
+        if (toolbar) {
+            bookmarksListBtn = document.createElement('button');
+            bookmarksListBtn.id = 'bookmarks-list-btn';
+            bookmarksListBtn.className = 'reader-btn';
+            bookmarksListBtn.innerHTML = '📑';
+            bookmarksListBtn.title = 'View bookmarks';
+            bookmarksListBtn.onclick = showBookmarksList;
+            const bookmarkBtn = document.getElementById('bookmark-btn');
+            if (bookmarkBtn) {
+                toolbar.insertBefore(bookmarksListBtn, bookmarkBtn.nextSibling);
+            } else {
+                toolbar.appendChild(bookmarksListBtn);
+            }
+        }
+    }
+}
+
+function continueReading(comicId) {
+    const progress = state.readingProgress[comicId];
+    const page = progress ? progress.page : 0;
+    startReading(comicId, page);
+}
+
+async function loadPage(pageNum) {
+    const comicId = state.currentComic.id;
+    const img = document.getElementById('reader-image');
+    
+    // Preload next page
+    if (pageNum < state.totalPages - 1) {
+        const nextImg = new Image();
+        nextImg.src = `/api/read/${comicId}/page/${pageNum + 1}`;
+    }
+    
+    img.src = `/api/read/${comicId}/page/${pageNum}`;
+}
+
+function updateReaderUI() {
+    document.getElementById('page-indicator').textContent = `${state.currentPage + 1} / ${state.totalPages}`;
+    document.getElementById('progress-slider').max = state.totalPages - 1;
+    document.getElementById('progress-slider').value = state.currentPage;
+    updateBookmarkUI();
+    saveProgress();
+}
+
+function nextPage() {
+    const increment = state.settings.direction === 'rtl' ? -1 : 1;
+    const newPage = state.currentPage + increment;
+    
+    if (newPage >= 0 && newPage < state.totalPages) {
+        state.currentPage = newPage;
+        loadPage(state.currentPage);
+        updateReaderUI();
+    } else if (newPage >= state.totalPages) {
+        completeReading();
+    }
+}
+
+async function completeReading() {
+    // Update local progress
+    state.readingProgress[state.currentComic.id] = {
+        ...state.readingProgress[state.currentComic.id],
+        completed: true,
+        page: state.totalPages - 1,
+        lastRead: Date.now()
+    };
+    
+    // Save to API if authenticated
+    await saveProgressToAPI();
+    
+    // Check if there's a next comic
+    if (state.readerNavigation.nextComic) {
+        showComicEndModal();
+    } else {
+        showToast('You\'ve reached the end of the series!', 'success');
+    }
+}
+
+// Show modal when reaching end of comic with next/previous options
+function showComicEndModal() {
+    // Remove existing modal if any
+    const existingModal = document.getElementById('comic-end-overlay');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'comic-end-overlay';
+    overlay.className = 'comic-end-overlay';
+    
+    const prevComic = state.readerNavigation.prevComic;
+    const nextComic = state.readerNavigation.nextComic;
+    
+    const prevBtn = prevComic ? `
+        <button class="btn-secondary" onclick="closeComicEndModal(); navigateReaderComic('prev')">
+            ← Previous: ${prevComic.chapter ? `Ch. ${prevComic.chapter}` : (prevComic.volume ? `Vol. ${prevComic.volume}` : 'Previous')}
+        </button>
+    ` : '';
+    
+    const nextBtn = nextComic ? `
+        <button class="btn-primary" onclick="closeComicEndModal(); navigateReaderComic('next')">
+            Next: ${nextComic.chapter ? `Ch. ${nextComic.chapter}` : (nextComic.volume ? `Vol. ${nextComic.volume}` : 'Next')} →
+        </button>
+    ` : '';
+    
+    overlay.innerHTML = `
+        <div class="comic-end-modal">
+            <h3>Chapter Complete! 🎉</h3>
+            <p>You've finished reading this chapter.</p>
+            <div class="comic-end-actions">
+                ${nextBtn}
+                ${prevBtn}
+                <button class="btn-secondary" onclick="closeComicEndModal()" style="margin-top: 8px;">
+                    Stay Here
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Trigger animation
+    setTimeout(() => overlay.classList.add('active'), 10);
+    
+    // Close on overlay click (but not modal click)
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            closeComicEndModal();
+        }
+    });
+}
+
+function closeComicEndModal() {
+    const overlay = document.getElementById('comic-end-overlay');
+    if (overlay) {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 300);
+    }
+}
+
+function prevPage() {
+    const increment = state.settings.direction === 'rtl' ? 1 : -1;
+    const newPage = state.currentPage + increment;
+    
+    if (newPage >= 0 && newPage < state.totalPages) {
+        state.currentPage = newPage;
+        loadPage(state.currentPage);
+        updateReaderUI();
+    }
+}
+
+function jumpToPage(pageNum) {
+    state.currentPage = parseInt(pageNum);
+    loadPage(state.currentPage);
+    updateReaderUI();
+}
+
+function saveProgress() {
+    if (!state.currentComic) return;
+    
+    state.readingProgress[state.currentComic.id] = {
+        page: state.currentPage,
+        lastRead: Date.now(),
+        completed: state.currentPage >= state.totalPages - 1
+    };
+    
+    // Save to API if authenticated
+    saveProgressToAPI();
+}
+
+function closeReader() {
+    document.getElementById('reader').classList.remove('active');
+    state.currentComic = null;
+    state.currentBookmarks = [];
+    saveProgress();
+}
+
+// Reader Settings
+function toggleSettings() {
+    document.getElementById('settings-panel').classList.toggle('open');
+}
+
+function setSetting(type, value) {
+    state.settings[type] = value;
+    
+    document.querySelectorAll(`[data-setting="${type}"]`).forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.value === value);
+    });
+
+    const img = document.getElementById('reader-image');
+    
+    if (type === 'display') {
+        if (value === 'double') {
+            img.classList.add('double-page');
+        } else {
+            img.classList.remove('double-page');
+        }
+    }
+
+    if (type === 'zoom') {
+        img.style.maxWidth = value === 'height' ? 'none' : '100%';
+        img.style.maxHeight = value === 'width' ? 'none' : '100%';
+        img.style.width = value === 'width' ? '100%' : 'auto';
+        img.style.height = value === 'height' ? '100%' : 'auto';
+    }
+    
+    // Save to API if authenticated
+    if (state.isAuthenticated) {
+        const prefMap = {
+            'direction': 'reader_direction',
+            'display': 'reader_display',
+            'zoom': 'reader_zoom'
+        };
+        if (prefMap[type]) {
+            setPreference(prefMap[type], value);
+        }
+    }
+}
+
+// Keyboard Shortcuts
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        if (!state.currentComic) return;
+        
+        switch(e.key) {
+            case 'ArrowLeft':
+            case 'a':
+            case 'A':
+                e.preventDefault();
+                prevPage();
+                break;
+            case 'ArrowRight':
+            case 'd':
+            case 'D':
+            case ' ':
+                e.preventDefault();
+                nextPage();
+                break;
+            case 'Escape':
+                closeReader();
+                break;
+            case 'f':
+            case 'F':
+                e.preventDefault();
+                toggleFullscreen();
+                break;
+            case 'b':
+            case 'B':
+                e.preventDefault();
+                toggleBookmark();
+                break;
+        }
+        
+        // Comic navigation with Shift+Arrow keys
+        if (e.shiftKey) {
+            switch(e.key) {
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    if (state.readerNavigation.prevComic) {
+                        navigateReaderComic('prev');
+                    }
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    if (state.readerNavigation.nextComic) {
+                        navigateReaderComic('next');
+                    }
+                    break;
+            }
+        }
+    });
+}
+
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+// Toast notifications
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const icon = type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ';
+    toast.innerHTML = `
+        <span>${icon}</span>
+        <span>${message}</span>
+    `;
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+// Close settings panel when clicking outside
+document.addEventListener('click', (e) => {
+    const settingsPanel = document.getElementById('settings-panel');
+    const settingsBtn = e.target.closest('.reader-btn');
+    
+    if (settingsPanel && settingsPanel.classList.contains('open') && 
+        !settingsPanel.contains(e.target) && 
+        (!settingsBtn || !settingsBtn.textContent.includes('Settings'))) {
+        settingsPanel.classList.remove('open');
+    }
+});
+
+// Close mobile sidebar when clicking outside
+document.addEventListener('click', (e) => {
+    const sidebar = document.getElementById('folder-sidebar');
+    const toggleBtn = e.target.closest('.sidebar-toggle');
+    
+    if (sidebar && sidebar.classList.contains('mobile-visible') && 
+        !sidebar.contains(e.target) && 
+        !toggleBtn) {
+        sidebar.classList.remove('mobile-visible');
+    }
+});

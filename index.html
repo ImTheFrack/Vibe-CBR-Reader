@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe CBR Reader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <button class="hamburger-btn" onclick="toggleHamburger()" title="Menu">≡</button>
+            <a href="#" class="logo" onclick="navigateToRoot(); return false;">
+                <div class="logo-icon">📚</div>
+                <span>Vibe Reader</span>
+            </a>
+        </div>
+        
+        <nav class="header-nav">
+            <button class="header-btn active" onclick="showView('library'); navigateToRoot();" id="nav-library">
+                <span>📖</span> Library
+            </button>
+            <button class="header-btn" onclick="showView('recent')" id="nav-recent">
+                <span>🕐</span> Recent
+            </button>
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search titles..." oninput="handleSearch(this.value)">
+                <button class="search-scope-btn" id="search-scope-btn" onclick="toggleSearchScope()" title="Toggle search scope">
+                    📍 Current
+                </button>
+            </div>
+        </nav>
+
+        <!-- Hamburger Menu Dropdown -->
+        <div class="hamburger-menu" id="hamburger-menu">
+            <!-- Auth Section (Injected here) -->
+            <div id="auth-section" class="menu-section"></div>
+            
+            <div class="menu-divider"></div>
+
+            <div class="menu-item" onclick="toggleTheme()">
+                <span class="menu-icon" id="theme-icon-menu">☀️</span>
+                <span>Toggle Theme</span>
+            </div>
+
+            <div class="menu-item sidebar-toggle-menu" onclick="toggleMobileSidebar()">
+                <span class="menu-icon">📁</span>
+                <span>Toggle Folders</span>
+            </div>
+
+            <div class="menu-divider"></div>
+
+            <div class="menu-item" onclick="scanLibrary(event)">
+                <span class="menu-icon">🔄</span>
+                <span>Scan Library</span>
+            </div>
+
+            <label class="menu-item flatten-toggle-menu">
+                <input type="checkbox" id="flatten-checkbox" onchange="toggleFlattenMode()">
+                <span class="menu-icon">📄</span>
+                <span>Flatten Library</span>
+            </label>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-container">
+        <!-- Library View -->
+        <div id="view-library" class="view active">
+            <div class="section-header">
+                <div class="header-info">
+                    <div class="breadcrumbs-inline" id="breadcrumbs">
+                        <span class="breadcrumb-link" onclick="navigateToRoot()">Library</span>
+                    </div>
+                    <h2 class="section-title">
+                        <span id="section-icon">📚</span>
+                        <span id="library-title">Categories</span>
+                    </h2>
+                    <p class="section-subtitle" id="library-subtitle">Browse your collection</p>
+                </div>
+                
+                <div class="header-controls">
+                    <div class="view-toggle">
+                        <button class="view-btn active" data-view="grid" onclick="setViewMode('grid')" title="Grid View">
+                            <span>⊞</span>
+                        </button>
+                        <button class="view-btn" data-view="list" onclick="setViewMode('list')" title="List View">
+                            <span>☰</span>
+                        </button>
+                        <button class="view-btn" data-view="detailed" onclick="setViewMode('detailed')" title="Detailed View">
+                            <span>▤</span>
+                        </button>
+                    </div>
+                    <select class="sort-select" id="sort-select" onchange="handleSort(this.value)">
+                        <option value="alpha-asc">A-Z</option>
+                        <option value="alpha-desc">Z-A</option>
+                        <option value="date-added">Date</option>
+                        <option value="page-count">Pages</option>
+                        <option value="file-size">Size</option>
+                        <option value="recent-read">Recent</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Library Content -->
+            <div class="library-layout" id="library-layout">
+                <!-- Folder Sidebar -->
+                <aside class="folder-sidebar" id="folder-sidebar">
+                    <div class="sidebar-title">📁 Navigation</div>
+                    <div class="folder-tree" id="folder-tree">
+                        <!-- Populated dynamically -->
+                    </div>
+                </aside>
+
+                <!-- Content Area -->
+                <div class="content-area" id="content-area">
+                    <!-- Folders Grid -->
+                    <div class="folder-grid" id="folder-grid" style="display: none;">
+                        <!-- Populated dynamically -->
+                    </div>
+
+                    <!-- Comics/Title Cards Container -->
+                    <div id="comics-container" class="comics-grid">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading your library...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Summary (moved to bottom) -->
+            <div class="stats-summary" id="stats-summary" style="display: none;">
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-total-comics">0</span>
+                    <span class="stat-label">Chapters</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-total-pages">0</span>
+                    <span class="stat-label">Pages</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-total-size">0 MB</span>
+                    <span class="stat-label">Size</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-reading">0</span>
+                    <span class="stat-label">Progress</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent View -->
+        <div id="view-recent" class="view">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>🕐</span>
+                    Continue Reading
+                </h2>
+                <p class="section-subtitle">Pick up where you left off</p>
+            </div>
+
+            <div id="recent-grid" class="comics-grid">
+                <div class="empty-state">
+                    <div class="empty-icon">📖</div>
+                    <div class="empty-title">No recent reads</div>
+                    <p>Start reading some comics to see them here!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Series Detail View -->
+        <div id="view-series" class="view">
+            <div class="series-detail" id="series-detail">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Reader Container -->
+    <div id="reader" class="reader-container">
+        <div class="reader-header">
+            <div class="reader-nav">
+                <button class="reader-btn" onclick="closeReader()">
+                    <span>←</span> Back
+                </button>
+            </div>
+            <div class="reader-title" id="reader-title">Loading...</div>
+            <div class="reader-nav reader-toolbar">
+                <button class="reader-btn" id="bookmark-btn" onclick="toggleBookmark()" title="Add bookmark">
+                    <span>🔖</span>
+                </button>
+                <button class="reader-btn" id="bookmarks-list-btn" onclick="showBookmarksList()" title="View bookmarks">
+                    <span>📑</span>
+                </button>
+                <button class="reader-btn" onclick="toggleSettings()">
+                    <span>⚙️</span> Settings
+                </button>
+            </div>
+        </div>
+
+        <div class="reader-content">
+            <div class="reader-viewport" id="reader-viewport">
+                <div class="click-zone prev" onclick="prevPage()"></div>
+                <img id="reader-image" class="reader-image" src="" alt="Comic page">
+                <div class="click-zone next" onclick="nextPage()"></div>
+            </div>
+        </div>
+
+        <div class="reader-footer">
+            <button class="reader-btn" onclick="prevPage()">← Prev</button>
+            <span class="page-indicator" id="page-indicator">1 / 1</span>
+            <input type="range" class="progress-slider" id="progress-slider" min="0" max="100" value="0" oninput="jumpToPage(this.value)">
+            <button class="reader-btn" onclick="nextPage()">Next →</button>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel" id="settings-panel">
+            <div class="settings-title">Reader Settings</div>
+            
+            <div class="setting-group">
+                <label class="setting-label">Reading Direction</label>
+                <div class="setting-options">
+                    <button class="setting-btn active" data-setting="direction" data-value="ltr" onclick="setSetting('direction', 'ltr')">
+                        ➡️ Left to Right
+                    </button>
+                    <button class="setting-btn" data-setting="direction" data-value="rtl" onclick="setSetting('direction', 'rtl')">
+                        ⬅️ Right to Left (Manga)
+                    </button>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <label class="setting-label">Page Display</label>
+                <div class="setting-options">
+                    <button class="setting-btn active" data-setting="display" data-value="single" onclick="setSetting('display', 'single')">
+                        📄 Single Page
+                    </button>
+                    <button class="setting-btn" data-setting="display" data-value="double" onclick="setSetting('display', 'double')">
+                        📖 Double Page
+                    </button>
+                    <button class="setting-btn" data-setting="display" data-value="long" onclick="setSetting('display', 'long')">
+                        📜 Long Strip
+                    </button>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <label class="setting-label">Zoom</label>
+                <div class="setting-options">
+                    <button class="setting-btn active" data-setting="zoom" data-value="fit" onclick="setSetting('zoom', 'fit')">
+                        Fit to Screen
+                    </button>
+                    <button class="setting-btn" data-setting="zoom" data-value="width" onclick="setSetting('zoom', 'width')">
+                        Fit Width
+                    </button>
+                    <button class="setting-btn" data-setting="zoom" data-value="height" onclick="setSetting('zoom', 'height')">
+                        Fit Height
+                    </button>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <label class="setting-label">Keyboard Shortcuts</label>
+                <div style="font-size: 0.8rem; color: var(--text-tertiary); line-height: 1.8;">
+                    <div>← / A - Previous page</div>
+                    <div>→ / D / Space - Next page</div>
+                    <div>Shift + ← - Previous chapter</div>
+                    <div>Shift + → - Next chapter</div>
+                    <div>F - Fullscreen</div>
+                    <div>B - Toggle bookmark</div>
+                    <div>ESC - Close reader</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>
