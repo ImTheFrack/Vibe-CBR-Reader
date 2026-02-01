@@ -7,7 +7,7 @@ from typing import Optional
 from config import COMICS_DIR, CACHE_DIR, IMG_EXTENSIONS
 from database import get_db_connection, get_reading_progress
 from scanner import scan_library_task, rescan_library_task, natural_sort_key
-from dependencies import get_optional_user
+from dependencies import get_current_user
 
 router = APIRouter(prefix="/api", tags=["library"])
 
@@ -42,7 +42,7 @@ async def get_cover(comic_id: str):
     return Response(status_code=404)
 
 @router.get("/read/{comic_id}")
-async def read_comic(comic_id: str, current_user: Optional[dict] = Depends(get_optional_user)):
+async def read_comic(comic_id: str, current_user: dict = Depends(get_current_user)):
     """Returns metadata for the reader, including user's progress if logged in"""
     conn = get_db_connection()
     book = conn.execute("SELECT * FROM comics WHERE id = ?", (comic_id,)).fetchone()

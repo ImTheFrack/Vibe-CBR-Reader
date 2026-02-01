@@ -15,6 +15,8 @@ export async function checkAuthStatus() {
         state.currentUser = result.user || null;
         if (state.isAuthenticated) {
             await loadUserData();
+        } else {
+            showLoginModal();
         }
     }
     updateAuthUI();
@@ -176,11 +178,6 @@ export function showLoginModal() {
     document.body.appendChild(overlay);
     // Trigger animation
     setTimeout(() => overlay.classList.add('active'), 10);
-    
-    // Close on overlay click
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) closeLoginModal();
-    });
 }
 
 export function closeLoginModal() {

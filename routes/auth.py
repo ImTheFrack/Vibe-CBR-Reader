@@ -41,7 +41,7 @@ async def login(user_data: UserLogin):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
     # Create session token
-    token = create_session(user['id'], expires_hours=168)  # 7 days
+    token = create_session(user['id'], expires_hours=720)  # 30 days
     
     response = JSONResponse({
         "message": "Login successful",
@@ -58,7 +58,7 @@ async def login(user_data: UserLogin):
         key="session_token",
         value=token,
         httponly=True,
-        max_age=604800,  # 7 days
+        max_age=2592000,  # 30 days
         samesite="lax"
     )
     

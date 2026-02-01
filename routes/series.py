@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
 from database import get_all_series, get_series_with_comics
-from dependencies import get_optional_user
+from dependencies import get_current_user
 
 router = APIRouter(prefix="/api/series", tags=["series"])
 
 @router.get("")
-async def list_series(category: Optional[str] = None, subcategory: Optional[str] = None, current_user: Optional[dict] = Depends(get_optional_user)):
+async def list_series(category: Optional[str] = None, subcategory: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """List all series with optional filtering"""
     series_list = get_all_series(category=category, subcategory=subcategory)
     return series_list
@@ -24,9 +24,9 @@ async def filter_series_by_tags(request: TagFilterRequest):
     return get_series_by_tags(request.selected_tags)
 
 @router.get("/{series_name}")
-async def get_series_detail(series_name: str, current_user: Optional[dict] = Depends(get_optional_user)):
+async def get_series_detail(series_name: str, current_user: dict = Depends(get_current_user)):
     """Get full series details including all comics and user progress"""
-    user_id = current_user['id'] if current_user else None
+    user_id = current_user['id']
     series = get_series_with_comics(series_name, user_id=user_id)
     
     if not series:
