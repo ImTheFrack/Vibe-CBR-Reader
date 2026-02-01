@@ -8,7 +8,7 @@ import {
     loadLibrary, scanLibrary, navigateToRoot, navigateToFolder, 
     navigateUp, toggleFlattenMode, setViewMode, handleSort, 
     handleSearch, toggleSearchScope, showView, openComic, 
-    toggleMobileSidebar, navigateTitleComic 
+    toggleMobileSidebar, navigateTitleComic, renderTitleFan, toggleSynopsis 
 } from './library.js';
 import { 
     setupKeyboardShortcuts, startReading, closeReader, 
@@ -20,6 +20,7 @@ import {
     showPreferences, closePreferencesModal, setPreference 
 } from './preferences.js';
 import { showToast } from './utils.js';
+import { initTagsView } from './tags.js';
 
 // Hamburger Menu
 export function toggleHamburger() {
@@ -53,10 +54,16 @@ window.setViewMode = setViewMode;
 window.handleSort = handleSort;
 window.handleSearch = handleSearch;
 window.toggleSearchScope = toggleSearchScope;
-window.showView = showView;
+window.showView = (view) => {
+    showView(view);
+    if (view === 'tags') {
+        initTagsView();
+    }
+};
 window.openComic = openComic;
 window.toggleMobileSidebar = toggleMobileSidebar;
 window.navigateTitleComic = navigateTitleComic;
+window.toggleSynopsis = toggleSynopsis;
 window.startReading = startReading;
 window.closeReader = closeReader;
 window.prevPage = prevPage;

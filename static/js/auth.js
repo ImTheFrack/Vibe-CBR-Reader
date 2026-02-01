@@ -3,7 +3,7 @@ import { apiGet, apiPost } from './api.js';
 import { showToast } from './utils.js';
 import { initTheme } from './theme.js';
 import { showPreferences } from './preferences.js';
-import { navigateToRoot, loadRecentReads } from './library.js';
+import { navigateToRoot, loadRecentReads, updateLibraryView, renderFolderGrid, getFoldersAtLevel, renderTitleCards, renderComicsView } from './library.js';
 
 export async function checkAuthStatus() {
     const result = await apiGet('/api/auth/check');
@@ -38,6 +38,7 @@ export async function loadUserData() {
     const prefsResult = await apiGet('/api/preferences');
     if (!prefsResult.error) {
         state.userPreferences = prefsResult;
+        
         // Apply preferences if they exist
         if (prefsResult.reader_direction) {
             state.settings.direction = prefsResult.reader_direction;
@@ -48,9 +49,36 @@ export async function loadUserData() {
         if (prefsResult.reader_zoom) {
             state.settings.zoom = prefsResult.reader_zoom;
         }
-        if (prefsResult.default_theme && prefsResult.default_theme !== state.theme) {
-            state.theme = prefsResult.default_theme;
+        if (prefsResult.theme && prefsResult.theme !== state.theme) {
+            state.theme = prefsResult.theme;
             initTheme();
+        }
+
+        // Apply View Mode Preference
+        if (prefsResult.default_view_mode) {
+            state.viewMode = prefsResult.default_view_mode;
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.view === state.viewMode);
+            });
+        }
+
+        // Apply Sort Preference
+        if (prefsResult.default_sort_by) {
+            state.sortBy = prefsResult.default_sort_by;
+            const sortSelect = document.getElementById('sort-select');
+            if (sortSelect) sortSelect.value = state.sortBy;
+        }
+        
+        // Refresh library view if active
+        if (state.currentView === 'library') {
+             if (state.currentLevel === 'title') {
+                renderComicsView();
+            } else if (state.flattenMode || state.currentLevel === 'subcategory') {
+                renderTitleCards();
+            } else if (!state.flattenMode && (state.currentLevel === 'root' || state.currentLevel === 'category')) {
+                const folders = getFoldersAtLevel();
+                renderFolderGrid(folders);
+            }
         }
     }
 }

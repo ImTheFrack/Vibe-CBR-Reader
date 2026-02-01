@@ -28,6 +28,9 @@
             <button class="header-btn" onclick="showView('recent')" id="nav-recent">
                 <span>🕐</span> Recent
             </button>
+            <button class="header-btn" onclick="showView('tags')" id="nav-tags">
+                <span>🏷️</span> Tags
+            </button>
             <div class="search-box">
                 <span class="search-icon">🔍</span>
                 <input type="text" class="search-input" id="searchInput" placeholder="Search titles..." oninput="handleSearch(this.value)">
@@ -172,6 +175,42 @@
                     <div class="empty-title">No recent reads</div>
                     <p>Start reading some comics to see them here!</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Tags View -->
+        <div id="view-tags" class="view">
+            <div class="section-header">
+                <div class="header-info">
+                    <div class="breadcrumbs-inline">
+                        <span class="breadcrumb-link" onclick="navigateToRoot()">Library</span> <span class="breadcrumb-separator">›</span> <span class="breadcrumb-current">Tags</span>
+                    </div>
+                    <h2 class="section-title">
+                        <span>🏷️</span>
+                        Browse by Tags
+                    </h2>
+                    <p class="section-subtitle" id="tags-subtitle">Select tags to narrow down your collection</p>
+                </div>
+                <div class="header-controls">
+                     <button id="btn-show-results" class="btn-primary" onclick="showTagResults()" style="display:none;">
+                        Display Results
+                     </button>
+                </div>
+            </div>
+
+            <!-- Selected Tags Bar -->
+            <div id="selected-tags-container" class="tags-filter-bar">
+                <!-- Selected tags will appear here -->
+            </div>
+
+            <!-- Tags Grid -->
+            <div id="tags-grid" class="folder-grid tags-view-grid">
+                <!-- Tag folders will appear here -->
+            </div>
+
+            <!-- Results Grid (Hidden by default) -->
+            <div id="tags-results" class="comics-grid" style="display: none;">
+                <!-- Matching series will appear here -->
             </div>
         </div>
 

@@ -1,0 +1,91 @@
+
+/* ============================================
+   TAGS VIEW
+   ============================================ */
+
+/* Selected Tags Bar */
+.tags-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    align-items: center;
+    min-height: 50px;
+}
+
+/* Tag Chip */
+.tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--bg-tertiary); /* Use primary or accent for selected? */
+    background: rgba(255, 107, 53, 0.15); /* Accent tint */
+    border: 1px solid var(--accent-primary);
+    color: var(--accent-primary);
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.tag-chip:hover {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.tag-chip:hover .tag-remove {
+    color: white;
+}
+
+.tag-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: var(--accent-primary);
+    font-weight: bold;
+}
+
+/* Clear Tags Button */
+.clear-tags-btn {
+    padding: 6px 12px;
+    margin-left: auto; /* Push to right */
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.clear-tags-btn:hover {
+    color: var(--text-primary);
+}
+
+/* Tags Grid */
+.tags-view-grid {
+    /* Inherits from .folder-grid, usually defined elsewhere */
+    /* Add any specific overrides here if needed */
+}
+
+/* Tag Card Specifics */
+.tag-card .folder-card-icon {
+    font-size: 2.5rem;
+    color: var(--text-secondary);
+}
+
+.tag-card:hover .folder-card-icon {
+    color: var(--accent-primary);
+    transform: scale(1.1);
+    transition: all var(--transition-fast);
+}

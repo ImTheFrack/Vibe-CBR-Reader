@@ -433,8 +433,7 @@ export function updateLibraryHeader() {
     } else if (state.currentLevel === 'title') {
         iconEl.textContent = '📖';
         titleEl.textContent = state.currentLocation.title;
-        const comics = getComicsInTitle();
-        subtitleEl.textContent = `${comics.length} chapter${comics.length !== 1 ? 's' : ''} available`;
+        subtitleEl.textContent = '';
     }
 }
 
@@ -569,7 +568,7 @@ function getSortedComicsForTitleFan(title) {
     return sorted.slice(0, 3);
 }
 
-function renderTitleFan(title) {
+export function renderTitleFan(title) {
     const comics = getSortedComicsForTitleFan(title);
     
     if (comics.length === 0) {
@@ -1048,10 +1047,38 @@ export async function renderTitleDetailView() {
     const demoTags = demographics.map(d => `<span class="meta-tag demographic">${d}</span>`).join('');
     
     const authorsDisplay = authors.length > 0 ? `<div class="meta-section"><span class="meta-label">Authors:</span> ${authors.join(', ')}</div>` : '';
-    const malLink = seriesData.mal_id ? `<a href="https://myanimelist.net/manga/${seriesData.mal_id}" target="_blank" class="external-link mal">MAL</a>` : '';
-    const anilistLink = seriesData.anilist_id ? `<a href="https://anilist.co/manga/${seriesData.anilist_id}" target="_blank" class="external-link anilist">AniList</a>` : '';
-    const externalLinks = malLink || anilistLink ? `<div class="external-links">${malLink}${anilistLink}</div>` : '';
     
+    // Combine all tags
+    const allTags = [...demographics, ...genres, ...tags];
+    const allTagsHtml = allTags.length > 0 ? `
+        <div class="meta-section tags-section">
+            <span class="meta-label">Tags:</span>
+            ${allTags.map(t => `<span class="meta-tag tag">${t}</span>`).join('')}
+        </div>
+    ` : '';
+
+    const malLink = seriesData.mal_id ? `<a href="https://myanimelist.net/manga/${seriesData.mal_id}" target="_blank" class="external-link mal">🔗 MAL</a>` : '';
+    const anilistLink = seriesData.anilist_id ? `<a href="https://anilist.co/manga/${seriesData.anilist_id}" target="_blank" class="external-link anilist">🔗 AniList</a>` : '';
+    const externalLinks = malLink || anilistLink ? `<div class="external-links-inline">${malLink}${anilistLink}</div>` : '';
+    
+    const synonyms = seriesData.synonyms || [];
+    const synonymsHtml = synonyms.length > 0 ? `<div class="synonyms">Also known as: ${synonyms.join(', ')}</div>` : '';
+    
+    const metadataSection = `
+        <div class="title-metadata-compact">
+            ${synonymsHtml}
+            <div class="title-meta-row-compact">
+                ${statusTag}
+                ${yearTag}
+                ${externalLinks}
+            </div>
+            ${authorsDisplay}
+            ${allTagsHtml}
+        </div>
+    `;
+
+    const fileCountHtml = `<div class="meta-section" style="margin-top: 16px;"><span class="meta-label">Files:</span> ${seriesData.comics ? seriesData.comics.length : 0} chapters available</div>`;
+
     let quickActions = '';
     if (seriesData.continue_reading) {
         const cr = seriesData.continue_reading;
@@ -1114,37 +1141,18 @@ export async function renderTitleDetailView() {
         `;
     }).join('') : '';
     
-    const tagsHtml = tags.length > 0 ? `
-        <div class="meta-section tags-section">
-            <span class="meta-label">Tags:</span>
-            ${tags.map(t => `<span class="meta-tag tag">${t}</span>`).join('')}
-        </div>
-    ` : '';
-    
-    const synonyms = seriesData.synonyms || [];
-    const synonymsHtml = synonyms.length > 0 ? `<div class="synonyms">Also known as: ${synonyms.join(', ')}</div>` : '';
-    
-    const metadataSection = `
-        <div class="title-metadata-compact">
-            ${synonymsHtml}
-            <div class="title-meta-row-compact">${statusTag}${yearTag}${genreTags}${demoTags}</div>
-            ${authorsDisplay}
-            ${externalLinks}
-            <div class="meta-section"><span class="meta-label">Files:</span> ${seriesData.comics ? seriesData.comics.length : 0} chapters available</div>
-        </div>
-    `;
-    
     // Synopsis
+    // Use a unique ID for the synopsis to toggle
+    const uniqueId = Math.random().toString(36).substr(2, 9);
     const synopsisHtml = seriesData.synopsis ? 
         `<div class="series-synopsis-block">
-            <p>${seriesData.synopsis}</p>
+            <p class="series-synopsis-text" id="synopsis-${uniqueId}">${seriesData.synopsis}</p>
+            <div class="synopsis-toggle" onclick="window.toggleSynopsis('${uniqueId}')">▼</div>
         </div>` : '';
 
     container.innerHTML = `
         <div class="title-detail-container">
-            <h1 class="series-title-large">${title}</h1>
             ${synopsisHtml}
-            ${tagsHtml}
             ${metadataSection}
             
             <div class="title-actions-bar">
@@ -1152,6 +1160,7 @@ export async function renderTitleDetailView() {
                 ${readFirstBtn}
                 ${readLatestBtn}
             </div>
+            ${fileCountHtml}
             
             <div class="chapters-section">
                 <div class="chapters-grid">${comicsHtml || '<p>No chapters available.</p>'}</div>
@@ -1405,6 +1414,12 @@ export function setViewMode(mode) {
     document.querySelectorAll('.view-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.view === mode);
     });
+    
+    // Save preference if logged in
+    if (state.isAuthenticated) {
+        apiPut('/api/preferences', { default_view_mode: mode });
+    }
+
     if (state.currentLevel === 'title') {
         renderComicsView();
     } else if (state.flattenMode || state.currentLevel === 'subcategory') {
@@ -1417,6 +1432,12 @@ export function setViewMode(mode) {
 
 export function handleSort(sortValue) {
     state.sortBy = sortValue;
+    
+    // Save preference if logged in
+    if (state.isAuthenticated) {
+        apiPut('/api/preferences', { default_sort_by: sortValue });
+    }
+
     if (state.currentLevel === 'title') {
         renderComicsView();
     } else if (state.flattenMode || state.currentLevel === 'subcategory') {
@@ -1741,11 +1762,23 @@ export function continueReading(comicId) {
     startReading(comicId, page);
 }
 
+export function toggleSynopsis(id) {
+    const textEl = document.getElementById(`synopsis-${id}`);
+    const btn = event.target; // Event is available in inline handler scope
+    
+    if (textEl) {
+        textEl.classList.toggle('expanded');
+        const isExpanded = textEl.classList.contains('expanded');
+        btn.textContent = isExpanded ? '▲' : '▼';
+    }
+}
+
 // Helper to show view (needs to be exported or available)
 export function showView(viewName) {
     document.querySelectorAll('.header-btn').forEach(btn => btn.classList.remove('active'));
     if (viewName === 'library') document.getElementById('nav-library').classList.add('active');
     if (viewName === 'recent') document.getElementById('nav-recent').classList.add('active');
+    if (viewName === 'tags') document.getElementById('nav-tags').classList.add('active');
 
     document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
     document.getElementById(`view-${viewName}`).classList.add('active');

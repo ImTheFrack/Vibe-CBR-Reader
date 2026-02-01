@@ -11,6 +11,18 @@ async def list_series(category: Optional[str] = None, subcategory: Optional[str]
     series_list = get_all_series(category=category, subcategory=subcategory)
     return series_list
 
+from pydantic import BaseModel
+from typing import List
+
+class TagFilterRequest(BaseModel):
+    selected_tags: List[str] = []
+
+@router.post("/tags/filter")
+async def filter_series_by_tags(request: TagFilterRequest):
+    """Filter series by tags and return stats/results"""
+    from database import get_series_by_tags
+    return get_series_by_tags(request.selected_tags)
+
 @router.get("/{series_name}")
 async def get_series_detail(series_name: str, current_user: Optional[dict] = Depends(get_optional_user)):
     """Get full series details including all comics and user progress"""

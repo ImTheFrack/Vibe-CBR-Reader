@@ -603,3 +603,112 @@ def get_all_series(category=None, subcategory=None, limit=100, offset=0):
         result.append(s)
     
     return result
+
+def get_series_by_tags(selected_tags=None):
+    """
+    Get series stats filtered by tags/genres.
+    selected_tags: list of strings (tags/genres) that MUST be present.
+    Returns: {
+        'matching_count': int,
+        'related_tags': [{'name': str, 'count': int, 'type': 'mixed'}],
+        'series': [dict] (summary of matching series)
+    }
+    """
+    if selected_tags is None:
+        selected_tags = []
+    
+    selected_set = set(t.lower() for t in selected_tags)
+    
+    conn = get_db_connection()
+    # Fetch all series with tags/genres
+    all_series = conn.execute('''
+        SELECT id, name, title, genres, tags, cover_comic_id, total_chapters 
+        FROM series
+    ''').fetchall()
+    
+    matching_series = []
+    import json
+    
+    # Tag aggregation
+    tag_counts = {}
+    
+    for row in all_series:
+        s_genres = []
+        s_tags = []
+        
+        if row['genres']:
+            try:
+                s_genres = json.loads(row['genres'])
+            except: pass
+            
+        if row['tags']:
+            try:
+                s_tags = json.loads(row['tags'])
+            except: pass
+            
+        # Merge and normalize
+        # We keep original casing for display, but use lower for matching
+        combined_map = {} # lower -> display
+        
+        for g in (s_genres or []):
+            combined_map[g.lower()] = g
+        for t in (s_tags or []):
+            combined_map[t.lower()] = t
+            
+        series_tag_set = set(combined_map.keys())
+        
+        # Check if series has all selected tags
+        if selected_set.issubset(series_tag_set):
+            # It's a match!
+            
+            # Add to matching list
+            
+            # Fetch up to 3 comics for the fan
+            fan_comics = conn.execute('''
+                SELECT id, volume, chapter, filename 
+                FROM comics 
+                WHERE series_id = ? 
+                ORDER BY 
+                    CASE WHEN volume IS NULL OR volume = 0 THEN 999999 ELSE volume END,
+                    COALESCE(chapter, 0), 
+                    filename
+                LIMIT 3
+            ''', (row['id'],)).fetchall()
+            
+            matching_series.append({
+                'id': row['id'],
+                'name': row['name'],
+                'title': row['title'],
+                'cover_comic_id': row['cover_comic_id'],
+                'count': row['total_chapters'] or 0,
+                'comics': [dict(c) for c in fan_comics]
+            })
+            
+            # Aggregate OTHER tags
+            for tag_lower, tag_display in combined_map.items():
+                if tag_lower not in selected_set:
+                    if tag_display not in tag_counts:
+                        tag_counts[tag_display] = {'count': 0, 'covers': [], 'series_names': []}
+                    
+                    tag_counts[tag_display]['count'] += 1
+                    # Collect up to 3 covers for the fan
+                    if len(tag_counts[tag_display]['covers']) < 3 and row['cover_comic_id']:
+                        tag_counts[tag_display]['covers'].append(row['cover_comic_id'])
+                    # Collect up to 3 series names for display
+                    if len(tag_counts[tag_display]['series_names']) < 3:
+                        tag_counts[tag_display]['series_names'].append(row['title'] or row['name'])
+                    
+    # Format related tags
+    related_tags_list = [
+        {'name': name, 'count': data['count'], 'covers': data['covers'], 'series_names': data['series_names']} 
+        for name, data in tag_counts.items()
+    ]
+    # Sort by count desc, then name asc
+    related_tags_list.sort(key=lambda x: (-x['count'], x['name']))
+    
+    conn.close()
+    return {
+        'matching_count': len(matching_series),
+        'related_tags': related_tags_list,
+        'series': matching_series
+    }
