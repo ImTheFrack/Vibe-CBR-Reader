@@ -12,6 +12,9 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     
+    # Enable WAL mode for better concurrency
+    conn.execute('PRAGMA journal_mode=WAL')
+    
     # Main comics table
     conn.execute('''
         CREATE TABLE IF NOT EXISTS comics (
@@ -135,6 +138,35 @@ def init_db():
         conn.execute('ALTER TABLE comics ADD COLUMN series_id INTEGER REFERENCES series(id) ON DELETE SET NULL')
     except sqlite3.OperationalError:
         pass  # Column already exists
+    
+    # Add has_thumbnail column to comics table if not exists
+    try:
+        conn.execute('ALTER TABLE comics ADD COLUMN has_thumbnail BOOLEAN DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    # Scan jobs table for tracking library scans
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS scan_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP,
+            status TEXT DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed')),
+            total_comics INTEGER DEFAULT 0,
+            processed_comics INTEGER DEFAULT 0,
+            errors TEXT,
+            scan_type TEXT DEFAULT 'fast'
+        )
+    ''')
+    
+    # Index on scan_jobs.status for fast polling queries
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_scan_jobs_status ON scan_jobs(status)')
+    
+    # Migrate data: set has_thumbnail = TRUE for already processed comics
+    try:
+        conn.execute('UPDATE comics SET has_thumbnail = 1 WHERE processed = 1')
+    except sqlite3.OperationalError:
+        pass  # Migration already done or column doesn't exist yet
     
     conn.commit()
     conn.close()
@@ -712,3 +744,111 @@ def get_series_by_tags(selected_tags=None):
         'related_tags': related_tags_list,
         'series': matching_series
     }
+
+# Scan jobs functions
+def create_scan_job(scan_type='fast', total_comics=0):
+    """Create a new scan job and return its ID"""
+    conn = get_db_connection()
+    cursor = conn.execute(
+        '''INSERT INTO scan_jobs (scan_type, total_comics, status) 
+           VALUES (?, ?, 'running')''',
+        (scan_type, total_comics)
+    )
+    job_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return job_id
+
+def update_scan_progress(job_id, processed_comics, errors=None):
+    """Update scan job progress"""
+    conn = get_db_connection()
+    import json
+    errors_json = json.dumps(errors) if errors else None
+    
+    conn.execute(
+        '''UPDATE scan_jobs 
+           SET processed_comics = ?, errors = ?
+           WHERE id = ?''',
+        (processed_comics, errors_json, job_id)
+    )
+    conn.commit()
+    conn.close()
+
+def complete_scan_job(job_id, status='completed', errors=None):
+    """Mark scan job as completed or failed"""
+    conn = get_db_connection()
+    import json
+    errors_json = json.dumps(errors) if errors else None
+    
+    conn.execute(
+        '''UPDATE scan_jobs 
+           SET status = ?, completed_at = CURRENT_TIMESTAMP, errors = ?
+           WHERE id = ?''',
+        (status, errors_json, job_id)
+    )
+    conn.commit()
+    conn.close()
+
+def get_scan_status(job_id):
+    """Get status of a specific scan job"""
+    conn = get_db_connection()
+    job = conn.execute(
+        '''SELECT id, started_at, completed_at, status, total_comics, processed_comics, errors, scan_type
+           FROM scan_jobs WHERE id = ?''',
+        (job_id,)
+    ).fetchone()
+    conn.close()
+    
+    if job:
+        result = dict(job)
+        # Parse errors JSON if present
+        if result.get('errors'):
+            import json
+            try:
+                result['errors'] = json.loads(result['errors'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return result
+    return None
+
+def get_latest_scan_job():
+    """Get the most recent scan job"""
+    conn = get_db_connection()
+    job = conn.execute(
+        '''SELECT id, started_at, completed_at, status, total_comics, processed_comics, errors, scan_type
+           FROM scan_jobs ORDER BY started_at DESC LIMIT 1'''
+    ).fetchone()
+    conn.close()
+    
+    if job:
+        result = dict(job)
+        # Parse errors JSON if present
+        if result.get('errors'):
+            import json
+            try:
+                result['errors'] = json.loads(result['errors'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return result
+    return None
+
+def get_running_scan_job():
+    """Get the currently running scan job, if any"""
+    conn = get_db_connection()
+    job = conn.execute(
+        '''SELECT id, started_at, completed_at, status, total_comics, processed_comics, errors, scan_type
+           FROM scan_jobs WHERE status = 'running' ORDER BY started_at DESC LIMIT 1'''
+    ).fetchone()
+    conn.close()
+    
+    if job:
+        result = dict(job)
+        # Parse errors JSON if present
+        if result.get('errors'):
+            import json
+            try:
+                result['errors'] = json.loads(result['errors'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return result
+    return None
