@@ -370,7 +370,7 @@ export function updateLibraryView() {
         statsSummary.classList.remove('compact');
         comicsContainer.className = 'comics-grid';
         
-        if (state.flattenMode) {
+        if (state.flattenMode || state.currentLevel === 'subcategory') {
             statsSummary.style.display = 'grid';
             updateStatsForCurrentView();
         } else {
@@ -380,7 +380,7 @@ export function updateLibraryView() {
     
     if (state.currentLevel === 'title') {
         // Handled above
-    } else if (state.flattenMode) {
+    } else if (state.flattenMode || state.currentLevel === 'subcategory') {
         folderGrid.style.display = 'none';
         comicsContainer.className = 'comics-grid';
         comicsContainer.style.display = 'grid';
@@ -463,6 +463,172 @@ export function updateBreadcrumbs() {
     container.innerHTML = parts.join(' <span class="breadcrumb-separator">›</span> ');
 }
 
+// Helper to get random comics from a folder structure
+function getRandomComicsForFolder(folder, count = 3) {
+    // 1. Collect all series (titles) in this folder recursively
+    const allTitles = [];
+    
+    function traverse(node) {
+        if (node.titles) {
+            Object.values(node.titles).forEach(title => {
+                if (title.comics && title.comics.length > 0) {
+                    allTitles.push(title);
+                }
+            });
+        }
+        if (node.subcategories) {
+            Object.values(node.subcategories).forEach(sub => traverse(sub));
+        }
+        // Handle direct categories if node is a category with subcategories
+        if (node.categories) {
+             Object.values(node.categories).forEach(cat => traverse(cat));
+        }
+    }
+    
+    traverse(folder);
+    
+    if (allTitles.length === 0) return [];
+
+    // 2. Shuffle titles to get random series
+    // Fisher-Yates shuffle
+    for (let i = allTitles.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allTitles[i], allTitles[j]] = [allTitles[j], allTitles[i]];
+    }
+    
+    // 3. Select up to 'count' titles, and pick one comic from each
+    const result = [];
+    for (let i = 0; i < Math.min(count, allTitles.length); i++) {
+        const title = allTitles[i];
+        // Pick a random comic from this title, or just the first one (cover)
+        // Let's pick the first one usually as it's often the volume 1 cover or similar
+        // But the user said "random files", so let's pick a random one from the series
+        const randomComicIndex = Math.floor(Math.random() * title.comics.length);
+        result.push(title.comics[randomComicIndex]);
+    }
+    
+    // If we don't have enough series to fill 'count', we could potentially pick more from the same series
+    // But "random from each series" implies variety. 
+    // If we have fewer series than count (e.g. 1 series), we should show multiple from that series.
+    if (result.length < count && allTitles.length > 0) {
+        const remainingNeeded = count - result.length;
+        // Collect all available comics from the selected titles (excluding ones already picked if possible)
+        // For simplicity, just grab more random ones from the available titles
+        const allComics = [];
+        allTitles.forEach(t => allComics.push(...t.comics));
+        
+        // Filter out ones we already picked
+        const pickedIds = new Set(result.map(c => c.id));
+        const availableComics = allComics.filter(c => !pickedIds.has(c.id));
+        
+        // Shuffle available
+        for (let i = availableComics.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [availableComics[i], availableComics[j]] = [availableComics[j], availableComics[i]];
+        }
+        
+        for (let i = 0; i < Math.min(remainingNeeded, availableComics.length); i++) {
+            result.push(availableComics[i]);
+        }
+    }
+
+    return result;
+}
+
+// Helper to get sorted comics for a Title Fan view
+// Requirements: Volume 1-X first, then non-volume comics.
+// Within groups: sort alphanumerically (or by chapter/volume number).
+function getSortedComicsForTitleFan(title) {
+    if (!title.comics || title.comics.length === 0) return [];
+
+    // Clone array to avoid mutating original order if it's used elsewhere
+    const sorted = [...title.comics];
+    
+    sorted.sort((a, b) => {
+        // 1. Volumes first (values > 0) vs Non-Volumes (0 or null)
+        const volA = (a.volume && a.volume > 0) ? a.volume : 999999;
+        const volB = (b.volume && b.volume > 0) ? b.volume : 999999;
+        
+        if (volA !== volB) {
+            return volA - volB;
+        }
+        
+        // 2. Sort by Chapter
+        const chapA = (a.chapter !== null && a.chapter !== undefined) ? a.chapter : 0;
+        const chapB = (b.chapter !== null && b.chapter !== undefined) ? b.chapter : 0;
+        
+        if (chapA !== chapB) {
+            return chapA - chapB;
+        }
+        
+        // 3. Fallback to filename (natural sort)
+        return a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' });
+    });
+    
+    // Return top 3
+    return sorted.slice(0, 3);
+}
+
+function renderTitleFan(title) {
+    const comics = getSortedComicsForTitleFan(title);
+    
+    if (comics.length === 0) {
+        return `<div class="empty-cover"></div>`; 
+    }
+    
+    // Create fan HTML
+    // We need 3 images max
+    let html = `<div class="folder-fan">`;
+    
+    // Position 1: Main (Top) - First comic (e.g. Vol 1)
+    if (comics.length >= 1) {
+        html += `<img src="/api/cover/${comics[0].id}" class="folder-fan-img fan-main" loading="lazy" alt="Cover">`;
+    }
+    
+    // Position 2: Left - Second comic
+    if (comics.length >= 2) {
+        html += `<img src="/api/cover/${comics[1].id}" class="folder-fan-img fan-left" loading="lazy" alt="Cover">`;
+    }
+    
+    // Position 3: Right - Third comic
+    if (comics.length >= 3) {
+        html += `<img src="/api/cover/${comics[2].id}" class="folder-fan-img fan-right" loading="lazy" alt="Cover">`;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
+function renderFolderFan(folder) {
+    const comics = getRandomComicsForFolder(folder, 3);
+    
+    if (comics.length === 0) {
+        return `<span class="folder-icon">📁</span>`;
+    }
+    
+    // Create fan HTML
+    // We need 3 images max
+    let html = `<div class="folder-fan">`;
+    
+    if (comics.length >= 1) {
+        // Main image (Top)
+        html += `<img src="/api/cover/${comics[0].id}" class="folder-fan-img fan-main" loading="lazy" alt="Cover">`;
+    }
+    
+    if (comics.length >= 2) {
+        // Left image
+        html += `<img src="/api/cover/${comics[1].id}" class="folder-fan-img fan-left" loading="lazy" alt="Cover">`;
+    }
+    
+    if (comics.length >= 3) {
+        // Right image
+        html += `<img src="/api/cover/${comics[2].id}" class="folder-fan-img fan-right" loading="lazy" alt="Cover">`;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
 export function renderFolderGrid(folders) {
     const container = document.getElementById('folder-grid');
     if (folders.length === 0) {
@@ -470,39 +636,154 @@ export function renderFolderGrid(folders) {
         return;
     }
     
-    container.innerHTML = folders.map(folder => {
-        let icon, clickHandler, meta;
-        if (state.currentLevel === 'root') {
-            icon = '📁';
-            clickHandler = `navigateToFolder('category', '${folder.name}')`;
-            const subcatCount = Object.keys(folder.subcategories).length;
-            let titleCount = 0;
-            Object.values(folder.subcategories).forEach(sub => { titleCount += Object.keys(sub.titles).length; });
-            meta = `${subcatCount} subcategor${subcatCount === 1 ? 'y' : 'ies'}, ${titleCount} title${titleCount === 1 ? '' : 's'}`;
-        } else if (state.currentLevel === 'category') {
-            icon = folder.name === '_direct' ? '📂' : '📁';
-            clickHandler = `navigateToFolder('subcategory', '${folder.name}')`;
-            const titleCount = Object.keys(folder.titles).length;
-            meta = `${titleCount} title${titleCount === 1 ? '' : 's'}`;
-        } else if (state.currentLevel === 'subcategory') {
-            icon = '📚';
-            clickHandler = `navigateToFolder('title', '${folder.name.replace(/'/g, "\\'")}')`;
-            const comicCount = folder.comics.length;
-            meta = `${comicCount} chapter${comicCount === 1 ? '' : 's'}`;
-        }
-        
-        const folderName = folder.name === '_direct' ? 'Uncategorized' : folder.name;
-        
-        return `
-            <div class="folder-card" onclick="${clickHandler}">
-                <div class="folder-card-icon">${icon}</div>
-                <div class="folder-card-info">
-                    <div class="folder-card-name">${folderName}</div>
-                    <div class="folder-card-meta">${meta}</div>
+    const sortedFolders = sortFolders(folders);
+    
+    container.className = state.viewMode === 'grid' ? 'folder-grid' : 
+                          state.viewMode === 'list' ? 'comics-list' : 
+                          'comics-detailed';
+                          
+    if (state.viewMode === 'grid') {
+        container.innerHTML = sortedFolders.map(folder => {
+            let clickHandler, meta;
+            if (state.currentLevel === 'root') {
+                clickHandler = `navigateToFolder('category', '${folder.name}')`;
+                const subcatCount = Object.keys(folder.subcategories).length;
+                let titleCount = 0;
+                Object.values(folder.subcategories).forEach(sub => { titleCount += Object.keys(sub.titles).length; });
+                meta = `${subcatCount} subcategor${subcatCount === 1 ? 'y' : 'ies'}, ${titleCount} title${titleCount === 1 ? '' : 's'}`;
+            } else if (state.currentLevel === 'category') {
+                clickHandler = `navigateToFolder('subcategory', '${folder.name}')`;
+                const titleCount = Object.keys(folder.titles).length;
+                meta = `${titleCount} title${titleCount === 1 ? '' : 's'}`;
+            }
+            
+            const folderName = folder.name === '_direct' ? 'Uncategorized' : folder.name;
+            const fanHtml = renderFolderFan(folder);
+            
+            return `
+                <div class="folder-card" onclick="${clickHandler}">
+                    <div class="folder-card-icon">${fanHtml}</div>
+                    <div class="folder-card-info">
+                        <div class="folder-card-name">${folderName}</div>
+                        <div class="folder-card-meta">${meta}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } else if (state.viewMode === 'list') {
+        container.innerHTML = sortedFolders.map(folder => renderFolderListCard(folder)).join('');
+    } else {
+        container.innerHTML = sortedFolders.map(folder => renderFolderDetailedCard(folder)).join('');
+    }
+}
+
+export function sortFolders(folders) {
+    const sorted = [...folders];
+    switch(state.sortBy) {
+        case 'alpha-asc': sorted.sort((a, b) => a.name.localeCompare(b.name)); break;
+        case 'alpha-desc': sorted.sort((a, b) => b.name.localeCompare(a.name)); break;
+        case 'date-added': 
+        case 'recent-read':
+             // Folders don't strictly have date/recent metadata easily accessible without deeper scan
+             // Fallback to alpha for now or implement if metadata available
+             sorted.sort((a, b) => a.name.localeCompare(b.name));
+             break;
+        case 'page-count': // Interpret as item count for folders
+            sorted.sort((a, b) => b.count - a.count);
+            break;
+        case 'file-size': // Not easily applicable to folders without deep scan
+            sorted.sort((a, b) => b.count - a.count);
+            break;
+    }
+    return sorted;
+}
+
+export function renderFolderListCard(folder) {
+    let clickHandler, meta, typeLabel, itemCount;
+    const folderName = folder.name === '_direct' ? 'Uncategorized' : folder.name;
+    
+    if (state.currentLevel === 'root') {
+        clickHandler = `navigateToFolder('category', '${folder.name}')`;
+        const subcatCount = Object.keys(folder.subcategories).length;
+        let titleCount = 0;
+        Object.values(folder.subcategories).forEach(sub => { titleCount += Object.keys(sub.titles).length; });
+        meta = `${subcatCount} subcategories, ${titleCount} titles`;
+        typeLabel = 'Category';
+        itemCount = titleCount;
+    } else {
+        clickHandler = `navigateToFolder('subcategory', '${folder.name}')`;
+        const titleCount = Object.keys(folder.titles).length;
+        meta = `${titleCount} titles`;
+        typeLabel = 'Subcategory';
+        itemCount = titleCount;
+    }
+
+    const fanHtml = renderFolderFan(folder);
+    // Adjust fan html for list view - remove 'folder-icon' wrapper if present inside renderFolderFan?
+    // renderFolderFan returns either <div class="folder-fan"> or <span class="folder-icon">
+    // We want to put it inside .list-cover
+    
+    // Note: renderFolderFan output is fine, but we might want to ensure it fits nicely in .list-cover
+    // .list-cover has relative positioning now.
+
+    return `
+        <div class="list-item" onclick="${clickHandler}">
+            <div class="list-cover" style="display:flex;align-items:center;justify-content:center;">${fanHtml}</div>
+            <div class="list-info">
+                <div class="list-title">${folderName}</div>
+                <div class="list-meta">
+                    <span>${typeLabel}</span><span>•</span><span>${meta}</span>
                 </div>
             </div>
-        `;
-    }).join('');
+            <div class="list-stat"><div>${itemCount}</div><div class="list-stat-label">Items</div></div>
+            <div class="list-actions"><button class="list-btn" onclick="event.stopPropagation(); ${clickHandler}">Open</button></div>
+        </div>
+    `;
+}
+
+export function renderFolderDetailedCard(folder) {
+    let clickHandler, meta, typeLabel, itemCount;
+    const folderName = folder.name === '_direct' ? 'Uncategorized' : folder.name;
+    
+    if (state.currentLevel === 'root') {
+        clickHandler = `navigateToFolder('category', '${folder.name}')`;
+        const subcatCount = Object.keys(folder.subcategories).length;
+        let titleCount = 0;
+        Object.values(folder.subcategories).forEach(sub => { titleCount += Object.keys(sub.titles).length; });
+        meta = `${subcatCount} subcategories, ${titleCount} titles`;
+        typeLabel = 'Category';
+        itemCount = titleCount;
+    } else {
+        clickHandler = `navigateToFolder('subcategory', '${folder.name}')`;
+        const titleCount = Object.keys(folder.titles).length;
+        meta = `${titleCount} titles`;
+        typeLabel = 'Subcategory';
+        itemCount = titleCount;
+    }
+
+    const fanHtml = renderFolderFan(folder);
+
+    return `
+        <div class="detailed-card" onclick="${clickHandler}">
+            <div class="detailed-cover" style="display:flex;align-items:center;justify-content:center;">${fanHtml}</div>
+            <div class="detailed-content">
+                <div class="detailed-header">
+                    <div class="detailed-title-group"><div class="detailed-title">${folderName}</div><div class="detailed-subtitle">${typeLabel}</div></div>
+                    <div class="detailed-badges"><span class="detailed-badge accent">${itemCount} Items</span></div>
+                </div>
+                <div class="detailed-stats">
+                    <div class="detailed-stat"><div class="detailed-stat-value">${itemCount}</div><div class="detailed-stat-label">Titles</div></div>
+                    <div class="detailed-stat"><div class="detailed-stat-value">-</div><div class="detailed-stat-label">Size</div></div>
+                    <div class="detailed-stat"><div class="detailed-stat-value">-</div><div class="detailed-stat-label">Progress</div></div>
+                    <div class="detailed-stat"><div class="detailed-stat-value">DIR</div><div class="detailed-stat-label">Format</div></div>
+                </div>
+                <div class="detailed-description">Folder containing ${meta}. Click to browse contents.</div>
+                <div class="detailed-actions">
+                    <button class="detailed-btn primary" onclick="event.stopPropagation(); ${clickHandler}">▶ Open Folder</button>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 export function renderTitleCards() {
@@ -520,42 +801,187 @@ export function renderTitleCards() {
         return;
     }
     
-    const sortedTitles = [...titles].sort((a, b) => a.name.localeCompare(b.name));
+    const sortedTitles = sortTitlesForDisplay(titles);
     
-    container.className = 'comics-grid';
-    container.innerHTML = sortedTitles.map(title => {
-        const firstComic = title.comics[0];
-        const comicCount = title.comics.length;
-        
-        let totalPages = 0;
-        let readPages = 0;
-        title.comics.forEach(comic => {
-            totalPages += comic.pages || 0;
-            const progress = state.readingProgress[comic.id];
-            if (progress) readPages += progress.page;
-        });
-        const progressPercent = totalPages > 0 ? (readPages / totalPages * 100) : 0;
-        const hasProgress = readPages > 0;
-        
-        const escapedName = title.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        
-        return `
-            <div class="comic-card title-card" onclick="navigateToFolder('title', '${escapedName}')" data-title-name="${title.name.replace(/"/g, '&quot;')}">
-                <div class="comic-cover">
-                    <img src="/api/cover/${firstComic.id}" alt="${title.name.replace(/"/g, '&quot;')}" loading="lazy">
-                    ${hasProgress ? `<div class="comic-progress"><div class="comic-progress-bar" style="width: ${progressPercent}%"></div></div>` : ''}
-                    <div class="comic-badge">${comicCount} ch</div>
-                </div>
-                <div class="comic-info">
-                    <div class="comic-title">${title.name}</div>
-                    <div class="comic-meta">
-                        <span class="comic-chapter">${comicCount} chapter${comicCount !== 1 ? 's' : ''}</span>
-                        ${state.currentLevel === 'root' ? `<span>${firstComic.category || 'Uncategorized'}</span>` : ''}
-                    </div>
+    container.className = state.viewMode === 'grid' ? 'comics-grid' : 
+                          state.viewMode === 'list' ? 'comics-list' : 
+                          'comics-detailed';
+                          
+    if (state.viewMode === 'grid') {
+        container.innerHTML = sortedTitles.map(title => renderTitleGridCard(title)).join('');
+    } else if (state.viewMode === 'list') {
+        container.innerHTML = sortedTitles.map(title => renderTitleListItem(title)).join('');
+    } else {
+        container.innerHTML = sortedTitles.map(title => renderTitleDetailedCard(title)).join('');
+    }
+}
+
+export function sortTitlesForDisplay(titles) {
+    const sorted = [...titles];
+    switch(state.sortBy) {
+        case 'alpha-asc': sorted.sort((a, b) => a.name.localeCompare(b.name)); break;
+        case 'alpha-desc': sorted.sort((a, b) => b.name.localeCompare(a.name)); break;
+        case 'date-added': 
+             sorted.sort((a, b) => {
+                 const idA = a.comics[0]?.id || '';
+                 const idB = b.comics[0]?.id || '';
+                 return idA.localeCompare(idB);
+             });
+             break;
+        case 'page-count': 
+            sorted.sort((a, b) => {
+                const pagesA = a.comics.reduce((sum, c) => sum + (c.pages || 0), 0);
+                const pagesB = b.comics.reduce((sum, c) => sum + (c.pages || 0), 0);
+                return pagesB - pagesA;
+            });
+            break;
+        case 'file-size':
+             sorted.sort((a, b) => {
+                 const sizeA = a.comics.reduce((sum, c) => sum + parseFileSize(c.size_str), 0);
+                 const sizeB = b.comics.reduce((sum, c) => sum + parseFileSize(c.size_str), 0);
+                 return sizeB - sizeA;
+             });
+             break;
+        case 'recent-read':
+            sorted.sort((a, b) => {
+                const getRecent = (title) => {
+                    let maxTime = 0;
+                    title.comics.forEach(c => {
+                        const p = state.readingProgress[c.id];
+                        if (p && p.lastRead > maxTime) maxTime = new Date(p.lastRead).getTime();
+                    });
+                    return maxTime;
+                };
+                return getRecent(b) - getRecent(a);
+            });
+            break;
+    }
+    return sorted;
+}
+
+export function renderTitleGridCard(title) {
+    const firstComic = title.comics[0];
+    const comicCount = title.comics.length;
+    
+    let totalPages = 0;
+    let readPages = 0;
+    title.comics.forEach(comic => {
+        totalPages += comic.pages || 0;
+        const progress = state.readingProgress[comic.id];
+        if (progress) readPages += progress.page;
+    });
+    const progressPercent = totalPages > 0 ? (readPages / totalPages * 100) : 0;
+    const hasProgress = readPages > 0;
+    
+    const escapedName = title.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const displayTitle = title.name.replace(/"/g, '&quot;');
+    const fanHtml = renderTitleFan(title);
+    
+    return `
+        <div class="comic-card title-card" onclick="navigateToFolder('title', '${escapedName}')" data-title-name="${displayTitle}">
+            <div class="comic-cover">
+                ${fanHtml}
+                ${hasProgress ? `<div class="comic-progress"><div class="comic-progress-bar" style="width: ${progressPercent}%"></div></div>` : ''}
+                <div class="comic-badge">${comicCount} ch</div>
+            </div>
+            <div class="comic-info">
+                <div class="comic-title">${title.name}</div>
+                <div class="comic-meta">
+                    <span class="comic-chapter">${comicCount} chapter${comicCount !== 1 ? 's' : ''}</span>
+                    ${state.currentLevel === 'root' ? `<span>${firstComic.category || 'Uncategorized'}</span>` : ''}
                 </div>
             </div>
-        `;
-    }).join('');
+        </div>
+    `;
+}
+
+export function renderTitleListItem(title) {
+    const firstComic = title.comics[0];
+    const comicCount = title.comics.length;
+    
+    let totalPages = 0;
+    let readPages = 0;
+    let totalSize = 0;
+    
+    title.comics.forEach(comic => {
+        totalPages += comic.pages || 0;
+        totalSize += parseFileSize(comic.size_str);
+        const progress = state.readingProgress[comic.id];
+        if (progress) readPages += progress.page;
+    });
+    
+    const progressPercent = totalPages > 0 ? Math.round(readPages / totalPages * 100) : 0;
+    
+    // Format size
+    let sizeDisplay;
+    if (totalSize > 1024**3) sizeDisplay = (totalSize / 1024**3).toFixed(1) + ' GB';
+    else if (totalSize > 1024**2) sizeDisplay = (totalSize / 1024**2).toFixed(1) + ' MB';
+    else sizeDisplay = (totalSize / 1024).toFixed(1) + ' KB';
+
+    const escapedName = title.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const fanHtml = renderTitleFan(title);
+    
+    return `
+        <div class="list-item" onclick="navigateToFolder('title', '${escapedName}')">
+            <div class="list-cover" style="display:flex;align-items:center;justify-content:center;">${fanHtml}</div>
+            <div class="list-info">
+                <div class="list-title">${title.name}</div>
+                <div class="list-meta">
+                    <span>${comicCount} chapters</span><span>•</span><span>${firstComic.category}</span><span>•</span><span>${totalPages} pages total</span><span>•</span><span>${progressPercent}% read</span>
+                </div>
+            </div>
+            <div class="list-stat"><div>${sizeDisplay}</div><div class="list-stat-label">Total Size</div></div>
+            <div class="list-actions"><button class="list-btn" onclick="event.stopPropagation(); navigateToFolder('title', '${escapedName}')">View</button></div>
+        </div>
+    `;
+}
+
+export function renderTitleDetailedCard(title) {
+    const firstComic = title.comics[0];
+    const comicCount = title.comics.length;
+    
+    let totalPages = 0;
+    let readPages = 0;
+    let totalSize = 0;
+    
+    title.comics.forEach(comic => {
+        totalPages += comic.pages || 0;
+        totalSize += parseFileSize(comic.size_str);
+        const progress = state.readingProgress[comic.id];
+        if (progress) readPages += progress.page;
+    });
+    
+    const progressPercent = totalPages > 0 ? Math.round(readPages / totalPages * 100) : 0;
+    
+    let sizeDisplay;
+    if (totalSize > 1024**3) sizeDisplay = (totalSize / 1024**3).toFixed(1) + ' GB';
+    else if (totalSize > 1024**2) sizeDisplay = (totalSize / 1024**2).toFixed(1) + ' MB';
+    else sizeDisplay = (totalSize / 1024).toFixed(1) + ' KB';
+
+    const escapedName = title.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const fanHtml = renderTitleFan(title);
+
+    return `
+        <div class="detailed-card" onclick="navigateToFolder('title', '${escapedName}')">
+            <div class="detailed-cover" style="display:flex;align-items:center;justify-content:center;">${fanHtml}</div>
+            <div class="detailed-content">
+                <div class="detailed-header">
+                    <div class="detailed-title-group"><div class="detailed-title">${title.name}</div><div class="detailed-subtitle">${firstComic.category}</div></div>
+                    <div class="detailed-badges"><span class="detailed-badge accent">${comicCount} Chapters</span><span class="detailed-badge">${totalPages} Pages</span></div>
+                </div>
+                <div class="detailed-stats">
+                    <div class="detailed-stat"><div class="detailed-stat-value">${comicCount}</div><div class="detailed-stat-label">Chapters</div></div>
+                    <div class="detailed-stat"><div class="detailed-stat-value">${sizeDisplay}</div><div class="detailed-stat-label">Total Size</div></div>
+                    <div class="detailed-stat"><div class="detailed-stat-value">${progressPercent}%</div><div class="detailed-stat-label">Total Progress</div></div>
+                    <div class="detailed-stat"><div class="detailed-stat-value">${firstComic.filename.split('.').pop().toUpperCase()}</div><div class="detailed-stat-label">Format</div></div>
+                </div>
+                <div class="detailed-description">Series containing ${comicCount} chapters or volumes. Total of ${totalPages} pages. ${readPages > 0 ? `You have read ${readPages} pages (${progressPercent}%).` : 'Not started.'}</div>
+                <div class="detailed-actions">
+                    <button class="detailed-btn primary" onclick="event.stopPropagation(); navigateToFolder('title', '${escapedName}')">▶ View Series</button>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 export function renderComicsView() {
@@ -940,7 +1366,7 @@ export function renderFolderSidebar() {
 export function updateStatsForCurrentView() {
     let comics = [];
     if (state.currentLevel === 'title') comics = getComicsInTitle();
-    else if (state.flattenMode) {
+    else if (state.flattenMode || state.currentLevel === 'subcategory') {
         const titles = getTitlesInLocation();
         titles.forEach(title => { comics = comics.concat(title.comics); });
     }
@@ -979,12 +1405,26 @@ export function setViewMode(mode) {
     document.querySelectorAll('.view-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.view === mode);
     });
-    if (state.currentLevel === 'title') renderComicsView();
+    if (state.currentLevel === 'title') {
+        renderComicsView();
+    } else if (state.flattenMode || state.currentLevel === 'subcategory') {
+        renderTitleCards();
+    } else if (!state.flattenMode && (state.currentLevel === 'root' || state.currentLevel === 'category')) {
+        const folders = getFoldersAtLevel();
+        renderFolderGrid(folders);
+    }
 }
 
 export function handleSort(sortValue) {
     state.sortBy = sortValue;
-    if (state.currentLevel === 'title') renderComicsView();
+    if (state.currentLevel === 'title') {
+        renderComicsView();
+    } else if (state.flattenMode || state.currentLevel === 'subcategory') {
+        renderTitleCards();
+    } else if (!state.flattenMode && (state.currentLevel === 'root' || state.currentLevel === 'category')) {
+        const folders = getFoldersAtLevel();
+        renderFolderGrid(folders);
+    }
 }
 
 export function parseFileSize(sizeStr) {

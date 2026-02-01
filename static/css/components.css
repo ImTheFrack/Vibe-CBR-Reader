@@ -39,6 +39,11 @@
     transform: scale(1.05);
 }
 
+/* Prevent fan images from using the default scale hover which breaks centering */
+.title-card:hover .comic-cover .folder-fan-img {
+    transform: none; 
+}
+
 .comic-badge {
     position: absolute;
     top: 8px;
@@ -49,6 +54,7 @@
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
     font-weight: 600;
+    z-index: 10;
 }
 
 .comic-progress {
@@ -58,6 +64,7 @@
     right: 0;
     height: 4px;
     background: rgba(0,0,0,0.3);
+    z-index: 10;
 }
 
 .comic-progress-bar {
@@ -125,6 +132,7 @@
     border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--bg-tertiary);
+    position: relative; /* For fan view positioning */
 }
 
 .list-cover img {
@@ -217,6 +225,7 @@
     overflow: hidden;
     aspect-ratio: 2/3;
     background: var(--bg-tertiary);
+    position: relative; /* For fan view positioning */
 }
 
 .detailed-cover img {
@@ -355,6 +364,8 @@
     border: 1px solid var(--border-color);
     cursor: pointer;
     transition: all var(--transition-fast);
+    position: relative;
+    overflow: hidden;
 }
 
 .folder-card:hover {
@@ -365,11 +376,90 @@
 }
 
 .folder-card-icon {
+    width: 60px;
+    height: 80px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 2rem;
+    position: relative;
 }
+
+.folder-fan {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.folder-fan-img {
+    position: absolute;
+    width: 70%;
+    height: 80%;
+    object-fit: cover;
+    border-radius: 4px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    background: var(--bg-tertiary);
+    transition: transform var(--transition-normal);
+}
+
+/* Fan Layout */
+.folder-fan-img.fan-main {
+    z-index: 3;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    height: 90%;
+}
+
+.folder-fan-img.fan-left {
+    z-index: 2;
+    left: 20%;
+    top: 60%;
+    transform: translate(-50%, -50%) rotate(-15deg);
+    width: 70%;
+    height: 80%;
+    opacity: 0.9;
+}
+
+.folder-fan-img.fan-right {
+    z-index: 1;
+    left: 80%;
+    top: 60%;
+    transform: translate(-50%, -50%) rotate(15deg);
+    width: 70%;
+    height: 80%;
+    opacity: 0.9;
+}
+
+/* Hover effects for fan */
+.folder-card:hover .folder-fan-img.fan-main,
+.title-card:hover .folder-fan-img.fan-main,
+.list-item:hover .folder-fan-img.fan-main,
+.detailed-card:hover .folder-fan-img.fan-main {
+    transform: translate(-50%, -55%) scale(1.05);
+}
+
+.folder-card:hover .folder-fan-img.fan-left,
+.title-card:hover .folder-fan-img.fan-left,
+.list-item:hover .folder-fan-img.fan-left,
+.detailed-card:hover .folder-fan-img.fan-left {
+    transform: translate(-60%, -50%) rotate(-20deg);
+}
+
+.folder-card:hover .folder-fan-img.fan-right,
+.title-card:hover .folder-fan-img.fan-right,
+.list-item:hover .folder-fan-img.fan-right,
+.detailed-card:hover .folder-fan-img.fan-right {
+    transform: translate(-40%, -50%) rotate(20deg);
+}
+
 
 .folder-card-info {
     flex: 1;
+    z-index: 4; /* Ensure text is above any potential overflow */
 }
 
 .folder-card-name {
