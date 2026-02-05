@@ -14,7 +14,7 @@
     <header class="header">
         <div class="header-left">
             <button class="hamburger-btn" onclick="toggleHamburger()" title="Menu">≡</button>
-            <a href="#" class="logo" onclick="navigateToRoot(); return false;">
+            <a href="#/library" class="logo">
                 <div class="logo-icon">📚</div>
                 <span>Vibe Reader</span>
             </a>
@@ -22,13 +22,13 @@
         </div>
         
         <nav class="header-nav">
-            <button class="header-btn active" onclick="showView('library'); navigateToRoot();" id="nav-library">
+            <button class="header-btn active" id="nav-library">
                 <span>📖</span> Library
             </button>
-            <button class="header-btn" onclick="showView('recent')" id="nav-recent">
+            <button class="header-btn" onclick="routerNavigate('recent', {})" id="nav-recent">
                 <span>🕐</span> Recent
             </button>
-            <button class="header-btn" onclick="showView('tags')" id="nav-tags">
+            <button class="header-btn" onclick="routerNavigate('tags', {})" id="nav-tags">
                 <span>🏷️</span> Tags
             </button>
             <div class="search-box">
@@ -74,7 +74,7 @@
             <div class="section-header">
                 <div class="header-info">
                     <div class="breadcrumbs-inline" id="breadcrumbs">
-                        <span class="breadcrumb-link" onclick="navigateToRoot()">Library</span>
+                        <span class="breadcrumb-link" onclick="routerNavigate('library', {})">Library</span>
                     </div>
                     <h2 class="section-title">
                         <span id="section-icon">📚</span>
@@ -178,7 +178,7 @@
             <div class="section-header">
                 <div class="header-info">
                     <div class="breadcrumbs-inline">
-                        <span class="breadcrumb-link" onclick="navigateToRoot()">Library</span> <span class="breadcrumb-separator">›</span> <span class="breadcrumb-current">Tags</span>
+                        <span class="breadcrumb-link" onclick="routerNavigate('library', {})">Library</span> <span class="breadcrumb-separator">›</span> <span class="breadcrumb-current">Tags</span>
                     </div>
                     <h2 class="section-title">
                         <span>🏷️</span>
@@ -187,6 +187,10 @@
                     <p class="section-subtitle" id="tags-subtitle">Select tags to narrow down your collection</p>
                 </div>
                 <div class="header-controls">
+                    <div class="search-box" style="margin-right: 1rem;">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" class="search-input" id="tagSearchInput" placeholder="Filter tags...">
+                    </div>
                      <button id="btn-show-results" class="btn-primary" onclick="showTagResults()" style="display:none;">
                         Display Results
                      </button>
@@ -266,12 +270,15 @@
     <div id="reader" class="reader-container">
         <div class="reader-header">
             <div class="reader-nav">
-                <button class="reader-btn" onclick="closeReader()">
+                <button class="reader-btn" onclick="history.back()">
                     <span>←</span> Back
                 </button>
             </div>
             <div class="reader-title" id="reader-title">Loading...</div>
             <div class="reader-nav reader-toolbar">
+                <button class="reader-btn" id="fullscreen-btn" onclick="readerToggleFullscreen()" title="Toggle Fullscreen">
+                    <span>⛶</span>
+                </button>
                 <button class="reader-btn" id="bookmark-btn" onclick="toggleBookmark()" title="Add bookmark">
                     <span>🔖</span>
                 </button>
@@ -286,19 +293,32 @@
 
         <div class="reader-content">
             <div class="reader-viewport" id="reader-viewport">
-                <div class="click-zone prev" onclick="prevPage()"></div>
+                <div class="click-zone prev" id="click-zone-prev"></div>
+                <div class="click-zone middle" id="click-zone-middle"></div>
                 <div id="reader-pages" class="reader-pages">
+                    <div id="reader-loading" class="reader-loading">
+                        <div class="spinner"></div>
+                    </div>
                     <img id="reader-image" class="reader-image" src="" alt="Comic page">
                 </div>
-                <div class="click-zone next" onclick="nextPage()"></div>
+                <div class="click-zone next" id="click-zone-next"></div>
             </div>
         </div>
 
         <div class="reader-footer">
+            <button class="reader-btn footer-nav-btn prev-chapter" id="footer-prev-chapter" onclick="navigateReaderComic('prev')" title="Previous Chapter">
+                <span>⏮</span>
+            </button>
             <button class="reader-btn" onclick="prevPage()">← Prev</button>
             <span class="page-indicator" id="page-indicator">1 / 1</span>
-            <input type="range" class="progress-slider" id="progress-slider" min="0" max="100" value="0" oninput="jumpToPage(this.value)">
+            <div class="progress-container">
+                <input type="range" class="progress-slider" id="progress-slider" min="0" max="100" value="0" oninput="handleSliderInput(this.value)" onchange="jumpToPage(this.value)">
+                <div id="reader-tooltip" class="reader-tooltip"></div>
+            </div>
             <button class="reader-btn" onclick="nextPage()">Next →</button>
+            <button class="reader-btn footer-nav-btn next-chapter" id="footer-next-chapter" onclick="navigateReaderComic('next')" title="Next Chapter">
+                <span>⏭</span>
+            </button>
         </div>
 
         <!-- Settings Panel -->
@@ -362,9 +382,8 @@
         </div>
     </div>
 
-    <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script type="module" src="/static/js/main.js"></script>
+    <script type="module" src="/static/js/main.js?v=3"></script>
 </body>
 </html>

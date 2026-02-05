@@ -1,7 +1,8 @@
-import { state } from './state.js';
-import { apiGet, apiPost, apiDelete } from './api.js';
-import { showToast } from './utils.js';
-import { setPreference } from './preferences.js';
+import { state } from './state.js?v=3';
+import { apiGet, apiPost, apiDelete } from './api.js?v=3';
+import { showToast } from './utils.js?v=3';
+import { setPreference } from './preferences.js?v=3';
+import * as router from './router.js?v=3';
 
 let uiTimer = null;
 let isUIVisible = true;
@@ -83,6 +84,8 @@ function setupReaderInteraction() {
 }
 
 export async function startReading(comicId, page = 0) {
+    // Navigate to read route
+    router.navigate('read', { comicId });
     // Fetch latest metadata from server to handle lazy-counted pages
     const comicData = await apiGet(`/api/read/${comicId}`);
     if (comicData.error) {
@@ -127,6 +130,7 @@ export async function startReading(comicId, page = 0) {
     
     // Initialize interaction
     setupReaderInteraction();
+    setupClickZones();
     showReaderUI();
     
     await loadBookmarks(comicId);
@@ -156,6 +160,14 @@ async function saveProgressToAPI() {
         total_pages: state.totalPages,
         completed: state.currentPage >= state.totalPages - 1
     };
+    
+    // Update local state immediately for responsiveness
+    state.readingProgress[state.currentComic.id] = {
+        page: state.currentPage,
+        lastRead: Date.now(),
+        completed: progressData.completed
+    };
+
     const result = await apiPost('/api/progress', progressData);
     if (result.error && result.status !== 401) {
         console.error('Failed to save progress:', result.error);
@@ -308,9 +320,7 @@ function updateReaderToolbar() {
 export function navigateReaderComic(direction) {
     const targetComic = direction === 'prev' ? state.readerNavigation.prevComic : state.readerNavigation.nextComic;
     if (!targetComic) return;
-    const progress = state.readingProgress[targetComic.id];
-    const page = progress && !progress.completed ? progress.page : 0;
-    startReading(targetComic.id, page);
+    router.navigate('read', { comicId: targetComic.id });
     showToast(`${direction === 'prev' ? 'Previous' : 'Next'} chapter loaded`, 'success');
 }
 
@@ -394,11 +404,23 @@ async function loadPage(pageNum) {
 }
 
 function createReaderImage(src) {
+    const loading = document.getElementById('reader-loading');
+    if (loading) loading.classList.add('active');
+
     const img = document.createElement('img');
     img.src = src;
     img.className = 'reader-image';
     img.alt = 'Comic page';
     
+    img.onload = () => {
+        if (loading) loading.classList.remove('active');
+    };
+    
+    img.onerror = () => {
+        if (loading) loading.classList.remove('active');
+        showToast('Failed to load page', 'error');
+    };
+
     // Apply current zoom settings
     applyImageZoom(img, state.settings.zoom);
     
@@ -459,6 +481,19 @@ function updateReaderUI() {
     const slider = document.getElementById('progress-slider');
     slider.max = state.totalPages - 1;
     slider.value = state.currentPage;
+    
+    // Update footer navigation buttons
+    const prevBtn = document.getElementById('footer-prev-chapter');
+    const nextBtn = document.getElementById('footer-next-chapter');
+    if (prevBtn) {
+        prevBtn.disabled = !state.readerNavigation.prevComic;
+        prevBtn.title = state.readerNavigation.prevComic ? `Previous: ${state.readerNavigation.prevComic.title}` : 'No previous chapter';
+    }
+    if (nextBtn) {
+        nextBtn.disabled = !state.readerNavigation.nextComic;
+        nextBtn.title = state.readerNavigation.nextComic ? `Next: ${state.readerNavigation.nextComic.title}` : 'No next chapter';
+    }
+
     updateBookmarkUI();
     saveProgress();
 }
@@ -477,6 +512,7 @@ export function nextPage() {
     const newPage = state.currentPage + increment;
     if (newPage < state.totalPages) {
         loadPage(newPage);
+        router.replace('read', { comicId: state.currentComic.id });
     } else {
         completeReading();
     }
@@ -495,6 +531,7 @@ export function prevPage() {
     const newPage = Math.max(0, state.currentPage - decrement);
     if (newPage !== state.currentPage) {
         loadPage(newPage);
+        router.replace('read', { comicId: state.currentComic.id });
     }
 }
 
@@ -502,6 +539,27 @@ export function jumpToPage(pageNum) {
     state.currentPage = parseInt(pageNum);
     loadPage(state.currentPage);
     updateReaderUI();
+    router.replace('read', { comicId: state.currentComic.id });
+}
+
+export function handleSliderInput(value) {
+    const tooltip = document.getElementById('reader-tooltip');
+    const slider = document.getElementById('progress-slider');
+    if (!tooltip || !slider) return;
+
+    const pageNum = parseInt(value) + 1;
+    tooltip.textContent = `Page ${pageNum}`;
+    tooltip.classList.add('visible');
+
+    // Position tooltip over the thumb
+    const percent = (value / slider.max) * 100;
+    tooltip.style.left = `${percent}%`;
+
+    // Hide tooltip after a delay
+    if (window.tooltipTimer) clearTimeout(window.tooltipTimer);
+    window.tooltipTimer = setTimeout(() => {
+        tooltip.classList.remove('visible');
+    }, 1500);
 }
 
 async function completeReading() {
@@ -561,6 +619,7 @@ function saveProgress() {
 }
 
 export function closeReader() {
+    console.log("[DEBUG] closeReader called");
     document.getElementById('reader').classList.remove('active');
     document.getElementById('reader').classList.remove('ui-hidden');
     if (uiTimer) clearTimeout(uiTimer);
@@ -590,6 +649,7 @@ export function setSetting(type, value) {
     }
     if (type === 'direction') {
         reader.setAttribute('data-direction', value);
+        setupClickZones(); // Update click zone behavior for new direction
         if (state.settings.display === 'double') {
             loadPage(state.currentPage);
         }
@@ -606,30 +666,114 @@ export function setSetting(type, value) {
     }
     if (state.isAuthenticated) {
         const prefMap = { 'direction': 'reader_direction', 'display': 'reader_display', 'zoom': 'reader_zoom' };
-        if (prefMap[type]) setPreference(prefMap[type], value);
+        if (prefMap[type]) setPreference(prefMap[type], value, false);
     }
 }
 
 export function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
         if (!state.currentComic) return;
+        const isRTL = state.settings.direction === 'rtl';
         switch(e.key) {
-            case 'ArrowLeft': case 'a': case 'A': e.preventDefault(); prevPage(); break;
-            case 'ArrowRight': case 'd': case 'D': case ' ': e.preventDefault(); nextPage(); break;
-            case 'Escape': closeReader(); break;
+            case 'ArrowLeft': case 'a': case 'A': 
+                e.preventDefault(); 
+                if (isRTL) nextPage(); else prevPage(); 
+                break;
+            case 'ArrowRight': case 'd': case 'D': case ' ': 
+                e.preventDefault(); 
+                if (isRTL) prevPage(); else nextPage(); 
+                break;
+            case 'Escape': 
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                } else {
+                    history.back();
+                }
+                break;
             case 'f': case 'F': e.preventDefault(); toggleFullscreen(); break;
             case 'b': case 'B': e.preventDefault(); toggleBookmark(); break;
         }
         if (e.shiftKey) {
             switch(e.key) {
-                case 'ArrowLeft': e.preventDefault(); if (state.readerNavigation.prevComic) navigateReaderComic('prev'); break;
-                case 'ArrowRight': e.preventDefault(); if (state.readerNavigation.nextComic) navigateReaderComic('next'); break;
+                case 'ArrowLeft': 
+                    e.preventDefault(); 
+                    if (isRTL) {
+                        if (state.readerNavigation.nextComic) navigateReaderComic('next');
+                    } else {
+                        if (state.readerNavigation.prevComic) navigateReaderComic('prev');
+                    }
+                    break;
+                case 'ArrowRight': 
+                    e.preventDefault(); 
+                    if (isRTL) {
+                        if (state.readerNavigation.prevComic) navigateReaderComic('prev');
+                    } else {
+                        if (state.readerNavigation.nextComic) navigateReaderComic('next');
+                    }
+                    break;
             }
         }
     });
 }
 
-function toggleFullscreen() {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-    else document.exitFullscreen();
+export function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+            console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+        });
+    } else {
+        document.exitFullscreen();
+    }
 }
+
+function flashZone(zone) {
+    zone.classList.add('active');
+    setTimeout(() => zone.classList.remove('active'), 200);
+}
+
+// Setup click zone navigation based on reading direction
+function setupClickZones() {
+    const prevZone = document.getElementById('click-zone-prev');
+    const middleZone = document.getElementById('click-zone-middle');
+    const nextZone = document.getElementById('click-zone-next');
+    
+    if (!prevZone || !nextZone) return;
+    
+    // Remove existing listeners by cloning
+    const newPrevZone = prevZone.cloneNode(true);
+    const newNextZone = nextZone.cloneNode(true);
+    const newMiddleZone = middleZone ? middleZone.cloneNode(true) : null;
+    
+    prevZone.parentNode.replaceChild(newPrevZone, prevZone);
+    nextZone.parentNode.replaceChild(newNextZone, nextZone);
+    if (middleZone && newMiddleZone) middleZone.parentNode.replaceChild(newMiddleZone, middleZone);
+    
+    // Add listeners based on direction
+    const isRTL = state.settings.direction === 'rtl';
+    
+    newPrevZone.addEventListener('click', (e) => {
+        e.stopPropagation();
+        flashZone(newPrevZone);
+        if (isRTL) nextPage(); else prevPage();
+    });
+    
+    newNextZone.addEventListener('click', (e) => {
+        e.stopPropagation();
+        flashZone(newNextZone);
+        if (isRTL) prevPage(); else nextPage();
+    });
+
+    if (newMiddleZone) {
+        newMiddleZone.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Middle zone: if in fullscreen, exit. If not, toggle UI.
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                if (isUIVisible) hideReaderUI(); else showReaderUI();
+            }
+        });
+    }
+}
+
+// Call setupClickZones when reader opens and when direction changes

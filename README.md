@@ -21,7 +21,7 @@ A modern, web-based comic book reader designed for CBR and CBZ archives. Featuri
 ### Security
 - **Path Traversal Protection**: Securely serves comic files while preventing unauthorized access.
 - **Input Validation**: Rigorous validation on all API endpoints.
-- **Authentication**: Secure password hashing with bcrypt and session management via HTTP-only cookies.
+- **Authentication**: Password hashing (SHA256 — bcrypt migration planned) and session management via HTTP-only cookies.
 - **SQL Injection Prevention**: All database interactions use parameterized queries.
 
 ### Scalability
@@ -47,22 +47,113 @@ A modern, web-based comic book reader designed for CBR and CBZ archives. Featuri
 ## Development Roadmap
 
 ### Phase 1: Core Infrastructure ✅ COMPLETED
-- Responsive Frontend UI & Authentication System
-- Database-backed Reading Progress & Bookmarks
-- Hierarchical Folder Navigation & Flatten Mode
-- Rich Metadata Display (series.json)
+- Responsive Frontend UI with Grid, List, and Detailed views
+- User authentication with 30-day session management
+- Database-backed reading progress and bookmarks
+- Hierarchical folder navigation (Root > Category > Subcategory > Title)
+- Flatten mode to view all titles in a subtree
+- Rich metadata display from `series.json`
+- Dark/light theme with persistence
+- Global search with scoped/everywhere toggle
+- Multiple sort criteria (alpha, date, pages, size, recent)
 
-### Phase 2: Enhanced Library Management (In Progress)
-- Advanced Search & Filtering (by Genre, Status, Author)
-- Collection Management (Reading Lists, Favorites)
-- Database Migration System
+### Phase 1.5: Scanning & Performance ✅ COMPLETED
+- Two-phase scanning (fast sync + background processing)
+- On-demand thumbnail generation with timeout fallback
+- On-demand (lazy) page counting in reader
+- Real-time scan metrics dashboard (phase, file, new/changed/deleted)
+- Full rescan with database wipe (Shift+Click)
+- Change detection via `mtime` + `size_bytes`
+- WAL mode and batch operations for database concurrency
 
-### Phase 3: Enhanced Reader Experience
-- PWA Support for Offline Reading
-- Notes on pages & Reading Timer
-- Auto-advance option
+### Phase 1.6: Series & Discovery ✅ COMPLETED
+- Series detail page with volume listing and stats
+- Tag-based filtering with related tag refinement
+- Continue reading indicator (first unread/in-progress volume)
+- Prev/next comic navigation within a series
+- Recently read comics view
+- Admin user management panel
 
-## Recent Changes (2026-02-01)
+### Phase 2: Hardening & Quality (Next)
+- [ ] Migrate password hashing from SHA256 to bcrypt/argon2id
+- [ ] Lock down registration (default role "reader", admin-only role assignment)
+- [ ] Environment variable config (`COMICS_DIR`, `DB_PATH`, `SECRET_KEY`)
+- [ ] Complete double-page (spread) reader mode
+- [ ] Complete long strip (webtoon) reader mode
+- [ ] Rate limiting on auth endpoints
+- [ ] Structured logging (replace `print()` with `logging` module)
+- [ ] Database migration system (versioned schema changes)
+- [ ] API pagination for `/api/books` and `/api/series`
+- [ ] Fix page serving content type (detect PNG/WebP/GIF)
+
+### Phase 3: Enhanced Library Management
+- [ ] Collections & reading lists (Favorites, Want to Read, custom)
+- [ ] Star ratings per comic or series
+- [ ] Batch operations (mark all as read, bulk add to collection)
+- [ ] Missing volume detection (compare parsed volumes vs `total_volumes`)
+- [ ] Library statistics dashboard (total comics, pages read, completion rates)
+- [ ] Duplicate detection (flag similar names/sizes across folders)
+- [ ] Import/export reading history as JSON
+- [ ] Advanced search filters (genre, status, author, read/unread, year)
+
+### Phase 4: Enhanced Reader Experience
+- [ ] Page preloading (prefetch next 2-3 pages)
+- [ ] Swipe gestures for mobile page turning (respecting LTR/RTL)
+- [ ] Pinch-to-zoom with pan on mobile
+- [ ] Page annotations (draw/highlight, saved per-user)
+- [ ] Reading timer (track time per session and per comic)
+- [ ] Auto-advance with configurable timer
+- [ ] Per-comic settings memory (remember zoom/direction per comic)
+- [ ] Brightness/warmth controls (CSS filters for night reading)
+
+### Phase 5: Metadata & Discovery
+- [ ] MAL/AniList API integration (auto-fetch metadata by title or ID)
+- [ ] ComicInfo.xml parsing (standard comic metadata from CBZ archives)
+- [ ] "Similar series" recommendations (based on shared tags/genres)
+- [ ] New additions view (recently scanned, sorted by scan date)
+- [ ] Homepage dashboard (continue reading carousel, new additions)
+- [ ] Series completion tracker (owned vs total volumes)
+- [ ] Reading challenges (goals like "read 50 volumes this month")
+
+### Phase 6: Platform & Distribution
+- [ ] Docker Compose (production-ready with env vars, volume mounts, health checks)
+- [ ] PWA / Service Worker (offline reading of cached pages, installable app)
+- [ ] OPDS feed (expose library for external readers like Librera, KOReader)
+- [ ] PDF comic support
+- [ ] EPUB manga/comic support
+- [ ] WebSocket scan updates (real-time push instead of polling)
+- [ ] Multi-library support (multiple comic directories)
+- [ ] Reverse proxy ready (configurable base path for nginx/caddy)
+
+### Phase 7: Social & Multi-User
+- [ ] User avatars (upload or Gravatar)
+- [ ] Per-user library restrictions (role-based access to categories)
+- [ ] Shared reading lists (publish collections for other users)
+- [ ] User activity feed ("X started reading Y")
+- [ ] Reading statistics comparison across users
+- [ ] Guest access (configurable read-only browsing without account)
+
+## Known Issues
+
+| Severity | Issue | Location |
+|----------|-------|----------|
+| HIGH | Password hashing uses unsalted SHA256 instead of bcrypt | `database.py:248` |
+| HIGH | Any user can register as admin via `role` field | `routes/auth.py:14,28` |
+| MEDIUM | `COMICS_DIR` hardcoded to Windows path | `config.py:4` |
+| MEDIUM | Default admin `admin/admin123` with no forced change | `server.py:44` |
+| LOW | `create_session` uses `.format()` in SQL string | `database.py:298` |
+| LOW | Session default 24h vs 720h mismatch | `database.py:291` |
+| LOW | `/api/scan/status` has no auth check | `routes/library.py:167` |
+| LOW | Page images always served as `image/jpeg` | `routes/library.py:335` |
+
+## Recent Changes
+
+### 2026-02-03
+- **Audit**: Full codebase review with 8 confirmed bugs documented.
+- **Updated**: Roadmap expanded from 3 to 7 phases reflecting actual feature state.
+- **Tracked**: All completed features now properly listed in roadmap.
+
+### 2026-02-01
 - **Overhaul**: Redesigned Title View UI for better readability.
 - **Refactor**: Unified frontend rendering logic, reducing code size and improving maintainability.
 - **Improved**: Added support for nested folder metadata scanning.

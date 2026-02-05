@@ -2,7 +2,6 @@
 export const state = {
     comics: [],
     currentView: 'library',
-    previousView: null,
     // New navigation state
     currentLevel: 'root', // 'root', 'category', 'subcategory', 'title'
     flattenMode: false,
@@ -21,13 +20,13 @@ export const state = {
     settings: {
         direction: 'ltr',
         display: 'single',
-        zoom: 'fit'
+        zoom: 'fit',
+        titleCardStyle: 'fan'
     },
     theme: localStorage.getItem('theme') || 'dark',
     sortBy: 'alpha-asc',
     // Search state
     searchQuery: '',
-    previousSearchQuery: '',
     searchScope: 'current', // 'current' or 'everywhere'
     // Authentication state
     currentUser: null,

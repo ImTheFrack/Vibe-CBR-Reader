@@ -1,8 +1,10 @@
 {
-  "active_plan": "Z:\\Documents\\Projects\\code\\Vibe CBR Reader\\.sisyphus\\plans\\lazy-loading-scan-refactor.md",
-  "started_at": "2026-02-01T22:14:22.635Z",
-  "session_ids": [
-    "ses_3e4ba8b80ffeh8XDwvspW1JyeE"
-  ],
-  "plan_name": "lazy-loading-scan-refactor"
+  "active_plan": "/mnt/o/documents/projects/code/Vibe CBR Reader/.sisyphus/plans/browser-history-navigation.md",
+  "started_at": "2026-02-04T23:36:20.710Z",
+  "completed_at": "2026-02-05T04:15:00.000Z",
+  "session_ids": ["ses_3d5f660fdffe67m6cHL2aEiE75"],
+  "plan_name": "browser-history-navigation",
+  "status": "completed",
+  "tasks_completed": 31,
+  "tasks_total": 31
 }

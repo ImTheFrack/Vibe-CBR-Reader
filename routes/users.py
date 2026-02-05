@@ -29,6 +29,7 @@ class PreferencesUpdate(BaseModel):
     reader_direction: Optional[str] = None
     reader_display: Optional[str] = None
     reader_zoom: Optional[str] = None
+    title_card_style: Optional[str] = None
 
 # --- Reading Progress Routes ---
 
@@ -45,12 +46,12 @@ async def get_recent_progress(current_user: dict = Depends(get_current_user), li
     
     # Sort by last_read and get most recent
     sorted_progress = sorted(
-        progress.items(),
-        key=lambda x: x[1].get('last_read', ''),
+        progress.values(),
+        key=lambda x: x.get('last_read') or '',
         reverse=True
     )[:limit]
     
-    return dict(sorted_progress)
+    return sorted_progress
 
 @router.get("/progress/{comic_id}")
 async def get_comic_progress(comic_id: str, current_user: dict = Depends(get_current_user)):

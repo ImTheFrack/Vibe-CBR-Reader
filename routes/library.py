@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Response
 from fastapi.responses import FileResponse
 from typing import Optional
 from PIL import Image, ImageDraw, ImageFont
-from config import COMICS_DIR, CACHE_DIR, IMG_EXTENSIONS
+from config import COMICS_DIR, IMG_EXTENSIONS, get_thumbnail_path, BASE_CACHE_DIR
 from database import (
     get_db_connection, get_reading_progress, create_scan_job, 
     get_latest_scan_job, get_running_scan_job, complete_scan_job
@@ -37,7 +37,7 @@ cleanup_stuck_scans()
 
 def create_placeholder_image():
     """Create a 'Generating...' placeholder image if it doesn't exist"""
-    placeholder_path = os.path.join(CACHE_DIR, "_placeholder.jpg")
+    placeholder_path = os.path.join(BASE_CACHE_DIR, "_placeholder.jpg")
     if not os.path.exists(placeholder_path):
         try:
             # Create a simple gray placeholder image
@@ -74,8 +74,8 @@ def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int
     pid = os.getpid()
     thread_id = threading.get_ident()
     temp_id = f"{comic_id}_{pid}_{thread_id}_tmp"
-    temp_cache_path = os.path.join(CACHE_DIR, f"{temp_id}.jpg")
-    final_cache_path = os.path.join(CACHE_DIR, f"{comic_id}.jpg")
+    temp_cache_path = get_thumbnail_path(temp_id)
+    final_cache_path = get_thumbnail_path(comic_id)
     
     def target():
         try:
@@ -215,7 +215,7 @@ async def list_books(current_user: dict = Depends(get_current_user)):
 
 @router.get("/cover/{comic_id}")
 async def get_cover(comic_id: str, current_user: dict = Depends(get_current_user)):
-    cache_path = os.path.join(CACHE_DIR, f"{comic_id}.jpg")
+    cache_path = get_thumbnail_path(comic_id)
     
     # If thumbnail exists in cache, serve it immediately
     if os.path.exists(cache_path):
@@ -245,7 +245,7 @@ async def get_cover(comic_id: str, current_user: dict = Depends(get_current_user
     
     if result['timeout']:
         # Timeout occurred - return placeholder and continue generation in background
-        placeholder_path = os.path.join(CACHE_DIR, "_placeholder.jpg")
+        placeholder_path = os.path.join(BASE_CACHE_DIR, "_placeholder.jpg")
         return FileResponse(placeholder_path)
     
     if result['success']:
@@ -256,7 +256,7 @@ async def get_cover(comic_id: str, current_user: dict = Depends(get_current_user
         conn.close()
         
         # Serve the newly generated thumbnail
-        final_cache_path = os.path.join(CACHE_DIR, f"{comic_id}.jpg")
+        final_cache_path = get_thumbnail_path(comic_id)
         if os.path.exists(final_cache_path):
             return FileResponse(final_cache_path)
     

@@ -9,13 +9,22 @@ const tagsState = {
     availableTags: [],
     matchingSeries: [],
     matchingCount: 0,
-    isShowingResults: false
+    isShowingResults: false,
+    filterText: ''
 };
 
 // Initialize the Tags View
 export async function initTagsView() {
     tagsState.selectedTags = [];
     tagsState.isShowingResults = false;
+    tagsState.filterText = '';
+    
+    const input = document.getElementById('tagSearchInput');
+    if (input) {
+        input.value = '';
+        input.oninput = (e) => window.filterTags(e.target.value);
+    }
+
     await updateTagsView();
 }
 
@@ -28,6 +37,15 @@ export async function updateTagsView() {
     
     // Default to empty arrays if elements are missing
     if (!container || !resultsContainer) return;
+
+    // Show loading state
+    container.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Filtering tags...</p>
+        </div>
+    `;
+    if (subtitle) subtitle.textContent = 'Updating filters...';
 
     try {
         const data = await apiPost('/api/series/tags/filter', { 
@@ -116,18 +134,26 @@ function renderTagsGrid() {
     const container = document.getElementById('tags-grid');
     if (!container) return;
     
-    if (tagsState.availableTags.length === 0) {
+    // Filter tags
+    let tagsToRender = tagsState.availableTags;
+    if (tagsState.filterText) {
+        tagsToRender = tagsState.availableTags.filter(tag => 
+            tag.name.toLowerCase().includes(tagsState.filterText)
+        );
+    }
+    
+    if (tagsToRender.length === 0) {
         container.innerHTML = `
             <div class=\"empty-state\">
                 <div class=\"empty-icon\">🏷️</div>
-                <div class=\"empty-title\">No tags available</div>
-                <p>Try clearing some filters or searching for something else.</p>
+                <div class=\"empty-title\">No tags found</div>
+                <p>${tagsState.availableTags.length === 0 ? 'Try clearing some filters.' : 'No tags match your search.'}</p>
             </div>
         `;
         return;
     }
 
-    const items = tagsState.availableTags.map(tag => {
+    const items = tagsToRender.map(tag => {
         const escapedName = tag.name.replace(/'/g, "\'");
         
         let metaText = `${tag.count} series`;
@@ -190,16 +216,16 @@ function renderResults() {
         return;
     }
 
-    const items = tagsState.matchingSeries.map(series => {
-        const seriesName = series.name || 'Unknown Series';
-        const seriesTitle = series.title || seriesName;
-        
-        // Escape for HTML attributes
-        const escapedName = seriesName.replace(/'/g, "\'").replace(/'/g, '&quot;');
-        const displayTitle = seriesTitle.replace(/'/g, '&quot;');
-        
-        const coverIds = getTitleCoverIds(series);
-        const onClick = `navigateToFolder('title', '${escapedName}'); showView('library');`;
+     const items = tagsState.matchingSeries.map(series => {
+         const seriesName = series.name || 'Unknown Series';
+         const seriesTitle = series.title || seriesName;
+         
+         // Escape for HTML attributes
+         const escapedName = seriesName.replace(/'/g, "\'").replace(/'/g, '&quot;');
+         const displayTitle = seriesTitle.replace(/'/g, '&quot;');
+         
+         const coverIds = getTitleCoverIds(series);
+         const onClick = `window.routerNavigate('library', { title: '${escapedName}' })`;
 
         return {
             title: seriesTitle,
@@ -232,8 +258,19 @@ function renderResults() {
 window.selectTag = function(tagName) {
     if (!tagsState.selectedTags.includes(tagName)) {
         tagsState.selectedTags.push(tagName);
+        
+        // Clear filter and input
+        tagsState.filterText = '';
+        const input = document.getElementById('tagSearchInput');
+        if (input) input.value = '';
+        
         updateTagsView();
     }
+};
+
+window.filterTags = function(text) {
+    tagsState.filterText = text.toLowerCase();
+    renderTagsGrid();
 };
 
 window.removeTag = function(tagName) {

@@ -84,10 +84,17 @@ def init_db():
             reader_direction TEXT DEFAULT 'ltr' CHECK(reader_direction IN ('ltr', 'rtl')),
             reader_display TEXT DEFAULT 'single' CHECK(reader_display IN ('single', 'double', 'long')),
             reader_zoom TEXT DEFAULT 'fit' CHECK(reader_zoom IN ('fit', 'width', 'height')),
+            title_card_style TEXT DEFAULT 'fan' CHECK(title_card_style IN ('fan', 'single')),
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
+    
+    # Add title_card_style column if not exists
+    try:
+        conn.execute("ALTER TABLE user_preferences ADD COLUMN title_card_style TEXT DEFAULT 'fan' CHECK(title_card_style IN ('fan', 'single'))")
+    except sqlite3.OperationalError:
+        pass
     
     # Sessions table for token-based auth
     conn.execute('''
@@ -195,6 +202,12 @@ def init_db():
     # Index on scan_jobs.status for fast polling queries
     conn.execute('CREATE INDEX IF NOT EXISTS idx_scan_jobs_status ON scan_jobs(status)')
     
+    # Index on comics.series_id for faster joins in tags view
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_comics_series_id ON comics(series_id)')
+    
+    # Index on comics.processed for fast Phase 2 pending queries
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_comics_processed ON comics(processed)')
+    
     # Migrate data: set has_thumbnail = TRUE for already processed comics
     try:
         conn.execute('UPDATE comics SET has_thumbnail = 1 WHERE processed = 1')
@@ -204,27 +217,33 @@ def init_db():
     conn.commit()
     conn.close()
 
-def delete_comics_by_ids(comic_ids):
+def delete_comics_by_ids(comic_ids, conn=None):
     """Delete multiple comics by their IDs"""
     if not comic_ids:
         return
-    conn = get_db_connection()
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db_connection()
     # SQLite has a limit on parameters, so we do it in chunks if necessary
     # but for typical cases, a single IN clause is fine if not thousands
     placeholders = ','.join(['?'] * len(comic_ids))
     conn.execute(f'DELETE FROM comics WHERE id IN ({placeholders})', comic_ids)
-    conn.commit()
-    conn.close()
+    if own_conn:
+        conn.commit()
+        conn.close()
 
-def get_pending_comics(limit=100):
+def get_pending_comics(limit=100, conn=None):
     """Get comics that need page counting or thumbnail extraction"""
-    conn = get_db_connection()
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db_connection()
     comics = conn.execute('''
         SELECT id, path FROM comics 
-        WHERE pages IS NULL OR pages = 0 OR processed = 0 
+        WHERE processed = 0 
         LIMIT ?
     ''', (limit,)).fetchall()
-    conn.close()
+    if own_conn:
+        conn.close()
     return [dict(c) for c in comics]
 
 def update_comic_metadata(comic_id, pages, processed):
@@ -390,7 +409,7 @@ def get_user_preferences(user_id):
 def update_user_preferences(user_id, **kwargs):
     """Update user preferences"""
     allowed_fields = ['theme', 'default_view_mode', 'default_nav_mode', 'default_sort_by', 
-                      'reader_direction', 'reader_display', 'reader_zoom']
+                      'reader_direction', 'reader_display', 'reader_zoom', 'title_card_style']
     
     updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
     if not updates:
@@ -481,9 +500,11 @@ def user_exists(username):
     return result is not None
 
 # Series metadata functions
-def create_or_update_series(name, metadata=None, category=None, subcategory=None, cover_comic_id=None):
+def create_or_update_series(name, metadata=None, category=None, subcategory=None, cover_comic_id=None, conn=None):
     """Create or update a series with metadata from series.json"""
-    conn = get_db_connection()
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db_connection()
     
     if metadata is None:
         metadata = {}
@@ -578,8 +599,9 @@ def create_or_update_series(name, metadata=None, category=None, subcategory=None
         ))
         series_id = cursor.lastrowid
     
-    conn.commit()
-    conn.close()
+    if own_conn:
+        conn.commit()
+        conn.close()
     return series_id
 
 def get_series_by_name(name):
@@ -713,23 +735,50 @@ def get_series_by_tags(selected_tags=None):
         'series': [dict] (summary of matching series)
     }
     """
+    import json
+    from collections import defaultdict
+    
+    def normalize_tag(t):
+        if not t: return ""
+        return " ".join(t.split()).lower()
+    
     if selected_tags is None:
         selected_tags = []
     
-    selected_set = set(t.lower() for t in selected_tags)
+    selected_set = set(normalize_tag(t) for t in selected_tags)
     
     conn = get_db_connection()
-    # Fetch all series with tags/genres
+    
+    # Fetch ALL series data
     all_series = conn.execute('''
         SELECT id, name, title, genres, tags, cover_comic_id, total_chapters 
         FROM series
     ''').fetchall()
     
-    matching_series = []
-    import json
+    # Optimization: Fetch all needed comics for the fans in one go for matching series
+    comics_by_series = defaultdict(list)
+    comics_query = '''
+        SELECT series_id, id, volume, chapter, filename
+        FROM (
+            SELECT series_id, id, volume, chapter, filename,
+                   ROW_NUMBER() OVER (PARTITION BY series_id ORDER BY 
+                       CASE WHEN volume IS NULL OR volume = 0 THEN 999999 ELSE volume END,
+                       COALESCE(chapter, 0), 
+                       filename
+                   ) as rn
+            FROM comics
+            WHERE series_id IS NOT NULL
+        )
+        WHERE rn <= 3
+    '''
     
-    # Tag aggregation
-    tag_counts = {}
+    all_fan_comics = conn.execute(comics_query).fetchall()
+    for c in all_fan_comics:
+        comics_by_series[c['series_id']].append(dict(c))
+        
+    matching_series = []
+    # Map normalized_tag -> {name: best_display_name, count: int, covers: [], series_names: []}
+    tag_counts = {} 
     
     for row in all_series:
         s_genres = []
@@ -745,64 +794,57 @@ def get_series_by_tags(selected_tags=None):
                 s_tags = json.loads(row['tags'])
             except: pass
             
-        # Merge and normalize
-        # We keep original casing for display, but use lower for matching
-        combined_map = {} # lower -> display
+        # Merge and normalize within this series
+        combined_map = {} # normalized -> display
         
         for g in (s_genres or []):
-            combined_map[g.lower()] = g
+            if g: combined_map[normalize_tag(g)] = g
         for t in (s_tags or []):
-            combined_map[t.lower()] = t
+            if t: combined_map[normalize_tag(t)] = t
             
         series_tag_set = set(combined_map.keys())
         
         # Check if series has all selected tags
         if selected_set.issubset(series_tag_set):
-            # It's a match!
-            
-            # Add to matching list
-            
-            # Fetch up to 3 comics for the fan
-            fan_comics = conn.execute('''
-                SELECT id, volume, chapter, filename 
-                FROM comics 
-                WHERE series_id = ? 
-                ORDER BY 
-                    CASE WHEN volume IS NULL OR volume = 0 THEN 999999 ELSE volume END,
-                    COALESCE(chapter, 0), 
-                    filename
-                LIMIT 3
-            ''', (row['id'],)).fetchall()
-            
+            # Match found
             matching_series.append({
                 'id': row['id'],
                 'name': row['name'],
                 'title': row['title'],
                 'cover_comic_id': row['cover_comic_id'],
                 'count': row['total_chapters'] or 0,
-                'comics': [dict(c) for c in fan_comics]
+                'comics': comics_by_series.get(row['id'], [])
             })
             
-            # Aggregate OTHER tags
-            for tag_lower, tag_display in combined_map.items():
-                if tag_lower not in selected_set:
-                    if tag_display not in tag_counts:
-                        tag_counts[tag_display] = {'count': 0, 'covers': [], 'series_names': []}
+            # Aggregate OTHER tags for refinement
+            for tag_norm, tag_display in combined_map.items():
+                if tag_norm not in selected_set:
+                    if tag_norm not in tag_counts:
+                        tag_counts[tag_norm] = {'name': tag_display, 'count': 0, 'covers': [], 'series_names': []}
                     
-                    tag_counts[tag_display]['count'] += 1
+                    data = tag_counts[tag_norm]
+                    data['count'] += 1
+                    
+                    # Update display name if current one is "better" (e.g. Title Case vs lowercase)
+                    # Simple heuristic: prefer Title Case if current is lower
+                    if tag_display[0].isupper() and not data['name'][0].isupper():
+                        data['name'] = tag_display
+                    
                     # Collect up to 3 covers for the fan
-                    if len(tag_counts[tag_display]['covers']) < 3 and row['cover_comic_id']:
-                        tag_counts[tag_display]['covers'].append(row['cover_comic_id'])
+                    if len(data['covers']) < 3 and row['cover_comic_id']:
+                        data['covers'].append(row['cover_comic_id'])
+                        
                     # Collect up to 3 series names for display
-                    if len(tag_counts[tag_display]['series_names']) < 3:
-                        tag_counts[tag_display]['series_names'].append(row['title'] or row['name'])
+                    if len(data['series_names']) < 3:
+                        data['series_names'].append(row['title'] or row['name'])
                     
     # Format related tags
     related_tags_list = [
-        {'name': name, 'count': data['count'], 'covers': data['covers'], 'series_names': data['series_names']} 
-        for name, data in tag_counts.items()
+        {'name': data['name'], 'count': data['count'], 'covers': data['covers'], 'series_names': data['series_names']} 
+        for data in tag_counts.values()
     ]
-    # Sort by count desc, then name asc
+    
+    # Sort: Most popular tags first
     related_tags_list.sort(key=lambda x: (-x['count'], x['name']))
     
     conn.close()
@@ -826,9 +868,11 @@ def create_scan_job(scan_type='fast', total_comics=0):
     conn.close()
     return job_id
 
-def update_scan_progress(job_id, processed_comics, errors=None, **kwargs):
+def update_scan_progress(job_id, processed_comics, errors=None, conn=None, **kwargs):
     """Update scan job progress with flexible metrics"""
-    conn = get_db_connection()
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db_connection()
     import json
     errors_json = json.dumps(errors) if errors else None
     
@@ -850,12 +894,15 @@ def update_scan_progress(job_id, processed_comics, errors=None, **kwargs):
     
     sql = f"UPDATE scan_jobs SET {', '.join(updates)} WHERE id = ?"
     conn.execute(sql, params)
-    conn.commit()
-    conn.close()
+    if own_conn:
+        conn.commit()
+        conn.close()
 
-def complete_scan_job(job_id, status='completed', errors=None):
+def complete_scan_job(job_id, status='completed', errors=None, conn=None):
     """Mark scan job as completed or failed"""
-    conn = get_db_connection()
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db_connection()
     import json
     errors_json = json.dumps(errors) if errors else None
     
@@ -865,8 +912,9 @@ def complete_scan_job(job_id, status='completed', errors=None):
            WHERE id = ?''',
         (status, errors_json, job_id)
     )
-    conn.commit()
-    conn.close()
+    if own_conn:
+        conn.commit()
+        conn.close()
 
 def get_scan_status(job_id):
     """Get status of a specific scan job"""

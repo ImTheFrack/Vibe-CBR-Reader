@@ -42,6 +42,13 @@ export function showPreferences() {
                     </div>
                 </div>
                 <div class="form-group">
+                    <label>Title Card Style</label>
+                    <div class="setting-options">
+                        <button class="setting-btn ${state.settings.titleCardStyle === 'fan' ? 'active' : ''}" onclick="setPreference('title_card_style', 'fan')">📚 Fan (Stack)</button>
+                        <button class="setting-btn ${state.settings.titleCardStyle === 'single' ? 'active' : ''}" onclick="setPreference('title_card_style', 'single')">📄 Single Cover</button>
+                    </div>
+                </div>
+                <div class="form-group">
                     <label>Zoom Mode</label>
                     <div class="setting-options">
                         <button class="setting-btn ${state.settings.zoom === 'fit' ? 'active' : ''}" onclick="setPreference('reader_zoom', 'fit')">🔲 Fit to Screen</button>
@@ -69,7 +76,7 @@ export function closePreferencesModal() {
     }
 }
 
-export async function setPreference(key, value) {
+export async function setPreference(key, value, showModal = true) {
     if (!state.isAuthenticated) {
         // Store locally if not authenticated
         if (key === 'default_theme') {
@@ -82,9 +89,11 @@ export async function setPreference(key, value) {
             state.settings.display = value;
         } else if (key === 'reader_zoom') {
             state.settings.zoom = value;
+        } else if (key === 'title_card_style') {
+            state.settings.titleCardStyle = value;
         }
-        // Update UI
-        showPreferences();
+        // Update UI if requested
+        if (showModal) showPreferences();
         return;
     }
 
@@ -108,10 +117,18 @@ export async function setPreference(key, value) {
         } else if (key === 'reader_zoom') {
             state.settings.zoom = value;
             state.userPreferences.reader_zoom = value;
+        } else if (key === 'title_card_style') {
+            state.settings.titleCardStyle = value;
+            state.userPreferences.title_card_style = value;
+            // Trigger re-render of library view if we are there
+            const event = new Event('preferences-updated');
+            document.dispatchEvent(event);
         }
         showToast('Preferences saved', 'success');
-        // Refresh modal to show updated state
-        closePreferencesModal();
-        showPreferences();
+        // Refresh modal if it was already open and requested
+        if (showModal) {
+            closePreferencesModal();
+            showPreferences();
+        }
     }
 }

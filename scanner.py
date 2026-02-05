@@ -4,8 +4,9 @@ import json
 import zipfile
 import rarfile
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from PIL import Image
-from config import COMICS_DIR, CACHE_DIR, IMG_EXTENSIONS
+from config import COMICS_DIR, IMG_EXTENSIONS, get_thumbnail_path
 from database import (
     get_db_connection, create_or_update_series, update_comic_series_id,
     update_scan_progress, complete_scan_job, delete_comics_by_ids,
@@ -106,45 +107,31 @@ def parse_series_json(filepath):
 def sync_library_task(job_id=None):
     """
     PHASE 1: Synchronize file system with database.
-    - Detect new files.
-    - Detect deleted files.
-    - Detect CHANGED files (mtime/size).
+    Single-pass os.walk — counts and compares simultaneously.
+    Uses shared DB connection to eliminate connection churn.
     """
     print("Phase 1: Synchronizing library structure...")
     conn = get_db_connection()
     
-    # 1. Get current files metadata from DB
+    # Get current files metadata from DB
     db_comics = conn.execute("SELECT id, path, mtime, size_bytes FROM comics").fetchall()
     db_meta = {row['id']: {'path': row['path'], 'mtime': row['mtime'], 'size': row['size_bytes']} for row in db_comics}
     db_ids = set(db_meta.keys())
     
-    # 2. Count for progress
-    print("Counting files on disk...")
-    total_on_disk = 0
-    for root, dirs, files in os.walk(COMICS_DIR):
-        total_on_disk += sum(1 for f in files if is_cbr_or_cbz(f))
-    
-    if job_id:
-        conn.execute("UPDATE scan_jobs SET total_comics = ? WHERE id = ?", (total_on_disk, job_id))
-        conn.commit()
-
     on_disk_ids = set()
-    new_comics = [] 
+    new_comics = []
     changed_comics = []
-    series_map = {} 
+    series_map = {}
     dir_metadata_cache = {}
-    processed_sync_count = 0
     
+    file_count = 0
     new_count = 0
     changed_count = 0
-    deleted_count = 0
     
     for root, dirs, files in os.walk(COMICS_DIR):
-        # ... (skipping metadata logic) ...
         abs_root = os.path.abspath(root)
         rel_path = os.path.relpath(abs_root, COMICS_DIR)
         
-        # Metadata cache
         series_json_path = os.path.join(root, "series.json")
         current_metadata = None
         if os.path.exists(series_json_path):
@@ -162,12 +149,11 @@ def sync_library_task(job_id=None):
         
         for filename in files:
             if is_cbr_or_cbz(filename):
+                file_count += 1
                 filepath = os.path.join(root, filename)
                 comic_id = hashlib.md5(filepath.encode('utf-8')).hexdigest()
                 on_disk_ids.add(comic_id)
-                processed_sync_count += 1
                 
-                # Get file stats
                 stat = os.stat(filepath)
                 mtime = int(stat.st_mtime)
                 size_bytes = stat.st_size
@@ -179,7 +165,6 @@ def sync_library_task(job_id=None):
                     if is_new: new_count += 1
                     else: changed_count += 1
                     
-                    # Deriving Metadata
                     category = path_parts[0] if len(path_parts) > 0 else "Uncategorized"
                     subcategory = path_parts[1] if len(path_parts) > 1 else None
                     if len(path_parts) >= 3: series = path_parts[2]
@@ -208,34 +193,42 @@ def sync_library_task(job_id=None):
                             'subcategory': subcategory, 'cover_id': comic_id
                         }
                 
-                if job_id and processed_sync_count % 50 == 0:
+                if job_id and file_count % 50 == 0:
                     update_scan_progress(
-                        job_id, processed_sync_count, 
+                        job_id, file_count, 
                         current_file=filename, phase="Phase 1: Syncing",
-                        new_comics=new_count, changed_comics=changed_count
+                        new_comics=new_count, changed_comics=changed_count,
+                        conn=conn
                     )
+                    conn.execute("UPDATE scan_jobs SET total_comics = ? WHERE id = ?", (file_count, job_id))
+                    conn.commit()
 
-    # 3. Handle Deletions
+    if job_id:
+        conn.execute("UPDATE scan_jobs SET total_comics = ? WHERE id = ?", (file_count, job_id))
+        conn.commit()
+
+    # Handle Deletions
     missing_ids = db_ids - on_disk_ids
     deleted_count = len(missing_ids)
     if missing_ids:
         print(f"Removing {deleted_count} missing comics.")
-        delete_comics_by_ids(list(missing_ids))
+        delete_comics_by_ids(list(missing_ids), conn=conn)
         if job_id:
-            update_scan_progress(job_id, processed_sync_count, deleted_comics=deleted_count)
+            update_scan_progress(job_id, file_count, deleted_comics=deleted_count, conn=conn)
+        conn.commit()
     
-    # 4. Handle Changes (Reset processed/pages so Phase 2 picks them up)
+    # Handle Changes (batch update with executemany)
     if changed_comics:
         print(f"Updating {len(changed_comics)} changed comics.")
-        for comic in changed_comics:
-            conn.execute('''
-                UPDATE comics SET 
-                    size_str = ?, size_bytes = ?, mtime = ?, pages = NULL, processed = 0, has_thumbnail = 0
-                WHERE id = ?
-            ''', (comic['size_str'], comic['size_bytes'], comic['mtime'], comic['id']))
+        update_data = [(c['size_str'], c['size_bytes'], c['mtime'], c['id']) for c in changed_comics]
+        conn.executemany('''
+            UPDATE comics SET 
+                size_str = ?, size_bytes = ?, mtime = ?, pages = NULL, processed = 0, has_thumbnail = 0
+            WHERE id = ?
+        ''', update_data)
         conn.commit()
 
-    # 5. Add New Comics
+    # Add New Comics (shared conn eliminates per-series connection overhead)
     if new_comics:
         print(f"Inserting {len(new_comics)} new comics.")
         series_id_map = {}
@@ -245,9 +238,11 @@ def sync_library_task(job_id=None):
                 metadata=s_info['metadata'],
                 category=s_info['category'],
                 subcategory=s_info['subcategory'],
-                cover_comic_id=s_info['cover_id']
+                cover_comic_id=s_info['cover_id'],
+                conn=conn
             )
             series_id_map[series_name] = series_id
+        conn.commit()
             
         batch = []
         for comic in new_comics:
@@ -274,31 +269,86 @@ def sync_library_task(job_id=None):
             conn.commit()
     
     conn.close()
-    print(f"Phase 1 complete. New: {len(new_comics)}, Changed: {len(changed_comics)}, Deleted: {len(missing_ids)}")
-    return len(new_comics) + len(changed_comics), len(missing_ids)
+    print(f"Phase 1 complete. New: {len(new_comics)}, Changed: {len(changed_comics)}, Deleted: {deleted_count}")
+    return len(new_comics) + len(changed_comics), deleted_count
+
+def _process_single_comic(comic_id, filepath):
+    """
+    Process a single comic archive. Thread-safe — no database access.
+    Opens the archive, counts pages, and generates thumbnail.
+    Returns a result dict for the caller to batch-write to DB.
+    """
+    result = {
+        'comic_id': comic_id,
+        'filepath': filepath,
+        'filename': os.path.basename(filepath),
+        'pages': 0,
+        'has_thumb': False,
+        'errors': [],
+        'file_missing': False,
+    }
+    
+    if not os.path.exists(filepath):
+        result['errors'].append(f"Comic file not found: {filepath}")
+        result['file_missing'] = True
+        return result
+    
+    try:
+        file_ext = os.path.splitext(filepath)[1].lower()
+        
+        if file_ext == '.cbz':
+            with zipfile.ZipFile(filepath, 'r') as z:
+                img_names = [n for n in z.namelist() if n.lower().endswith(IMG_EXTENSIONS)]
+                result['pages'] = len(img_names)
+                if img_names:
+                    img_names.sort(key=natural_sort_key)
+                    with z.open(img_names[0]) as f_img:
+                        thumb_result = save_thumbnail(f_img, comic_id, img_names[0])
+                        if isinstance(thumb_result, str):
+                            result['errors'].append(thumb_result)
+                        else:
+                            result['has_thumb'] = thumb_result
+        elif file_ext == '.cbr':
+            with rarfile.RarFile(filepath) as r:
+                img_names = [n for n in r.namelist() if n.lower().endswith(IMG_EXTENSIONS)]
+                result['pages'] = len(img_names)
+                if img_names:
+                    img_names.sort(key=natural_sort_key)
+                    with r.open(img_names[0]) as f_img:
+                        thumb_result = save_thumbnail(f_img, comic_id, img_names[0])
+                        if isinstance(thumb_result, str):
+                            result['errors'].append(thumb_result)
+                        else:
+                            result['has_thumb'] = thumb_result
+    except Exception as e:
+        result['errors'].append(f"Error processing {filepath}: {e}")
+        print(f"Error processing {filepath}: {e}")
+    
+    return result
 
 def process_library_task(job_id=None):
     """
     PHASE 2: Background processing of pending items.
+    Parallelized archive processing with ThreadPoolExecutor.
+    Uses shared DB connection and fixes progress tracking.
     """
     print("Phase 2: Processing metadata and thumbnails...")
     
     conn = get_db_connection()
-    total_pending = conn.execute("SELECT COUNT(*) FROM comics WHERE pages IS NULL OR pages = 0 OR processed = 0").fetchone()[0]
-    conn.close()
+    total_pending = conn.execute("SELECT COUNT(*) FROM comics WHERE processed = 0").fetchone()[0]
     
     if total_pending == 0:
         print("No pending comics to process.")
-        if job_id: complete_scan_job(job_id, status='completed')
+        conn.close()
+        if job_id: complete_scan_job(job_id, status='completed', errors=None)
         return
 
     if job_id:
-        conn = get_db_connection()
         conn.execute("UPDATE scan_jobs SET total_comics = ?, processed_comics = 0 WHERE id = ?", (total_pending, job_id))
         conn.commit()
-        conn.close()
 
     batch_size = 100
+    max_workers = 4
     processed_count = 0
     
     pages_done = 0
@@ -306,82 +356,85 @@ def process_library_task(job_id=None):
     thumb_done = 0
     thumb_err = 0
     
-    conn = get_db_connection()
+    all_scan_errors = []
+    
     try:
         while True:
-            pending = get_pending_comics(limit=batch_size)
+            pending = get_pending_comics(limit=batch_size, conn=conn)
             if not pending: break
-                
+            
             update_buffer = []
-            for comic in pending:
-                comic_id = comic['id']
-                filepath = comic['path']
-                filename = os.path.basename(filepath)
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(_process_single_comic, comic['id'], comic['path']): comic
+                    for comic in pending
+                }
                 
-                if not os.path.exists(filepath):
-                    update_buffer.append((0, 0, 0, comic_id))
+                for future in as_completed(futures):
+                    result = future.result()
                     processed_count += 1
-                    continue
                     
-                try:
-                    pages = 0
-                    file_ext = os.path.splitext(filepath)[1].lower()
-                    if file_ext == '.cbz':
-                        with zipfile.ZipFile(filepath, 'r') as z:
-                            pages = len([n for n in z.namelist() if n.lower().endswith(IMG_EXTENSIONS)])
-                    elif file_ext == '.cbr':
-                        with rarfile.RarFile(filepath) as r:
-                            pages = len([n for n in r.namelist() if n.lower().endswith(IMG_EXTENSIONS)])
+                    if result['file_missing'] or (result['errors'] and result['pages'] == 0):
+                        pages_err += 1
+                        thumb_err += 1
+                        update_buffer.append((0, 1, 0, result['comic_id']))
+                    else:
+                        if result['pages'] > 0: pages_done += 1
+                        else: pages_err += 1
+                        
+                        if result['has_thumb']: thumb_done += 1
+                        else: thumb_err += 1
+                        
+                        update_buffer.append((result['pages'], 1, 1 if result['has_thumb'] else 0, result['comic_id']))
                     
-                    if pages > 0: pages_done += 1
-                    else: pages_err += 1
-                    
-                    processed = extract_cover_image(filepath, comic_id)
-                    if processed: thumb_done += 1
-                    else: thumb_err += 1
-                    
-                    update_buffer.append((pages, 1 if processed else 0, 1 if processed else 0, comic_id))
-                    
-                except Exception as e:
-                    print(f"Error processing {filepath}: {e}")
-                    pages_err += 1
-                    thumb_err += 1
-                    update_buffer.append((0, 0, 0, comic_id))
-                
-                processed_count += 1
-                
-                if len(update_buffer) >= 20: 
-                    conn.executemany('UPDATE comics SET pages = ?, processed = ?, has_thumbnail = ? WHERE id = ?', update_buffer)
-                    conn.commit()
-                    update_buffer = []
-                    if job_id:
-                        conn.execute('''
-                            UPDATE scan_jobs SET 
-                                processed_comics = ?, current_file = ?, phase = ?,
-                                processed_pages = ?, page_errors = ?, 
-                                processed_thumbnails = ?, thumbnail_errors = ?
-                            WHERE id = ?
-                        ''', (processed_count, filename, "Phase 2: Processing", pages_done, pages_err, thumb_done, thumb_err, job_id))
-                        conn.commit()
-
+                    if result['errors']:
+                        all_scan_errors.append({
+                            'comic_id': result['comic_id'],
+                            'filepath': result['filepath'],
+                            'errors': result['errors']
+                        })
+            
             if update_buffer:
                 conn.executemany('UPDATE comics SET pages = ?, processed = ?, has_thumbnail = ? WHERE id = ?', update_buffer)
-                conn.commit()
                 if job_id:
+                    last_filename = pending[-1]['path'].split(os.sep)[-1] if pending else ''
                     conn.execute('''
                         UPDATE scan_jobs SET 
                             processed_comics = ?, current_file = ?, phase = ?,
                             processed_pages = ?, page_errors = ?, 
-                            processed_thumbnails = ?, thumbnail_errors = ?
+                            processed_thumbnails = ?, thumbnail_errors = ?,
+                            errors = ?
                         WHERE id = ?
-                    ''', (processed_count, filename, "Phase 2: Processing", pages_done, pages_err, thumb_done, thumb_err, job_id))
-                    conn.commit()
+                    ''', (processed_count, last_filename, "Phase 2: Processing",
+                          pages_done, pages_err, thumb_done, thumb_err,
+                          json.dumps(all_scan_errors) if all_scan_errors else None, job_id))
+                conn.commit()
                     
     finally:
         conn.close()
     
-    if job_id: complete_scan_job(job_id, status='completed')
+    if job_id:
+        complete_scan_job(job_id, status='completed',
+                          errors=json.dumps(all_scan_errors) if all_scan_errors else None)
     print(f"Phase 2 complete. Processed {processed_count} items.")
+
+def save_thumbnail(f_img, comic_id, item_name, target_size=300):
+    """Helper to process and save thumbnail from an open file handle"""
+    try:
+        img = Image.open(f_img)
+        img.thumbnail((target_size, target_size * 1.5))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        cache_path = get_thumbnail_path(comic_id)
+        if not cache_path:
+            return False
+        img.save(cache_path, format="JPEG", quality=85)
+        return True
+    except Exception as e:
+        error_msg = f"Thumbnail error: {item_name} - {e}"
+        print(error_msg)
+        return error_msg
 
 def full_scan_library_task():
     from database import get_running_scan_job
@@ -389,6 +442,12 @@ def full_scan_library_task():
     if running: return
         
     job_id = create_scan_job(scan_type='full', total_comics=0)
+    
+    conn = get_db_connection()
+    conn.execute("UPDATE comics SET processed = 0 WHERE processed = 1 AND (pages IS NULL OR pages = 0)")
+    conn.commit()
+    conn.close()
+
     try:
         sync_library_task(job_id)
         process_library_task(job_id)

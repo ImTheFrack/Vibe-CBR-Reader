@@ -34,6 +34,10 @@
     transition: transform 0.3s ease;
 }
 
+.reader-container.ui-hidden {
+    cursor: none;
+}
+
 .reader-container.ui-hidden .reader-header {
     transform: translateY(-100%);
 }
@@ -99,6 +103,20 @@
     justify-content: center;
     height: 100%;
     width: 100%;
+    position: relative;
+}
+
+.reader-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+    z-index: 10;
+}
+
+.reader-loading.active {
+    display: block;
 }
 
 .reader-container[data-display="long"] .reader-pages {
@@ -154,11 +172,21 @@
     transition: background var(--transition-fast);
 }
 
+/* Don't show hover on click zones to avoid impinging on reader experience */
 .click-zone:hover {
-    background: rgba(255, 107, 53, 0.05);
+    background: transparent;
+}
+
+.click-zone.active {
+    background: rgba(255, 107, 53, 0.2) !important;
 }
 
 .click-zone.prev { left: 0; }
+.click-zone.middle { 
+    left: 25%; 
+    width: 50%; 
+    z-index: 4; /* Slightly behind so corners of prev/next can be reached if needed, though they overlap */
+}
 .click-zone.next { right: 0; }
 
 .reader-footer {
@@ -183,6 +211,21 @@
     transform: translateY(100%);
 }
 
+.reader-footer .reader-btn {
+    padding: 8px 12px;
+}
+
+.footer-nav-btn {
+    min-width: 44px;
+    justify-content: center;
+}
+
+.footer-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background: transparent;
+}
+
 .page-indicator {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.875rem;
@@ -191,14 +234,43 @@
     text-align: center;
 }
 
-.progress-slider {
+.progress-container {
     flex: 1;
     max-width: 400px;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.progress-slider {
+    width: 100%;
     height: 4px;
     -webkit-appearance: none;
     background: var(--bg-tertiary);
     border-radius: 2px;
     cursor: pointer;
+}
+
+.reader-tooltip {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent-primary);
+    color: white;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+    z-index: 1000;
+}
+
+.reader-tooltip.visible {
+    opacity: 1;
 }
 
 .progress-slider::-webkit-slider-thumb {
@@ -1414,4 +1486,22 @@
     .title-meta-row-compact {
         justify-content: center;
     }
+}
+
+/* Fix double page alignment - align images to the gutter (center) */
+.reader-container[data-display="double"] .reader-image:first-child {
+    object-position: right center;
+}
+
+.reader-container[data-display="double"] .reader-image:last-child {
+    object-position: left center;
+}
+
+/* RTL direction support */
+.reader-container[data-display="double"][data-direction="rtl"] .reader-image:first-child {
+    object-position: left center;
+}
+
+.reader-container[data-display="double"][data-direction="rtl"] .reader-image:last-child {
+    object-position: right center;
 }

@@ -1,7 +1,24 @@
 import { state } from './state.js';
 import { apiGet } from './api.js';
+import { registerCleanup } from './router.js';
 
 let pollInterval = null;
+
+export function stopScanPolling() {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+}
+
+registerCleanup('scan', stopScanPolling);
+
+export function startScanPolling() {
+    // Start polling
+    pollScanStatus();
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(pollScanStatus, 3000);
+}
 
 export function showScanStatus() {
     // Hide all views
@@ -10,9 +27,7 @@ export function showScanStatus() {
     state.currentView = 'scan-status';
     
     // Start polling
-    pollScanStatus();
-    if (pollInterval) clearInterval(pollInterval);
-    pollInterval = setInterval(pollScanStatus, 3000);
+    startScanPolling();
 }
 
 async function pollScanStatus() {

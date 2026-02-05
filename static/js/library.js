@@ -1,10 +1,11 @@
-import { state } from './state.js';
-import { apiGet, apiPost } from './api.js';
-import { showToast } from './utils.js';
-import { startReading } from './reader.js';
-import { renderItems, renderFan, getTitleCoverIds, getFolderCoverIds } from './components/index.js';
-import { calculateComicProgress, aggregateProgress } from './utils/progress.js';
-import { sortItems, parseFileSize, TITLE_SORT_ACCESSORS, COMIC_SORT_ACCESSORS, FOLDER_SORT_ACCESSORS } from './utils/sorting.js';
+import { state } from './state.js?v=3';
+import { apiGet, apiPost, apiPut } from './api.js?v=3';
+import { showToast } from './utils.js?v=3';
+import { startReading } from './reader.js?v=3';
+import { renderItems, renderFan, getTitleCoverIds, getFolderCoverIds } from './components/index.js?v=3';
+import { calculateComicProgress, aggregateProgress } from './utils/progress.js?v=3';
+import { sortItems, parseFileSize, TITLE_SORT_ACCESSORS, COMIC_SORT_ACCESSORS, FOLDER_SORT_ACCESSORS } from './utils/sorting.js?v=3';
+import { navigate } from './router.js?v=3';
 
 // Library Loading
 export async function loadLibrary() {
@@ -29,9 +30,6 @@ export async function loadLibrary() {
         
         // Parse file paths to build folder structure
         buildFolderTree();
-        
-        // Start at root
-        navigateToRoot();
     } catch (error) {
         showToast('Failed to load library', 'error');
         console.error(error);
@@ -358,33 +356,33 @@ export function navigateToFolder(type, name) {
             }
         }
     }
-    if (state.searchQuery) {
-        state.previousSearchQuery = state.searchQuery;
-    }
     state.searchQuery = '';
     updateLibraryView();
 }
 
 export function navigateUp() {
+    let params = {};
+    
     switch (state.currentLevel) {
         case 'title':
-            state.currentLevel = 'subcategory';
-            state.currentLocation.title = null;
+            params = {
+                category: state.currentLocation.category,
+                subcategory: state.currentLocation.subcategory
+            };
             break;
         case 'subcategory':
-            state.currentLevel = 'category';
-            state.currentLocation.subcategory = null;
-            state.currentLocation.title = null;
+            params = {
+                category: state.currentLocation.category
+            };
             break;
         case 'category':
-            state.currentLevel = 'root';
-            state.currentLocation.category = null;
-            state.currentLocation.subcategory = null;
-            state.currentLocation.title = null;
+            params = {};
             break;
-        default: return;
+        default:
+            return;
     }
-    updateLibraryView();
+    
+    navigate('library', params);
 }
 
 export function toggleFlattenMode() {
@@ -496,24 +494,22 @@ export function updateLibraryHeader() {
 
 export function updateBreadcrumbs() {
     const container = document.getElementById('breadcrumbs');
-    const parts = ['<span class="breadcrumb-link" onclick="navigateToRoot()">Library</span>'];
+    const parts = ['<span class="breadcrumb-link" onclick="routerNavigate(\'library\', {})">Library</span>'];
     
     if (state.currentLevel === 'category') {
         parts.push(`<span class="breadcrumb-current">${state.currentLocation.category}</span>`);
     } else if (state.currentLevel === 'subcategory') {
-        parts.push(`<span class="breadcrumb-link" onclick="navigateToFolder('category', '${state.currentLocation.category}')">${state.currentLocation.category}</span>`);
+        parts.push(`<span class="breadcrumb-link" onclick="routerNavigate('library', { category: '${state.currentLocation.category}' })">${state.currentLocation.category}</span>`);
         const subName = state.currentLocation.subcategory === '_direct' ? 'Uncategorized' : state.currentLocation.subcategory;
         parts.push(`<span class="breadcrumb-current">${subName}</span>`);
     } else if (state.currentLevel === 'title') {
         if (state.currentLocation.category) {
-            parts.push(`<span class="breadcrumb-link" onclick="navigateToFolder('category', '${state.currentLocation.category}')">${state.currentLocation.category}</span>`);
+            parts.push(`<span class="breadcrumb-link" onclick="routerNavigate('library', { category: '${state.currentLocation.category}' })">${state.currentLocation.category}</span>`);
         }
         if (state.currentLocation.subcategory) {
             const subName = state.currentLocation.subcategory === '_direct' ? 'Uncategorized' : state.currentLocation.subcategory;
-            parts.push(`<span class="breadcrumb-link" onclick="navigateToFolder('subcategory', '${state.currentLocation.subcategory}')">${subName}</span>`);
+            parts.push(`<span class="breadcrumb-link" onclick="routerNavigate('library', { category: '${state.currentLocation.category}', subcategory: '${state.currentLocation.subcategory}' })">${subName}</span>`);
         }
-        // Don't show title in breadcrumbs if we are in title view (redundant with header)
-        // parts.push(`<span class="breadcrumb-current">${state.currentLocation.title}</span>`);
     }
     
     container.innerHTML = parts.join(' <span class="breadcrumb-separator">›</span> ');
@@ -535,9 +531,10 @@ export function renderFolderGrid(folders) {
     const items = sortedFolders.map(folder => {
         let clickHandler, meta, typeLabel, itemCount;
         const folderName = folder.name === '_direct' ? 'Uncategorized' : folder.name;
+        const escapedName = folder.name.replace(/'/g, "\\'");
         
         if (state.currentLevel === 'root') {
-            clickHandler = `navigateToFolder('category', '${folder.name}')`;
+            clickHandler = `window.routerNavigate('library', { category: '${escapedName}' })`;
             const subcatCount = Object.keys(folder.subcategories).length;
             let titleCount = 0;
             Object.values(folder.subcategories).forEach(sub => { titleCount += Object.keys(sub.titles).length; });
@@ -545,7 +542,7 @@ export function renderFolderGrid(folders) {
             typeLabel = 'Category';
             itemCount = titleCount;
         } else {
-            clickHandler = `navigateToFolder('subcategory', '${folder.name}')`;
+            clickHandler = `window.routerNavigate('library', { category: '${state.currentLocation.category.replace(/'/g, "\\'")}', subcategory: '${escapedName}' })`;
             const titleCount = Object.keys(folder.titles).length;
             meta = `${titleCount} title${titleCount === 1 ? '' : 's'}`;
             typeLabel = 'Subcategory';
@@ -635,10 +632,21 @@ export function renderTitleCards() {
 
         const onClick = `navigateToFolder('title', '${escapedName}')`;
 
+        // Determine cover style
+        const titleCardStyle = state.settings.titleCardStyle;
+        let itemCoverIds = coverIds;
+        let itemCoverUrl = undefined;
+        
+        if (titleCardStyle === 'single' && coverIds.length > 0) {
+            itemCoverIds = undefined; // Disable fan
+            itemCoverUrl = `/api/cover/${coverIds[0]}`; // Use first cover
+        }
+
         return {
             // Shared
             title: title.name,
-            coverIds: coverIds,
+            coverIds: itemCoverIds,
+            coverUrl: itemCoverUrl,
             
             // Grid
             progressPercent: progressStats.percent,
@@ -748,11 +756,11 @@ export function renderComicsView() {
             description: `${comic.series} - ${chapterText}. ${progressStats.hasProgress ? `You've read ${progressStats.readPages} of ${progressStats.totalPages} pages (${Math.round(progressStats.percent)}% complete).` : 'Not started yet. Click to begin reading.'}`,
             buttons: [
                 { text: progressStats.hasProgress ? '▶ Continue Reading' : '▶ Start Reading', class: 'primary', onClick: `startReading('${comic.id}')` },
-                { text: '📖 View Details', class: 'secondary', onClick: `openComic('${comic.id}')` }
+                { text: '📖 View Details', class: 'secondary', onClick: `window.routerNavigate('series', { name: '${comic.series.replace(/'/g, "\\'")}' })` }
             ],
             
             // Events
-            onClick: `openComic('${comic.id}')`
+            onClick: `window.routerNavigate('series', { name: '${comic.series.replace(/'/g, "\\'")}' })`
         };
     });
 
@@ -903,12 +911,10 @@ export async function renderTitleDetailView() {
             <p class="series-synopsis-text" id="synopsis-${uniqueId}">${seriesData.synopsis}</p>
         </div>` : '';
 
-    const backLabel = getBackLabel();
-
     container.innerHTML = `
         <div class="title-detail-container">
-            <button class="back-btn-inline" onclick="handleBack()">
-                <span>←</span> Back to ${backLabel}
+            <button class="back-btn-inline" onclick="history.back()">
+                <span>←</span> Back
             </button>
             <div class="title-details-grid">
                 <div class="title-details-left">
@@ -987,7 +993,7 @@ export function renderFolderSidebar() {
         Object.values(tree.categories || {}).forEach(category => {
             html += `
                 <div class="folder-item">
-                    <div class="folder-header" onclick="navigateToFolder('category', '${category.name}')">
+                    <div class="folder-header" onclick="routerNavigate('library', { category: '${category.name}' })">
                         <span class="folder-icon">📁</span><span class="folder-name">${category.name}</span><span class="folder-count">${category.count}</span>
                     </div>
                 </div>
@@ -998,7 +1004,7 @@ export function renderFolderSidebar() {
         if (category) {
             html += `
                 <div class="folder-item back-item">
-                    <div class="folder-header back-button" onclick="navigateToRoot()">
+                    <div class="folder-header back-button" onclick="routerNavigate('library', {})">
                         <span class="folder-icon">←</span><span class="folder-name">Back to Categories</span>
                     </div>
                 </div>
@@ -1008,7 +1014,7 @@ export function renderFolderSidebar() {
                 const subName = subcategory.name === '_direct' ? 'Uncategorized' : subcategory.name;
                 html += `
                     <div class="folder-item">
-                        <div class="folder-header" onclick="navigateToFolder('subcategory', '${subcategory.name}')">
+                        <div class="folder-header" onclick="routerNavigate('library', { category: '${state.currentLocation.category}', subcategory: '${subcategory.name}' })">
                             <span class="folder-icon">📁</span><span class="folder-name">${subName}</span><span class="folder-count">${subcategory.count}</span>
                         </div>
                     </div>
@@ -1023,7 +1029,7 @@ export function renderFolderSidebar() {
                 const subName = subcategory.name === '_direct' ? 'Uncategorized' : subcategory.name;
                 html += `
                     <div class="folder-item back-item">
-                        <div class="folder-header back-button" onclick="navigateToFolder('category', '${state.currentLocation.category}')">
+                        <div class="folder-header back-button" onclick="routerNavigate('library', { category: '${state.currentLocation.category}' })">
                             <span class="folder-icon">←</span><span class="folder-name">Back to ${state.currentLocation.category}</span>
                         </div>
                     </div>
@@ -1033,7 +1039,7 @@ export function renderFolderSidebar() {
                     const isActive = state.currentLocation.title === title.name;
                     html += `
                         <div class="folder-item">
-                            <div class="folder-header ${isActive ? 'active' : ''}" onclick="navigateToFolder('title', '${title.name.replace(/'/g, "\\'")}')">
+                            <div class="folder-header ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: '${state.currentLocation.category}', subcategory: '${state.currentLocation.subcategory}', title: '${title.name.replace(/'/g, "\\'")}' })">
                                 <span class="folder-icon">📚</span><span class="folder-name">${title.name}</span><span class="folder-count">${title.count}</span>
                             </div>
                         </div>
@@ -1397,8 +1403,8 @@ export function openComic(comicId) {
                     <button class="btn-primary" onclick="startReading('${comicId}')">
                         <span>▶</span> Read Now
                     </button>
-                    <button class="btn-secondary" onclick="handleBack()">
-                        <span>←</span> Back to ${getBackLabel()}
+                    <button class="btn-secondary" onclick="history.back()">
+                        <span>←</span> Back
                     </button>
                 </div>
             </div>
@@ -1460,38 +1466,8 @@ export function toggleMeta(id) {
     }
 }
 
-export function handleBack() {
-    if (state.previousSearchQuery && state.currentLevel === 'title') {
-        state.searchQuery = state.previousSearchQuery;
-        state.previousSearchQuery = '';
-        updateLibraryView();
-    } else if (state.previousView && state.previousView !== 'library') {
-        const targetView = state.previousView;
-        showView(targetView);
-    } else {
-        navigateUp();
-    }
-}
-
-function getBackLabel() {
-    if (state.previousView && state.previousView !== 'library') {
-        return state.previousView.charAt(0).toUpperCase() + state.previousView.slice(1);
-    }
-    if (state.currentLevel === 'title') {
-        if (state.currentLocation.subcategory) {
-             return state.currentLocation.subcategory === '_direct' ? 'Category' : state.currentLocation.subcategory;
-        }
-        if (state.currentLocation.category) return state.currentLocation.category;
-    }
-    return 'Library';
-}
-
 // Helper to show view (needs to be exported or available)
 export function showView(viewName) {
-    if (state.currentView !== viewName) {
-        state.previousView = state.currentView;
-    }
-    
     document.querySelectorAll('.header-btn').forEach(btn => btn.classList.remove('active'));
     if (viewName === 'library') document.getElementById('nav-library').classList.add('active');
     if (viewName === 'recent') document.getElementById('nav-recent').classList.add('active');
@@ -1505,3 +1481,16 @@ export function showView(viewName) {
         loadRecentReads();
     }
 }
+
+// Handle click on Library tab
+export function handleLibraryClick() {
+    navigate('library', {});
+}
+
+// Listen for preferences updates to re-render titles
+document.addEventListener('preferences-updated', () => {
+    // Re-render if we are viewing titles (either flat mode or in a subcategory)
+    if (state.currentView === 'library' && (state.currentLevel === 'subcategory' || state.flattenMode)) {
+        renderTitleCards();
+    }
+});

@@ -141,13 +141,17 @@ cython_debug/
 
 # VS Code
 .vscode/
+.sisyphus/
 
 # Project-specific
 *.db
 *.sqlite
 *.sqlite3
 comics.db
-
+*.db*
+*.db-shm
+*.db-wal
+*.json
 # Cache directories
 cache/
 *.cache
@@ -179,3 +183,6 @@ $RECYCLE.BIN/
 # Linux
 *~
 .nfs*
+comics.db-shm
+comics.db-wal
+.sisyphus/boulder.json

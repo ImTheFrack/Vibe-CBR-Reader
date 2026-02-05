@@ -48,6 +48,35 @@ def create_default_admin():
 # Create default admin on startup
 create_default_admin()
 
+def is_port_in_use(port):
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("0.0.0.0", port))
+            return False
+        except socket.error:
+            return True
+
+def find_available_port(start_port, max_attempts=100):
+    port = start_port
+    while is_port_in_use(port) and port < start_port + max_attempts:
+        port += 1
+    return port
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Vibe CBR Reader Server")
+    parser.add_argument("--port", "-p", type=int, help="Port to run the server on")
+    args = parser.parse_args()
+    
+    port = args.port
+    if port is None:
+        port = find_available_port(8501)
+        print(f"No port specified, using first available port: {port}")
+    else:
+        if is_port_in_use(port):
+            print(f"Warning: Port {port} is already in use. Uvicorn may fail to start.")
+            
+    uvicorn.run(app, host="0.0.0.0", port=port)
