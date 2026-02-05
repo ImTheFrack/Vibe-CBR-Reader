@@ -73,6 +73,7 @@ export function parseHash(hash) {
             return { view: 'recent', params };
 
         case 'tags':
+            // #/tags?tags=Fantasy,Action
             return { view: 'tags', params };
 
         case 'series':
@@ -155,7 +156,23 @@ export function buildHash(view, params = {}) {
             }
             return hash;
 
-        // recent, tags, scan - no additional params
+        case 'tags':
+            const tagParams = new URLSearchParams();
+            let hasParams = false;
+            if (params.tags) {
+                tagParams.set('tags', params.tags);
+                hasParams = true;
+            }
+            if (params.view) {
+                tagParams.set('view', params.view);
+                hasParams = true;
+            }
+            if (hasParams) {
+                hash += `?${tagParams.toString()}`;
+            }
+            break;
+
+        // recent, scan - no additional params
     }
 
     return hash;

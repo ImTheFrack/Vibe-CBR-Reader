@@ -161,11 +161,18 @@
         <!-- Recent View -->
         <div id="view-recent" class="view">
             <div class="section-header">
-                <h2 class="section-title">
-                    <span>🕐</span>
-                    Continue Reading
-                </h2>
-                <p class="section-subtitle">Pick up where you left off</p>
+                <div class="header-with-actions">
+                    <div>
+                        <h2 class="section-title">
+                            <span>🕐</span>
+                            Continue Reading
+                        </h2>
+                        <p class="section-subtitle">Pick up where you left off</p>
+                    </div>
+                    <button class="btn-secondary" id="btn-purge-history" onclick="confirmPurgeHistory()">
+                        <span>🗑️</span> Purge History
+                    </button>
+                </div>
             </div>
 
             <div id="recent-grid" class="comics-grid">

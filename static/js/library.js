@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { apiGet, apiPost, apiPut } from './api.js';
+import { apiGet, apiPost, apiPut, apiDelete } from './api.js';
 import { showToast } from './utils.js';
 import { startReading } from './reader.js';
 import { renderItems, renderFan, getTitleCoverIds, getFolderCoverIds } from './components/index.js';
@@ -1347,6 +1347,7 @@ export async function loadRecentReads() {
             const chapterText = comic.chapter ? `Ch. ${comic.chapter}` : (comic.volume ? `Vol. ${comic.volume}` : 'One-shot');
             return `
                 <div class="comic-card" onclick="continueReading('${comic.id}')">
+                    <button class="card-remove-btn" onclick="event.stopPropagation(); removeSingleHistory('${comic.id}')" title="Remove from history">×</button>
                     <div class="comic-cover">
                         <img src="/api/cover/${comic.id}" alt="${comic.title}" loading="lazy">
                         <div class="comic-progress">
@@ -1494,3 +1495,47 @@ document.addEventListener('preferences-updated', () => {
         renderTitleCards();
     }
 });
+
+/**
+ * History Management
+ */
+
+export async function confirmPurgeHistory() {
+    if (confirm("Are you sure you want to purge your entire reading history? This cannot be undone.")) {
+        await purgeHistory();
+    }
+}
+
+export async function purgeHistory() {
+    try {
+        const result = await apiDelete('/api/progress');
+        if (result.error) throw new Error(result.error);
+        
+        showToast("Reading history purged successfully", "success");
+        
+        // Refresh view
+        await loadRecentReads();
+    } catch (error) {
+        console.error("Failed to purge history:", error);
+        showToast("Failed to purge history: " + error.message, "error");
+    }
+}
+
+export async function removeSingleHistory(comicId) {
+    try {
+        const result = await apiDelete(`/api/progress/${comicId}`);
+        if (result.error) throw new Error(result.error);
+        
+        showToast("Item removed from history", "success");
+        
+        // Refresh view
+        await loadRecentReads();
+    } catch (error) {
+        console.error("Failed to remove item from history:", error);
+        showToast("Failed to remove item: " + error.message, "error");
+    }
+}
+
+// Expose to window for HTML onclick
+window.confirmPurgeHistory = confirmPurgeHistory;
+window.removeSingleHistory = removeSingleHistory;

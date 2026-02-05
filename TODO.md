@@ -44,10 +44,14 @@ This file tracks the project's outstanding tasks, known bugs, and future roadmap
 - [ ] **User Profile & Personalization**:
     - **Profile Page**: Central view for account settings, `POST /api/users/me/password` (requires current password validation), and stats.
     - **Integrated Stats**: Dashboard showing reading speed, completion rates, and library growth metrics.
-    - **History**: Implement "Import/Export Reading History" as JSON.
+    - **History**: [Implemented] Purge entire reading history or remove individual items from the "Recent" tab. Includes confirmation for full purge and toast notifications.
 - [ ] **Collections & Discovery**:
     - **Shared Lists**: Custom lists with `is_public` flags; community view to browse public collections.
     - **Advanced Search**: Deep metadata search (synopsis, authors) using SQLite FTS5.
+    - [x] **Optimized Tagging System**: 
+        - **Features**: Multi-word consolidation (e.g., "Fantasy" matches "Urban Fantasy"), metadata-based matching (searching titles/synopses), and deep-linking support (`#/tags?tags=...`).
+        - **Performance**: 128x speedup achieved via module-level caching of containment maps and a word-set tokenization algorithm for metadata search.
+        - **Task**: Trigger cache invalidation in `database.py` at the end of library scan jobs to ensure new tags/metadata are reflected without server restart.
     - **Filters**: UI filters for genre, status, and read/unread state.
 - [ ] **Anonymous Star Ratings**: 5-star system for series/comics; individual votes are private, only averages are public.
 - [ ] **Modular Batch Operations Framework**:

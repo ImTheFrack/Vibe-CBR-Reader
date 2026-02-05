@@ -426,6 +426,23 @@ def update_reading_progress(user_id, comic_id, current_page, total_pages=None, c
     conn.commit()
     conn.close()
 
+def clear_reading_progress(user_id):
+    """Delete all reading progress for a user (Purge History)"""
+    conn = get_db_connection()
+    conn.execute('DELETE FROM reading_progress WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+def delete_reading_progress(user_id, comic_id):
+    """Delete reading progress for a specific comic and user"""
+    conn = get_db_connection()
+    conn.execute(
+        'DELETE FROM reading_progress WHERE user_id = ? AND comic_id = ?',
+        (user_id, comic_id)
+    )
+    conn.commit()
+    conn.close()
+
 # User preferences functions
 def get_user_preferences(user_id):
     """Get user preferences"""
@@ -756,17 +773,89 @@ def get_all_series(category=None, subcategory=None, limit=100, offset=0):
     
     return result
 
+# --- Global Cache for Tags (Optimized for performance) ---
+_TAG_CACHE = {
+    'system_tags': None, # norm -> display
+    'containment_map': None, # child -> parents
+    'tag_lookup': None, # first_word -> [full_norms]
+    'last_updated': 0
+}
+
+def _refresh_tag_cache(conn=None):
+    """Rebuild the tag metadata cache if empty or if data might have changed"""
+    global _TAG_CACHE
+    
+    # Simple check: if we have it, keep it. 
+    # In a production app, we might check a 'last_scan_time' from DB.
+    if _TAG_CACHE['system_tags'] is not None:
+        return
+        
+    import json
+    import re
+    from collections import defaultdict
+    
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+        
+    # 1. Fetch all tags from series
+    rows = conn.execute("SELECT genres, tags, demographics FROM series").fetchall()
+    
+    def normalize_tag(t):
+        if not t: return ""
+        return " ".join(t.split()).lower()
+
+    system_tags = {}
+    for row in rows:
+        combined = []
+        try:
+            if row['genres']: combined.extend(json.loads(row['genres']))
+            if row['tags']: combined.extend(json.loads(row['tags']))
+            if row['demographics']: combined.extend(json.loads(row['demographics']))
+        except: pass
+        
+        for t in combined:
+            if not t: continue
+            norm = normalize_tag(t)
+            if norm not in system_tags:
+                system_tags[norm] = t
+            elif t[0].isupper() and not system_tags[norm][0].isupper():
+                system_tags[norm] = t
+                
+    # 2. Containment map
+    all_norms = sorted(system_tags.keys())
+    containment_map = defaultdict(set)
+    for child in all_norms:
+        if len(child.split()) > 1:
+            for potential_parent in all_norms:
+                if len(potential_parent) >= len(child): continue
+                if re.search(r'\b' + re.escape(potential_parent) + r'\b', child):
+                    containment_map[child].add(potential_parent)
+                    
+    # 3. Lookup for metadata search
+    tag_lookup = defaultdict(list)
+    for norm in all_norms:
+        if len(norm) >= 3:
+            first_word = norm.split()[0]
+            tag_lookup[first_word].append(norm)
+            
+    _TAG_CACHE['system_tags'] = system_tags
+    _TAG_CACHE['containment_map'] = containment_map
+    _TAG_CACHE['tag_lookup'] = tag_lookup
+    _TAG_CACHE['last_updated'] = time.time() if 'time' in globals() else 0
+    
+    if close_conn:
+        conn.close()
+
 def get_series_by_tags(selected_tags=None):
     """
     Get series stats filtered by tags/genres.
     selected_tags: list of strings (tags/genres) that MUST be present.
-    Returns: {
-        'matching_count': int,
-        'related_tags': [{'name': str, 'count': int, 'type': 'mixed'}],
-        'series': [dict] (summary of matching series)
-    }
+    Uses optimized caching and word-set search.
     """
     import json
+    import re
     from collections import defaultdict
     
     def normalize_tag(t):
@@ -776,19 +865,46 @@ def get_series_by_tags(selected_tags=None):
     if selected_tags is None:
         selected_tags = []
     
-    selected_set = set(normalize_tag(t) for t in selected_tags)
+    selected_norms = [normalize_tag(t) for t in selected_tags]
     
     conn = get_db_connection()
+    _refresh_tag_cache(conn) # Ensure we have the system-wide tag metadata
+    
+    all_system_tags = _TAG_CACHE['system_tags']
+    containment_map = _TAG_CACHE['containment_map']
+    tag_lookup = _TAG_CACHE['tag_lookup']
     
     # Fetch ALL series data
-    all_series = conn.execute('''
-        SELECT id, name, title, genres, tags, cover_comic_id, total_chapters 
+    rows = conn.execute('''
+        SELECT id, name, title, genres, tags, demographics, synopsis, cover_comic_id, total_chapters 
         FROM series
     ''').fetchall()
     
-    # Optimization: Fetch all needed comics for the fans in one go for matching series
+    # Pass 1: Local processing
+    processed_series = []
+    for row in rows:
+        s_genres = json.loads(row['genres']) if row['genres'] else []
+        s_tags = json.loads(row['tags']) if row['tags'] else []
+        s_demographics = json.loads(row['demographics']) if row['demographics'] else []
+        
+        explicit_norms = set(normalize_tag(t) for t in (s_genres + s_tags + s_demographics) if t)
+        
+        processed_series.append({
+            'id': row['id'],
+            'name': row['name'],
+            'title': row['title'],
+            'synopsis': row['synopsis'],
+            'explicit_norms': explicit_norms,
+            'cover_comic_id': row['cover_comic_id'],
+            'total_chapters': row['total_chapters'] or 0
+        })
+
+    # Pass 2: Match and Aggregate
+    matching_series = []
+    tag_counts = {} 
+    
     comics_by_series = defaultdict(list)
-    comics_query = '''
+    fan_query = '''
         SELECT series_id, id, volume, chapter, filename
         FROM (
             SELECT series_id, id, volume, chapter, filename,
@@ -802,82 +918,58 @@ def get_series_by_tags(selected_tags=None):
         )
         WHERE rn <= 3
     '''
-    
-    all_fan_comics = conn.execute(comics_query).fetchall()
-    for c in all_fan_comics:
+    for c in conn.execute(fan_query).fetchall():
         comics_by_series[c['series_id']].append(dict(c))
+
+    for series in processed_series:
+        series_all_norms = series['explicit_norms'].copy()
         
-    matching_series = []
-    # Map normalized_tag -> {name: best_display_name, count: int, covers: [], series_names: []}
-    tag_counts = {} 
-    
-    for row in all_series:
-        s_genres = []
-        s_tags = []
+        # 1. Add parents of explicit tags
+        for t in list(series_all_norms):
+            series_all_norms.update(containment_map.get(t, []))
         
-        if row['genres']:
-            try:
-                s_genres = json.loads(row['genres'])
-            except: pass
-            
-        if row['tags']:
-            try:
-                s_tags = json.loads(row['tags'])
-            except: pass
-            
-        # Merge and normalize within this series
-        combined_map = {} # normalized -> display
+        # 2. Search metadata (Word-Set Optimized)
+        metadata_text = f"{series['title'] or ''} {series['name'] or ''} {series['synopsis'] or ''}".lower()
+        meta_words = set(re.findall(r'\w+', metadata_text))
         
-        for g in (s_genres or []):
-            if g: combined_map[normalize_tag(g)] = g
-        for t in (s_tags or []):
-            if t: combined_map[normalize_tag(t)] = t
-            
-        series_tag_set = set(combined_map.keys())
+        for word in meta_words:
+            if word in tag_lookup:
+                for potential_tag in tag_lookup[word]:
+                    # Quick string check before regex
+                    if potential_tag in metadata_text:
+                        # Ensure word boundaries for multi-word tags
+                        if re.search(r'\b' + re.escape(potential_tag) + r'\b', metadata_text):
+                            series_all_norms.add(potential_tag)
+                            series_all_norms.update(containment_map.get(potential_tag, []))
         
-        # Check if series has all selected tags
-        if selected_set.issubset(series_tag_set):
-            # Match found
+        if all(sel in series_all_norms for sel in selected_norms):
             matching_series.append({
-                'id': row['id'],
-                'name': row['name'],
-                'title': row['title'],
-                'cover_comic_id': row['cover_comic_id'],
-                'count': row['total_chapters'] or 0,
-                'comics': comics_by_series.get(row['id'], [])
+                'id': series['id'],
+                'name': series['name'],
+                'title': series['title'],
+                'cover_comic_id': series['cover_comic_id'],
+                'count': series['total_chapters'],
+                'comics': comics_by_series.get(series['id'], [])
             })
-            
-            # Aggregate OTHER tags for refinement
-            for tag_norm, tag_display in combined_map.items():
-                if tag_norm not in selected_set:
+            for tag_norm in series_all_norms:
+                if tag_norm not in selected_norms:
                     if tag_norm not in tag_counts:
-                        tag_counts[tag_norm] = {'name': tag_display, 'count': 0, 'covers': [], 'series_names': []}
-                    
+                        tag_counts[tag_norm] = {
+                            'name': all_system_tags.get(tag_norm, tag_norm), 
+                            'count': 0, 'covers': [], 'series_names': []
+                        }
                     data = tag_counts[tag_norm]
                     data['count'] += 1
-                    
-                    # Update display name if current one is "better" (e.g. Title Case vs lowercase)
-                    # Simple heuristic: prefer Title Case if current is lower
-                    if tag_display[0].isupper() and not data['name'][0].isupper():
-                        data['name'] = tag_display
-                    
-                    # Collect up to 3 covers for the fan
-                    if len(data['covers']) < 3 and row['cover_comic_id']:
-                        data['covers'].append(row['cover_comic_id'])
-                        
-                    # Collect up to 3 series names for display
+                    if len(data['covers']) < 3 and series['cover_comic_id']:
+                        data['covers'].append(series['cover_comic_id'])
                     if len(data['series_names']) < 3:
-                        data['series_names'].append(row['title'] or row['name'])
-                    
-    # Format related tags
+                        data['series_names'].append(series['title'] or series['name'])
+    
     related_tags_list = [
-        {'name': data['name'], 'count': data['count'], 'covers': data['covers'], 'series_names': data['series_names']} 
-        for data in tag_counts.values()
+        {'name': d['name'], 'count': d['count'], 'covers': d['covers'], 'series_names': d['series_names']} 
+        for d in tag_counts.values()
     ]
-    
-    # Sort: Most popular tags first
     related_tags_list.sort(key=lambda x: (-x['count'], x['name']))
-    
     conn.close()
     return {
         'matching_count': len(matching_series),

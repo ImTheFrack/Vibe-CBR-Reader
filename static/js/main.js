@@ -141,7 +141,7 @@ function onHashChange() {
         
         case 'tags':
             showView('tags');
-            initTagsView();
+            initTagsView(route.params);
             break;
         
         case 'series':

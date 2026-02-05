@@ -2,6 +2,7 @@ import { apiPost } from './api.js';
 import { navigateToFolder, showView } from './library.js';
 import { state } from './state.js';
 import { renderItems, renderFan, getTitleCoverIds } from './components/index.js';
+import { navigate } from './router.js';
 
 // State for tags view
 const tagsState = {
@@ -14,9 +15,17 @@ const tagsState = {
 };
 
 // Initialize the Tags View
-export async function initTagsView() {
-    tagsState.selectedTags = [];
-    tagsState.isShowingResults = false;
+export async function initTagsView(params = {}) {
+    // Sync tags from URL params if present
+    if (params.tags) {
+        tagsState.selectedTags = params.tags.split(',').map(t => decodeURIComponent(t)).filter(t => t.length > 0);
+    } else {
+        tagsState.selectedTags = [];
+    }
+    
+    // Sync results view state from URL
+    tagsState.isShowingResults = params.view === 'results';
+    
     tagsState.filterText = '';
     
     const input = document.getElementById('tagSearchInput');
@@ -26,6 +35,20 @@ export async function initTagsView() {
     }
 
     await updateTagsView();
+}
+
+/**
+ * Helper to update URL with current selected tags
+ */
+function syncTagsToUrl() {
+    const params = {};
+    if (tagsState.selectedTags.length > 0) {
+        params.tags = tagsState.selectedTags.join(',');
+    }
+    if (tagsState.isShowingResults) {
+        params.view = 'results';
+    }
+    navigate('tags', params);
 }
 
 // Main update function
@@ -264,7 +287,7 @@ window.selectTag = function(tagName) {
         const input = document.getElementById('tagSearchInput');
         if (input) input.value = '';
         
-        updateTagsView();
+        syncTagsToUrl();
     }
 };
 
@@ -276,16 +299,19 @@ window.filterTags = function(text) {
 window.removeTag = function(tagName) {
     tagsState.selectedTags = tagsState.selectedTags.filter(t => t !== tagName);
     tagsState.isShowingResults = false; // Reset to grid view when criteria changes
-    updateTagsView();
+    syncTagsToUrl();
 };
 
 window.clearAllTags = function() {
     tagsState.selectedTags = [];
     tagsState.isShowingResults = false;
-    updateTagsView();
+    syncTagsToUrl();
 };
 
 window.showTagResults = function() {
+
     tagsState.isShowingResults = true;
-    updateTagsView();
+
+    syncTagsToUrl();
+
 };

@@ -837,7 +837,224 @@
         display: none;
     }
     
-    .folder-grid {
-        grid-template-columns: 1fr;
+        .folder-grid {
+    
+            grid-template-columns: 1fr;
+    
+        }
+    
     }
-}
+    
+    
+    
+    /* History Management Styles */
+    
+    .header-with-actions {
+    
+        display: flex;
+    
+        justify-content: space-between;
+    
+        align-items: center;
+    
+        width: 100%;
+    
+    }
+    
+    
+    
+    .comic-card {
+    
+        position: relative;
+    
+    }
+    
+    
+    
+    .card-remove-btn {
+    
+    
+    
+        position: absolute;
+    
+    
+    
+        top: 10px;
+    
+    
+    
+        left: 10px;
+    
+    
+    
+        width: 28px;
+    
+    
+    
+        height: 28px;
+    
+    
+    
+        border-radius: 50%;
+    
+    
+    
+        background: rgba(0, 0, 0, 0.8);
+    
+    
+    
+        color: white;
+    
+    
+    
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    
+    
+    
+        display: flex;
+    
+    
+    
+        align-items: center;
+    
+    
+    
+        justify-content: center;
+    
+    
+    
+        cursor: pointer;
+    
+    
+    
+        z-index: 10;
+    
+    
+    
+        opacity: 0;
+    
+    
+    
+        transition: all var(--transition-fast);
+    
+    
+    
+        font-size: 20px;
+    
+    
+    
+        font-weight: bold;
+    
+    
+    
+        line-height: 1;
+    
+    
+    
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    
+    
+    
+    }
+    
+    
+    
+    
+    
+    
+    
+    .comic-card:hover .card-remove-btn {
+    
+    
+    
+        opacity: 1;
+    
+    
+    
+    }
+    
+    
+    
+    
+    
+    
+    
+    .card-remove-btn:hover {
+    
+    
+    
+        background: var(--error);
+    
+    
+    
+        border-color: var(--error);
+    
+    
+    
+        transform: scale(1.1);
+    
+    
+    
+    }
+    
+    
+    
+    
+    
+    
+    
+    #btn-purge-history {
+    
+    
+    
+        display: flex;
+    
+    
+    
+        align-items: center;
+    
+    
+    
+        gap: 8px;
+    
+    
+    
+        padding: 8px 16px;
+    
+    
+    
+        font-size: 0.9rem;
+    
+    
+    
+    }
+    
+    
+    
+    
+    
+    
+    
+    #btn-purge-history:hover {
+    
+    
+    
+        background: var(--error);
+    
+    
+    
+        color: white;
+    
+    
+    
+        border-color: var(--error);
+    
+    
+    
+    }
+    
+    
+    
+    
+    
+    

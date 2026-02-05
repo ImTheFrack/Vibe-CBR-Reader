@@ -4,7 +4,8 @@ from typing import Optional
 from database import (
     get_reading_progress, update_reading_progress,
     get_user_preferences, update_user_preferences,
-    get_bookmarks, add_bookmark, remove_bookmark
+    get_bookmarks, add_bookmark, remove_bookmark,
+    clear_reading_progress, delete_reading_progress
 )
 from dependencies import get_current_user
 
@@ -91,6 +92,18 @@ async def update_progress(progress_data: ReadingProgressUpdate, current_user: di
         progress_data.additional_seconds
     )
     return {"message": "Progress updated"}
+
+@router.delete("/progress")
+async def clear_history(current_user: dict = Depends(get_current_user)):
+    """Clear all reading history for current user"""
+    clear_reading_progress(current_user['id'])
+    return {"message": "Reading history cleared"}
+
+@router.delete("/progress/{comic_id}")
+async def delete_comic_history(comic_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete reading progress for specific comic"""
+    delete_reading_progress(current_user['id'], comic_id)
+    return {"message": "Comic history removed"}
 
 # --- User Preferences Routes ---
 
