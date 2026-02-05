@@ -17,7 +17,7 @@ import {
     prevPage, nextPage, jumpToPage, handleSliderInput, toggleBookmark, 
     showBookmarksList, closeBookmarksModal, removeBookmark, 
     toggleSettings, setSetting, navigateReaderComic, closeComicEndModal,
-    toggleFullscreen
+    toggleFullscreen, toggleAutoAdvance
 } from './reader.js';
 import { 
     showPreferences, closePreferencesModal, setPreference 
@@ -85,6 +85,7 @@ window.closeBookmarksModal = closeBookmarksModal;
 window.removeBookmark = removeBookmark;
 window.toggleSettings = toggleSettings;
 window.setSetting = setSetting;
+window.toggleAutoAdvance = toggleAutoAdvance;
 window.readerToggleFullscreen = toggleFullscreen;
 window.navigateReaderComic = navigateReaderComic;
 window.closeComicEndModal = closeComicEndModal;

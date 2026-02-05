@@ -56,6 +56,18 @@ export function showPreferences() {
                         <button class="setting-btn ${state.settings.zoom === 'height' ? 'active' : ''}" onclick="setPreference('reader_zoom', 'height')">↕️ Fit Height</button>
                     </div>
                 </div>
+                <div class="form-group">
+                    <label>Keyboard Shortcuts</label>
+                    <div class="setting-info" style="font-size: 0.8rem; line-height: 1.6; background: var(--bg-tertiary); padding: 12px; border-radius: var(--radius-sm);">
+                        <div><b>Next Page:</b> ${state.settings.keybindings.next.join(', ')}</div>
+                        <div><b>Prev Page:</b> ${state.settings.keybindings.prev.join(', ')}</div>
+                        <div><b>Next Chapter:</b> Shift + ${state.settings.keybindings.nextChapter.join(', ')}</div>
+                        <div><b>Prev Chapter:</b> Shift + ${state.settings.keybindings.prevChapter.join(', ')}</div>
+                        <div><b>Fullscreen:</b> ${state.settings.keybindings.fullscreen.join(', ')}</div>
+                        <div><b>Bookmark:</b> ${state.settings.keybindings.bookmark.join(', ')}</div>
+                        <div><b>Exit:</b> ${state.settings.keybindings.exit.join(', ')}</div>
+                    </div>
+                </div>
             </div>
         </div>
     `;

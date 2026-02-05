@@ -52,18 +52,18 @@ This file tracks the project's outstanding tasks, known bugs, and future roadmap
 - [ ] **Anonymous Star Ratings**: 5-star system for series/comics; individual votes are private, only averages are public.
 - [ ] **Modular Batch Operations Framework**:
     - **Selection Mode**: UI checkboxes on cards to trigger an "Action Queue".
-    - **Export as CBZ**: Backend worker to uncompress archives and recompress into a single `.cbz`. Ensure strict alphabetization/numerical sorting and use streaming to avoid high server disk usage.
+    - [x] **Export as CBZ**: Backend implemented in `/api/export/cbz`. Supports streaming multi-comic exports with numerical sorting and zero-compression (ZIP_STORED) for efficiency. [Frontend UI pending]
 - [ ] **Sequence Gap Detection**: Identify numerical jumps in chapter/volume sequences (e.g., Vol 1, 2, 4 -> 3 is missing) and provide a "Gaps Report".
 
 ## 📖 Phase 3: Reader Enhancements
-- [ ] **Performance & Preloading**: Prefetch the next 2-3 pages into a background buffer using a `PrefetchManager` class.
-- [ ] **Mobile Navigation Gestures**: Implement native `pointerdown/move/up` events via a `GestureController` class for swipes and pinch-to-zoom (using CSS transforms).
-- [ ] **Reading Environment**:
+- [X] **Performance & Preloading**: Prefetch the next 2-3 pages into a background buffer using a `PrefetchManager` class.
+- [X] **Mobile Navigation Gestures**: Implement native `pointerdown/move/up` events via a `GestureController` class for swipes and pinch-to-zoom (using CSS transforms).
+- [X] **Reading Environment**:
     - **Memory**: Per-comic settings memory (remember zoom mode and direction per title).
     - **Visual Navigation**: Thumbnail-based "scrubber" bar for rapid jumping.
     - **Auto-advance**: Configurable timer for automatic page turning.
     - **Filters**: Brightness and Warmth (sepia) CSS filters for night reading.
-- [ ] **Utility**: Track time spent reading per session and per series; support custom remappable keybindings.
+- [X] **Utility**: Track time spent reading per session and per series; support custom remappable keybindings.
 
 ## 🔍 Phase 4: Metadata & Discovery - BASED ON VIBEMANGA PROJECT TO BE IMPORTED - FUTURE
 - [ ] **Page Annotations**: Save notes, snippets, or highlights on specific pages.

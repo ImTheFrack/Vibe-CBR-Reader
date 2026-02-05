@@ -66,11 +66,28 @@ def init_db():
             total_pages INTEGER,
             completed BOOLEAN DEFAULT 0,
             last_read TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            reader_display TEXT,
+            reader_direction TEXT,
+            reader_zoom TEXT,
+            seconds_read INTEGER DEFAULT 0,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (comic_id) REFERENCES comics(id) ON DELETE CASCADE,
             UNIQUE(user_id, comic_id)
         )
     ''')
+    
+    # Add new columns to reading_progress table if they don't exist
+    for col, col_type, default in [
+        ('reader_display', 'TEXT', None),
+        ('reader_direction', 'TEXT', None),
+        ('reader_zoom', 'TEXT', None),
+        ('seconds_read', 'INTEGER', '0')
+    ]:
+        try:
+            default_clause = f" DEFAULT {default}" if default is not None else ""
+            conn.execute(f'ALTER TABLE reading_progress ADD COLUMN {col} {col_type}{default_clause}')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
     
     # User preferences table
     conn.execute('''
@@ -343,7 +360,8 @@ def get_reading_progress(user_id, comic_id=None):
     
     if comic_id:
         progress = conn.execute(
-            '''SELECT comic_id, current_page, total_pages, completed, last_read 
+            '''SELECT comic_id, current_page, total_pages, completed, last_read,
+                      reader_display, reader_direction, reader_zoom, seconds_read
                FROM reading_progress WHERE user_id = ? AND comic_id = ?''',
             (user_id, comic_id)
         ).fetchone()
@@ -351,14 +369,16 @@ def get_reading_progress(user_id, comic_id=None):
         return dict(progress) if progress else None
     else:
         progress_list = conn.execute(
-            '''SELECT comic_id, current_page, total_pages, completed, last_read 
+            '''SELECT comic_id, current_page, total_pages, completed, last_read,
+                      reader_display, reader_direction, reader_zoom, seconds_read
                FROM reading_progress WHERE user_id = ? ORDER BY last_read DESC''',
             (user_id,)
         ).fetchall()
         conn.close()
         return {p['comic_id']: dict(p) for p in progress_list}
 
-def update_reading_progress(user_id, comic_id, current_page, total_pages=None, completed=None):
+def update_reading_progress(user_id, comic_id, current_page, total_pages=None, completed=None, 
+                            reader_display=None, reader_direction=None, reader_zoom=None, additional_seconds=0):
     """Update or insert reading progress"""
     conn = get_db_connection()
     
@@ -370,26 +390,37 @@ def update_reading_progress(user_id, comic_id, current_page, total_pages=None, c
     
     if existing:
         # Update
-        if total_pages is not None and completed is not None:
-            conn.execute(
-                '''UPDATE reading_progress 
-                   SET current_page = ?, total_pages = ?, completed = ?, last_read = CURRENT_TIMESTAMP
-                   WHERE user_id = ? AND comic_id = ?''',
-                (current_page, total_pages, completed, user_id, comic_id)
-            )
-        else:
-            conn.execute(
-                '''UPDATE reading_progress 
-                   SET current_page = ?, last_read = CURRENT_TIMESTAMP
-                   WHERE user_id = ? AND comic_id = ?''',
-                (current_page, user_id, comic_id)
-            )
+        updates = ["current_page = ?", "last_read = CURRENT_TIMESTAMP", "seconds_read = seconds_read + ?"]
+        params = [current_page, additional_seconds]
+        
+        if total_pages is not None:
+            updates.append("total_pages = ?")
+            params.append(total_pages)
+        if completed is not None:
+            updates.append("completed = ?")
+            params.append(completed)
+        if reader_display is not None:
+            updates.append("reader_display = ?")
+            params.append(reader_display)
+        if reader_direction is not None:
+            updates.append("reader_direction = ?")
+            params.append(reader_direction)
+        if reader_zoom is not None:
+            updates.append("reader_zoom = ?")
+            params.append(reader_zoom)
+            
+        params.extend([user_id, comic_id])
+        sql = f"UPDATE reading_progress SET {', '.join(updates)} WHERE user_id = ? AND comic_id = ?"
+        conn.execute(sql, params)
     else:
         # Insert
         conn.execute(
-            '''INSERT INTO reading_progress (user_id, comic_id, current_page, total_pages, completed)
-               VALUES (?, ?, ?, ?, ?)''',
-            (user_id, comic_id, current_page, total_pages or 0, completed or False)
+            '''INSERT INTO reading_progress 
+               (user_id, comic_id, current_page, total_pages, completed, 
+                reader_display, reader_direction, reader_zoom, seconds_read)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (user_id, comic_id, current_page, total_pages or 0, completed or False,
+             reader_display, reader_direction, reader_zoom, additional_seconds)
         )
     
     conn.commit()

@@ -21,7 +21,20 @@ export const state = {
         direction: 'ltr',
         display: 'single',
         zoom: 'fit',
-        titleCardStyle: 'fan'
+        titleCardStyle: 'fan',
+        brightness: 1.0,
+        sepia: 0.0,
+        autoAdvanceActive: false,
+        autoAdvanceInterval: 10,
+        keybindings: {
+            next: ['ArrowRight', 'd', 'D', ' '],
+            prev: ['ArrowLeft', 'a', 'A'],
+            prevChapter: ['ArrowLeft'], // With Shift
+            nextChapter: ['ArrowRight'], // With Shift
+            fullscreen: ['f', 'F'],
+            bookmark: ['b', 'B'],
+            exit: ['Escape']
+        }
     },
     theme: localStorage.getItem('theme') || 'dark',
     sortBy: 'alpha-asc',

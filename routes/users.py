@@ -15,6 +15,10 @@ class ReadingProgressUpdate(BaseModel):
     current_page: int
     total_pages: Optional[int] = None
     completed: Optional[bool] = None
+    reader_display: Optional[str] = None
+    reader_direction: Optional[str] = None
+    reader_zoom: Optional[str] = None
+    additional_seconds: Optional[int] = 0
 
 class BookmarkCreate(BaseModel):
     comic_id: str
@@ -65,7 +69,11 @@ async def get_comic_progress(comic_id: str, current_user: dict = Depends(get_cur
         "current_page": 0,
         "total_pages": 0,
         "completed": False,
-        "last_read": None
+        "last_read": None,
+        "reader_display": None,
+        "reader_direction": None,
+        "reader_zoom": None,
+        "seconds_read": 0
     }
 
 @router.post("/progress")
@@ -76,7 +84,11 @@ async def update_progress(progress_data: ReadingProgressUpdate, current_user: di
         progress_data.comic_id,
         progress_data.current_page,
         progress_data.total_pages,
-        progress_data.completed
+        progress_data.completed,
+        progress_data.reader_display,
+        progress_data.reader_direction,
+        progress_data.reader_zoom,
+        progress_data.additional_seconds
     )
     return {"message": "Progress updated"}
 

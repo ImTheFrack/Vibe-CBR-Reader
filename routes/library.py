@@ -1,11 +1,15 @@
 import os
+import re
 import zipfile
 import rarfile
 import threading
+import tempfile
+import shutil
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Response
 from fastapi.responses import FileResponse
-from typing import Optional
+from pydantic import BaseModel
+from typing import Optional, List
 from PIL import Image, ImageDraw, ImageFont
 from config import COMICS_DIR, IMG_EXTENSIONS, get_thumbnail_path, BASE_CACHE_DIR
 from database import (
@@ -338,3 +342,99 @@ async def get_comic_page(comic_id: str, page_num: int, current_user: dict = Depe
     except Exception as e:
         print(f"Error reading page {page_num} of {filepath}: {e}")
         raise HTTPException(status_code=500, detail="Error reading comic archive")
+
+class ExportCBZRequest(BaseModel):
+    comic_ids: List[str]
+    filename: Optional[str] = "export.cbz"
+
+@router.post("/export/cbz")
+async def export_cbz(
+    request: ExportCBZRequest, 
+    background_tasks: BackgroundTasks, 
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Export one or more comics as a single CBZ file.
+    Streams contents to avoid high memory usage.
+    Uses ZIP_STORED (no compression) for speed and compatibility.
+    """
+    if not request.comic_ids:
+        raise HTTPException(status_code=400, detail="No comic IDs provided")
+    
+    conn = get_db_connection()
+    comics = []
+    # Preserve order of IDs provided in request
+    for cid in request.comic_ids:
+        c = conn.execute("SELECT * FROM comics WHERE id = ?", (cid,)).fetchone()
+        if c:
+            comics.append(dict(c))
+    conn.close()
+    
+    if not comics:
+        raise HTTPException(status_code=404, detail="No valid comics found")
+        
+    # Create a temporary file for the export
+    fd, temp_path = tempfile.mkstemp(suffix=".cbz")
+    os.close(fd)
+    
+    try:
+        # ZIP_STORED (0) is very fast and ideal for images already compressed (jpg/png/webp)
+        with zipfile.ZipFile(temp_path, 'w', compression=zipfile.ZIP_STORED) as out_zip:
+            for idx, comic in enumerate(comics):
+                filepath = comic['path']
+                if not os.path.exists(filepath):
+                    continue
+                
+                # Sanitize title for use as folder name
+                clean_title = re.sub(r'[\\/*?:"<>|]', "_", comic['title'])
+                # If multiple comics, put each in its own numbered folder to maintain order and avoid collisions
+                folder_prefix = f"{idx+1:03d}_{clean_title}/" if len(comics) > 1 else ""
+                
+                try:
+                    file_ext = os.path.splitext(filepath)[1].lower()
+                    if file_ext == '.cbz':
+                        with zipfile.ZipFile(filepath, 'r') as in_zip:
+                            # Filter and sort image files naturally
+                            img_names = sorted(
+                                [n for n in in_zip.namelist() if n.lower().endswith(IMG_EXTENSIONS)], 
+                                key=natural_sort_key
+                            )
+                            for img_name in img_names:
+                                with in_zip.open(img_name) as f_in:
+                                    # Create the entry in out_zip and stream from f_in to f_out
+                                    target_name = f"{folder_prefix}{os.path.basename(img_name)}"
+                                    with out_zip.open(target_name, 'w') as f_out:
+                                        shutil.copyfileobj(f_in, f_out)
+                                        
+                    elif file_ext == '.cbr':
+                        with rarfile.RarFile(filepath) as in_rar:
+                            img_names = sorted(
+                                [n for n in in_rar.namelist() if n.lower().endswith(IMG_EXTENSIONS)], 
+                                key=natural_sort_key
+                            )
+                            for img_name in img_names:
+                                with in_rar.open(img_name) as f_in:
+                                    target_name = f"{folder_prefix}{os.path.basename(img_name)}"
+                                    with out_zip.open(target_name, 'w') as f_out:
+                                        shutil.copyfileobj(f_in, f_out)
+                except Exception as e:
+                    print(f"Error adding {filepath} to export: {e}")
+                    # Continue with other comics even if one fails
+    except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise HTTPException(status_code=500, detail=f"Export creation failed: {str(e)}")
+
+    # Prepare response filename
+    download_filename = request.filename if request.filename else "export.cbz"
+    if not download_filename.lower().endswith(".cbz"):
+        download_filename += ".cbz"
+        
+    # Schedule cleanup of the temp file after response is sent
+    background_tasks.add_task(os.remove, temp_path)
+    
+    return FileResponse(
+        temp_path, 
+        filename=download_filename, 
+        media_type="application/vnd.comicbook+zip"
+    )

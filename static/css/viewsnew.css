@@ -104,6 +104,7 @@
     height: 100%;
     width: 100%;
     position: relative;
+    filter: brightness(var(--reader-brightness, 1)) sepia(var(--reader-sepia, 0));
 }
 
 .reader-loading {
@@ -209,6 +210,55 @@
 
 .reader-container.ui-hidden .reader-footer {
     transform: translateY(100%);
+}
+
+.reader-scrubber {
+    position: absolute;
+    bottom: 64px;
+    left: 0;
+    right: 0;
+    height: 90px;
+    background: rgba(26, 26, 26, 0.9);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    z-index: 90;
+    transition: transform 0.3s ease, visibility 0.3s ease;
+    border-top: 1px solid var(--border-color);
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-primary) transparent;
+}
+
+.reader-container.ui-hidden .reader-scrubber {
+    transform: translateY(160px); /* Increased to ensure total hiding */
+    visibility: hidden;
+}
+
+.scrubber-thumb {
+    height: 70px;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    opacity: 0.5;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+    border: 2px solid transparent;
+}
+
+.scrubber-thumb:hover {
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+.scrubber-thumb.active {
+    opacity: 1;
+    border-color: var(--accent-primary);
+    transform: scale(1.1);
 }
 
 .reader-footer .reader-btn {

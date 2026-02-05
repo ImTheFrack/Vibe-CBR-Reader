@@ -9,6 +9,8 @@ let isUIVisible = true;
 let lastMouseY = 0;
 let lastShowX = 0;
 let lastShowY = 0;
+let sessionStartTime = null;
+let autoAdvanceTimer = null;
 
 function showReaderUI() {
     const reader = document.getElementById('reader');
@@ -81,6 +83,101 @@ function setupReaderInteraction() {
         lastShowX = e.clientX;
         lastShowY = e.clientY;
     });
+
+    // Initialize Swipes
+    new GestureController(reader, 
+        () => { // Swipe Left
+            if (state.settings.direction === 'rtl') prevPage(); else nextPage();
+        },
+        () => { // Swipe Right
+            if (state.settings.direction === 'rtl') nextPage(); else prevPage();
+        }
+    );
+}
+
+class PrefetchManager {
+    constructor() {
+        this.cache = new Map();
+        this.maxCacheSize = 8; // Reduced from 15
+        this.loadingUrls = new Set();
+    }
+
+    async prefetch(url) {
+        if (this.cache.has(url) || this.loadingUrls.has(url)) return;
+        if (this.cache.size >= this.maxCacheSize) this.enforceCacheLimit();
+
+        this.loadingUrls.add(url);
+        try {
+            const img = new Image();
+            img.src = url;
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                // Timeout prefetch after 5s to not block forever
+                setTimeout(resolve, 5000);
+            });
+            this.cache.set(url, img);
+        } catch (e) {
+            console.warn(`Failed to prefetch: ${url}`, e);
+        } finally {
+            this.loadingUrls.delete(url);
+        }
+    }
+
+    enforceCacheLimit() {
+        while (this.cache.size >= this.maxCacheSize) {
+            const firstKey = this.cache.keys().next().value;
+            this.cache.delete(firstKey);
+        }
+    }
+
+    getCachedImage(url) {
+        return this.cache.get(url);
+    }
+
+    clear() {
+        this.cache.clear();
+        this.loadingUrls.clear();
+    }
+}
+
+const prefetchManager = new PrefetchManager();
+
+class GestureController {
+    constructor(element, onSwipeLeft, onSwipeRight) {
+        this.element = element;
+        this.onSwipeLeft = onSwipeLeft;
+        this.onSwipeRight = onSwipeRight;
+        this.startX = 0;
+        this.startY = 0;
+        this.threshold = 50; // min distance for swipe
+        
+        this.init();
+    }
+
+    init() {
+        this.element.addEventListener('touchstart', (e) => {
+            this.startX = e.touches[0].clientX;
+            this.startY = e.touches[0].clientY;
+        }, { passive: true });
+
+        this.element.addEventListener('touchend', (e) => {
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            
+            const diffX = endX - this.startX;
+            const diffY = endY - this.startY;
+            
+            // horizontal swipe
+            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > this.threshold) {
+                if (diffX > 0) {
+                    this.onSwipeRight();
+                } else {
+                    this.onSwipeLeft();
+                }
+            }
+        }, { passive: true });
+    }
 }
 
 export async function startReading(comicId, page = 0) {
@@ -96,6 +193,9 @@ export async function startReading(comicId, page = 0) {
     const comic = comicData;
     state.currentComic = comic;
     state.totalPages = comic.pages || 0;
+    sessionStartTime = Date.now();
+    
+    prefetchManager.clear();
     
     // Update state.comics with latest pages count if it changed
     const localComic = state.comics.find(c => c.id === comicId);
@@ -121,6 +221,11 @@ export async function startReading(comicId, page = 0) {
         if (savedProgress) {
             startPage = savedProgress.page;
             state.readingProgress[comicId] = savedProgress;
+            
+            // Apply per-comic settings if they exist
+            if (savedProgress.reader_display) setSetting('display', savedProgress.reader_display, false);
+            if (savedProgress.reader_direction) setSetting('direction', savedProgress.reader_direction, false);
+            if (savedProgress.reader_zoom) setSetting('zoom', savedProgress.reader_zoom, false);
         }
     }
     state.currentPage = startPage;
@@ -136,7 +241,19 @@ export async function startReading(comicId, page = 0) {
     await loadBookmarks(comicId);
     ensureBookmarkButton();
     await loadPage(startPage);
+    applyFilters();
+    renderScrubber();
     updateReaderUI();
+    
+    // Sync slider UI
+    const bSlider = document.getElementById('brightness-slider');
+    if (bSlider) bSlider.value = state.settings.brightness;
+    const sSlider = document.getElementById('sepia-slider');
+    if (sSlider) sSlider.value = state.settings.sepia;
+    const aSlider = document.getElementById('auto-advance-slider');
+    if (aSlider) aSlider.value = state.settings.autoAdvanceInterval;
+    const aVal = document.getElementById('auto-advance-value');
+    if (aVal) aVal.textContent = `${state.settings.autoAdvanceInterval}s`;
 }
 
 async function loadProgressFromAPI(comicId) {
@@ -146,26 +263,38 @@ async function loadProgressFromAPI(comicId) {
         return {
             page: result.current_page,
             completed: result.completed,
-            lastRead: new Date(result.last_read).getTime()
+            lastRead: new Date(result.last_read).getTime(),
+            reader_display: result.reader_display,
+            reader_direction: result.reader_direction,
+            reader_zoom: result.reader_zoom,
+            seconds_read: result.seconds_read
         };
     }
     return null;
 }
 
-async function saveProgressToAPI() {
+async function saveProgressToAPI(additionalSeconds = 0) {
     if (!state.isAuthenticated || !state.currentComic) return;
     const progressData = {
         comic_id: state.currentComic.id,
         current_page: state.currentPage,
         total_pages: state.totalPages,
-        completed: state.currentPage >= state.totalPages - 1
+        completed: state.currentPage >= state.totalPages - 1,
+        reader_display: state.settings.display,
+        reader_direction: state.settings.direction,
+        reader_zoom: state.settings.zoom,
+        additional_seconds: additionalSeconds
     };
     
     // Update local state immediately for responsiveness
     state.readingProgress[state.currentComic.id] = {
+        ...state.readingProgress[state.currentComic.id],
         page: state.currentPage,
         lastRead: Date.now(),
-        completed: progressData.completed
+        completed: progressData.completed,
+        reader_display: progressData.reader_display,
+        reader_direction: progressData.reader_direction,
+        reader_zoom: progressData.reader_zoom
     };
 
     const result = await apiPost('/api/progress', progressData);
@@ -392,34 +521,56 @@ async function loadPage(pageNum) {
         // Single page
         const img = createReaderImage(`/api/read/${comicId}/page/${pageNum}`);
         container.appendChild(img);
-        
-        // Preload next
-        if (pageNum < state.totalPages - 1) {
-            const nextImg = new Image();
-            nextImg.src = `/api/read/${comicId}/page/${pageNum + 1}`;
-        }
     }
     
     updateReaderUI();
+
+    // Prefetching logic - reduced count and prioritized
+    setTimeout(() => {
+        if (!state.currentComic) return;
+        const nextOffset = state.settings.display === 'double' ? 2 : 1;
+        // Just prefetch next 2 pages and prev 1 page
+        const prefetchIndices = [
+            state.currentPage + nextOffset,
+            state.currentPage + (nextOffset * 2),
+            state.currentPage - nextOffset
+        ];
+
+        prefetchIndices.forEach(idx => {
+            if (idx >= 0 && idx < state.totalPages) {
+                prefetchManager.prefetch(`/api/read/${state.currentComic.id}/page/${idx}`);
+            }
+        });
+    }, 500); // Small delay to let current page load first
 }
 
 function createReaderImage(src) {
     const loading = document.getElementById('reader-loading');
-    if (loading) loading.classList.add('active');
+    
+    // Check cache
+    const cachedImg = prefetchManager.getCachedImage(src);
+    let img;
+    
+    if (cachedImg) {
+        img = cachedImg.cloneNode();
+        if (loading) loading.classList.remove('active');
+    } else {
+        if (loading) loading.classList.add('active');
+        img = document.createElement('img');
+        img.src = src;
+        
+        img.onload = () => {
+            if (loading) loading.classList.remove('active');
+        };
+        
+        img.onerror = () => {
+            if (loading) loading.classList.remove('active');
+            showToast('Failed to load page', 'error');
+        };
+    }
 
-    const img = document.createElement('img');
-    img.src = src;
     img.className = 'reader-image';
     img.alt = 'Comic page';
-    
-    img.onload = () => {
-        if (loading) loading.classList.remove('active');
-    };
-    
-    img.onerror = () => {
-        if (loading) loading.classList.remove('active');
-        showToast('Failed to load page', 'error');
-    };
 
     // Apply current zoom settings
     applyImageZoom(img, state.settings.zoom);
@@ -450,6 +601,13 @@ function applyImageZoom(img, zoom) {
     }
 }
 
+function applyFilters() {
+    const container = document.getElementById('reader-pages');
+    if (!container) return;
+    container.style.setProperty('--reader-brightness', state.settings.brightness);
+    container.style.setProperty('--reader-sepia', state.settings.sepia);
+}
+
 async function loadLongStrip() {
     const comicId = state.currentComic.id;
     const container = document.getElementById('reader-pages');
@@ -466,6 +624,72 @@ async function loadLongStrip() {
     // Reset scroll position
     document.getElementById('reader-viewport').scrollTop = 0;
     updateReaderUI();
+}
+
+function renderScrubber() {
+    const scrubber = document.getElementById('reader-scrubber');
+    if (!scrubber || !state.currentComic) return;
+    
+    const comicId = state.currentComic.id;
+    const total = state.totalPages;
+    const current = state.currentPage;
+    const windowSize = 50; // Show 50 thumbnails at a time
+    
+    let start = Math.max(0, current - Math.floor(windowSize / 2));
+    let end = Math.min(total, start + windowSize);
+    
+    // Adjust start if end is at total
+    if (end === total) {
+        start = Math.max(0, end - windowSize);
+    }
+
+    // Clear and render window
+    scrubber.innerHTML = '';
+    
+    // Add spacer for scroll position if not at start (optional, but complicates scrolling)
+    // For simplicity, we just render the window.
+    
+    for (let i = start; i < end; i++) {
+        const thumb = document.createElement('img');
+        thumb.src = `/api/read/${comicId}/page/${i}`;
+        thumb.className = 'scrubber-thumb';
+        thumb.loading = 'lazy';
+        thumb.dataset.page = i;
+        thumb.onclick = (e) => {
+            e.stopPropagation();
+            jumpToPage(i);
+        };
+        scrubber.appendChild(thumb);
+    }
+    updateScrubberActive();
+}
+
+function updateScrubberActive() {
+    const scrubber = document.getElementById('reader-scrubber');
+    if (!scrubber) return;
+    
+    // Check if current page is in currently rendered window
+    const thumbs = scrubber.querySelectorAll('.scrubber-thumb');
+    if (thumbs.length === 0) return;
+    
+    const firstPage = parseInt(thumbs[0].dataset.page);
+    const lastPage = parseInt(thumbs[thumbs.length - 1].dataset.page);
+    
+    if (state.currentPage < firstPage || state.currentPage > lastPage) {
+        renderScrubber(); // Re-render window
+        return;
+    }
+    
+    thumbs.forEach(thumb => {
+        const page = parseInt(thumb.dataset.page);
+        const isActive = page === state.currentPage || 
+                        (state.settings.display === 'double' && page === state.currentPage + 1);
+        thumb.classList.toggle('active', isActive);
+        
+        if (isActive) {
+            thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+    });
 }
 
 function updateReaderUI() {
@@ -495,6 +719,7 @@ function updateReaderUI() {
     }
 
     updateBookmarkUI();
+    updateScrubberActive();
     saveProgress();
 }
 
@@ -610,12 +835,20 @@ export function closeComicEndModal() {
 
 function saveProgress() {
     if (!state.currentComic) return;
+    
+    let additionalSeconds = 0;
+    if (sessionStartTime) {
+        additionalSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+        sessionStartTime = Date.now(); // Reset for next incremental save
+    }
+
     state.readingProgress[state.currentComic.id] = {
+        ...state.readingProgress[state.currentComic.id],
         page: state.currentPage,
         lastRead: Date.now(),
         completed: state.currentPage >= state.totalPages - 1
     };
-    saveProgressToAPI();
+    saveProgressToAPI(additionalSeconds);
 }
 
 export function closeReader() {
@@ -623,21 +856,72 @@ export function closeReader() {
     document.getElementById('reader').classList.remove('active');
     document.getElementById('reader').classList.remove('ui-hidden');
     if (uiTimer) clearTimeout(uiTimer);
+    if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+    
+    saveProgress(); // Final save with time
+    
     state.currentComic = null;
     state.currentBookmarks = [];
-    saveProgress();
+    sessionStartTime = null;
+    state.settings.autoAdvanceActive = false;
+    const btn = document.getElementById('auto-advance-toggle');
+    if (btn) {
+        btn.innerHTML = '▶ Start Auto-Advance';
+        btn.classList.remove('active');
+    }
 }
 
 export function toggleSettings() {
     document.getElementById('settings-panel').classList.toggle('open');
 }
 
-export function setSetting(type, value) {
+export function toggleAutoAdvance() {
+    state.settings.autoAdvanceActive = !state.settings.autoAdvanceActive;
+    const btn = document.getElementById('auto-advance-toggle');
+    if (btn) {
+        btn.innerHTML = state.settings.autoAdvanceActive ? '⏹ Stop Auto-Advance' : '▶ Start Auto-Advance';
+        btn.classList.toggle('active', state.settings.autoAdvanceActive);
+    }
+    
+    if (state.settings.autoAdvanceActive) {
+        startAutoAdvanceTimer();
+    } else {
+        if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+    }
+}
+
+function startAutoAdvanceTimer() {
+    if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+    if (!state.settings.autoAdvanceActive || !state.currentComic) return;
+    
+    autoAdvanceTimer = setTimeout(() => {
+        if (state.currentPage < state.totalPages - 1) {
+            nextPage();
+            startAutoAdvanceTimer();
+        } else {
+            toggleAutoAdvance(); // Stop at the end
+        }
+    }, state.settings.autoAdvanceInterval * 1000);
+}
+
+export function setSetting(type, value, syncPreference = true) {
     state.settings[type] = value;
+    
+    // Update UI buttons if they exist
     document.querySelectorAll(`[data-setting="${type}"]`).forEach(btn => {
         btn.classList.toggle('active', btn.dataset.value === value);
     });
     
+    // Update UI sliders if they exist
+    const slider = document.getElementById(`${type}-slider`);
+    if (slider) slider.value = value;
+    
+    const valueDisplay = document.getElementById(`${type}-value`);
+    if (valueDisplay) {
+        if (type === 'autoAdvanceInterval') valueDisplay.textContent = `${value}s`;
+        else valueDisplay.textContent = value;
+    }
+
     const reader = document.getElementById('reader');
     if (type === 'display') {
         reader.setAttribute('data-display', value);
@@ -664,9 +948,23 @@ export function setSetting(type, value) {
             loadPage(state.currentPage);
         }
     }
-    if (state.isAuthenticated) {
+
+    if (type === 'brightness' || type === 'sepia') {
+        applyFilters();
+    }
+
+    if (type === 'autoAdvanceInterval' && state.settings.autoAdvanceActive) {
+        startAutoAdvanceTimer(); // Reset timer with new interval
+    }
+    
+    if (syncPreference && state.isAuthenticated) {
         const prefMap = { 'direction': 'reader_direction', 'display': 'reader_display', 'zoom': 'reader_zoom' };
         if (prefMap[type]) setPreference(prefMap[type], value, false);
+    }
+    
+    // Always save per-comic progress when setting changes in reader
+    if (state.currentComic) {
+        saveProgress();
     }
 }
 
@@ -674,43 +972,43 @@ export function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
         if (!state.currentComic) return;
         const isRTL = state.settings.direction === 'rtl';
-        switch(e.key) {
-            case 'ArrowLeft': case 'a': case 'A': 
-                e.preventDefault(); 
-                if (isRTL) nextPage(); else prevPage(); 
-                break;
-            case 'ArrowRight': case 'd': case 'D': case ' ': 
-                e.preventDefault(); 
-                if (isRTL) prevPage(); else nextPage(); 
-                break;
-            case 'Escape': 
-                if (document.fullscreenElement) {
-                    document.exitFullscreen();
-                } else {
-                    history.back();
-                }
-                break;
-            case 'f': case 'F': e.preventDefault(); toggleFullscreen(); break;
-            case 'b': case 'B': e.preventDefault(); toggleBookmark(); break;
+        const keys = state.settings.keybindings;
+
+        if (keys.next.includes(e.key)) {
+            e.preventDefault();
+            if (isRTL) prevPage(); else nextPage();
+        } else if (keys.prev.includes(e.key)) {
+            e.preventDefault();
+            if (isRTL) nextPage(); else prevPage();
+        } else if (keys.exit.includes(e.key)) {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                history.back();
+            }
+        } else if (keys.fullscreen.includes(e.key)) {
+            e.preventDefault();
+            toggleFullscreen();
+        } else if (keys.bookmark.includes(e.key)) {
+            e.preventDefault();
+            toggleBookmark();
         }
+
         if (e.shiftKey) {
-            switch(e.key) {
-                case 'ArrowLeft': 
-                    e.preventDefault(); 
-                    if (isRTL) {
-                        if (state.readerNavigation.nextComic) navigateReaderComic('next');
-                    } else {
-                        if (state.readerNavigation.prevComic) navigateReaderComic('prev');
-                    }
-                    break;
-                case 'ArrowRight': 
-                    e.preventDefault(); 
-                    if (isRTL) {
-                        if (state.readerNavigation.prevComic) navigateReaderComic('prev');
-                    } else {
-                        if (state.readerNavigation.nextComic) navigateReaderComic('next');
-                    }
-                    break;
+            if (keys.nextChapter.includes(e.key)) {
+                e.preventDefault();
+                if (isRTL) {
+                    if (state.readerNavigation.prevComic) navigateReaderComic('prev');
+                } else {
+                    if (state.readerNavigation.nextComic) navigateReaderComic('next');
+                }
+            } else if (keys.prevChapter.includes(e.key)) {
+                e.preventDefault();
+                if (isRTL) {
+                    if (state.readerNavigation.nextComic) navigateReaderComic('next');
+                } else {
+                    if (state.readerNavigation.prevComic) navigateReaderComic('prev');
+                }
             }
         }
     });
