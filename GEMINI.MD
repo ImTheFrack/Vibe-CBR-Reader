@@ -206,21 +206,8 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 - **Dynamic Relativization**: Frontend fetches `COMICS_DIR` from backend to accurately "subtract" the root path and derive categories, regardless of library location.
 - **Contextual Back Button**: Smart navigation that remembers search queries and previous views.
 
-## Known Bugs & Security Issues
-
-### HIGH Severity
-1. **SHA256 Password Hashing** (`database.py:248,273`): Uses `hashlib.sha256()` with no salt. README incorrectly claims bcrypt. Vulnerable to rainbow table attacks. Migrate to `bcrypt` or `argon2id`.
-2. **Role Escalation on Registration** (`routes/auth.py:14,28`): The `UserCreate` Pydantic model accepts an arbitrary `role` string. Any user can POST `{"role": "admin"}` to `/api/auth/register` and become admin. The DB CHECK constraint accepts "admin" as valid. Fix: hardcode role to "reader" in the route, ignore client-supplied value.
-
-### MEDIUM Severity
-3. **Hardcoded COMICS_DIR** (`config.py:4`): Set to `Z:/ArrData/media/comics/manga`. No environment variable fallback. Not portable across machines or to Docker.
-4. **Default Admin Credentials** (`server.py:44`): Creates `admin/admin123` on first run and prints credentials to stdout. No mechanism to force password change.
-
-### LOW Severity
-5. **SQL String Formatting** (`database.py:298`): `create_session()` uses `.format(expires_hours)` inside a SQL string instead of a parameterized query. Input is controlled (integer), but the pattern is unsafe.
-6. **Session Expiry Default Mismatch** (`database.py:291` vs `routes/auth.py:44`): Function default is 24h but login passes 720h. Any direct caller using the default gets shorter sessions.
-7. **Scan Status No Auth** (`routes/library.py:167`): `/api/scan/status` endpoint has no `Depends(get_current_user)`. All other library endpoints require auth. Minor info leak.
-8. **Wrong Content Type for Pages** (`routes/library.py:335`): Always returns `media_type="image/jpeg"` regardless of actual image format (PNG, WebP, GIF, BMP are all supported in archives).
+## TODO & Roadmap
+For a detailed list of planned features, known bugs, and code quality goals, please see [TODO.md](TODO.md).
 
 ## Implemented Feature Set
 
@@ -298,12 +285,3 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 - ✅ Centralized state management (state.js)
 - ✅ API abstraction layer (api.js)
 - ✅ Dependency injection for auth (dependencies.py)
-- ⏳ Migrate password hashing to bcrypt/argon2id
-- ⏳ Fix role escalation on registration
-- ⏳ Environment variable config support
-- ⏳ Python type hints completion
-- ⏳ Backend Unit Tests
-- ⏳ ESLint/Prettier integration
-- ⏳ Split library.js (1000+ lines) into smaller modules
-- ⏳ Replace inline onclick handlers with event delegation
-- ⏳ Structured logging (Python logging module)

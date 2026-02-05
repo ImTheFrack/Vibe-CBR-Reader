@@ -1,31 +1,31 @@
-import { state } from './state.js?v=3';
-import { initTheme, toggleTheme } from './theme.js?v=3';
+import { state } from './state.js';
+import { initTheme, toggleTheme } from './theme.js';
 import {
     checkAuthStatus, setupAuthEventListeners, toggleUserMenu,
     showLoginModal, closeLoginModal, handleLogin, handleRegister,
     logout, showRegisterForm, showLoginForm
-} from './auth.js?v=3';
+} from './auth.js';
 import { 
     loadLibrary, scanLibrary, navigateToRoot, navigateToFolder, 
     navigateUp, toggleFlattenMode, setViewMode, handleSort, 
     handleSearch, toggleSearchScope, showView, openComic, 
     toggleMobileSidebar, navigateTitleComic, renderTitleFan, toggleSynopsis, toggleMeta, continueReading,
     handleLibraryClick
-} from './library.js?v=3';
+} from './library.js';
 import { 
     setupKeyboardShortcuts, startReading, closeReader, 
     prevPage, nextPage, jumpToPage, handleSliderInput, toggleBookmark, 
     showBookmarksList, closeBookmarksModal, removeBookmark, 
     toggleSettings, setSetting, navigateReaderComic, closeComicEndModal,
     toggleFullscreen
-} from './reader.js?v=3';
+} from './reader.js';
 import { 
     showPreferences, closePreferencesModal, setPreference 
-} from './preferences.js?v=3';
-import { showToast } from './utils.js?v=3';
-import { initTagsView } from './tags.js?v=3';
-import { showScanStatus, startScanPolling } from './scan-status.js?v=3';
-import * as router from './router.js?v=3';
+} from './preferences.js';
+import { showToast } from './utils.js';
+import { initTagsView } from './tags.js';
+import { showScanStatus, startScanPolling } from './scan-status.js';
+import * as router from './router.js';
 
 // Hamburger Menu
 export function toggleHamburger() {

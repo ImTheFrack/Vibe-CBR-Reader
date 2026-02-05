@@ -1,8 +1,8 @@
-import { state } from './state.js?v=3';
-import { apiGet, apiPost, apiDelete } from './api.js?v=3';
-import { showToast } from './utils.js?v=3';
-import { setPreference } from './preferences.js?v=3';
-import * as router from './router.js?v=3';
+import { state } from './state.js';
+import { apiGet, apiPost, apiDelete } from './api.js';
+import { showToast } from './utils.js';
+import { setPreference } from './preferences.js';
+import * as router from './router.js';
 
 let uiTimer = null;
 let isUIVisible = true;

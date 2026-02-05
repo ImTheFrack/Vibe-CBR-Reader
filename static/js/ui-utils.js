@@ -10,3 +10,15 @@ window.toggleSynopsis = function(id) {
         btn.textContent = isExpanded ? '▲' : '▼';
     }
 };
+
+// Toggle Mobile Search Bar
+window.toggleMobileSearch = function(active) {
+    const searchBox = document.getElementById('header-search-box');
+    if (searchBox) {
+        searchBox.classList.toggle('mobile-active', active);
+        if (active) {
+            const input = searchBox.querySelector('.search-input');
+            if (input) input.focus();
+        }
+    }
+};

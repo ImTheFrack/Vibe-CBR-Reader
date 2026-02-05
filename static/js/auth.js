@@ -1,9 +1,9 @@
-import { state } from './state.js?v=3';
-import { apiGet, apiPost } from './api.js?v=3';
-import { showToast } from './utils.js?v=3';
-import { initTheme } from './theme.js?v=3';
-import { showPreferences } from './preferences.js?v=3';
-import { navigateToRoot, loadRecentReads, updateLibraryView, renderFolderGrid, getFoldersAtLevel, renderTitleCards, renderComicsView, loadLibrary } from './library.js?v=3';
+import { state } from './state.js';
+import { apiGet, apiPost } from './api.js';
+import { showToast } from './utils.js';
+import { initTheme } from './theme.js';
+import { showPreferences } from './preferences.js';
+import { navigateToRoot, loadRecentReads, updateLibraryView, renderFolderGrid, getFoldersAtLevel, renderTitleCards, renderComicsView, loadLibrary } from './library.js';
 
 export async function checkAuthStatus() {
     const result = await apiGet('/api/auth/check');

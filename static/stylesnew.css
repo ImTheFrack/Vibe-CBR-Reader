@@ -2,17 +2,17 @@
 /* Modularized Structure */
 
 /* 1. Variables & Themes */
-@import 'css/variables.css';
+@import 'css/variablesnew.css';
 
 /* 2. Base & Reset */
-@import 'css/base.css';
+@import 'css/basenew.css';
 
 /* 3. Layout & App Shell */
-@import 'css/layout.css';
+@import 'css/layoutnew.css';
 
 /* 4. UI Components */
-@import 'css/components.css';
+@import 'css/componentsnew.css';
 
 /* 5. View-Specific Styles */
-@import 'css/views.css';
-@import 'css/tags.css';
+@import 'css/viewsnew.css';
+@import 'css/tagsnew.css';

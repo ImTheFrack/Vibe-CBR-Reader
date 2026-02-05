@@ -1,11 +1,11 @@
-import { state } from './state.js?v=3';
-import { apiGet, apiPost, apiPut } from './api.js?v=3';
-import { showToast } from './utils.js?v=3';
-import { startReading } from './reader.js?v=3';
-import { renderItems, renderFan, getTitleCoverIds, getFolderCoverIds } from './components/index.js?v=3';
-import { calculateComicProgress, aggregateProgress } from './utils/progress.js?v=3';
-import { sortItems, parseFileSize, TITLE_SORT_ACCESSORS, COMIC_SORT_ACCESSORS, FOLDER_SORT_ACCESSORS } from './utils/sorting.js?v=3';
-import { navigate } from './router.js?v=3';
+import { state } from './state.js';
+import { apiGet, apiPost, apiPut } from './api.js';
+import { showToast } from './utils.js';
+import { startReading } from './reader.js';
+import { renderItems, renderFan, getTitleCoverIds, getFolderCoverIds } from './components/index.js';
+import { calculateComicProgress, aggregateProgress } from './utils/progress.js';
+import { sortItems, parseFileSize, TITLE_SORT_ACCESSORS, COMIC_SORT_ACCESSORS, FOLDER_SORT_ACCESSORS } from './utils/sorting.js';
+import { navigate } from './router.js';
 
 // Library Loading
 export async function loadLibrary() {

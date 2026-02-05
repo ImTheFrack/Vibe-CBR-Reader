@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/stylesnew.css">
 </head>
 <body>
     <!-- Header -->
@@ -16,28 +16,32 @@
             <button class="hamburger-btn" onclick="toggleHamburger()" title="Menu">≡</button>
             <a href="#/library" class="logo">
                 <div class="logo-icon">📚</div>
-                <span>Vibe Reader</span>
+                <span class="logo-text">Vibe Reader</span>
             </a>
             <span id="user-header-info" class="user-header-info"></span>
         </div>
         
         <nav class="header-nav">
-            <button class="header-btn active" id="nav-library">
-                <span>📖</span> Library
+            <button class="header-btn mobile-icon-only active" id="nav-library" title="Library">
+                <span>📖</span> <span class="nav-label">Library</span>
             </button>
-            <button class="header-btn" onclick="routerNavigate('recent', {})" id="nav-recent">
-                <span>🕐</span> Recent
+            <button class="header-btn mobile-icon-only" onclick="routerNavigate('recent', {})" id="nav-recent" title="Recent">
+                <span>🕐</span> <span class="nav-label">Recent</span>
             </button>
-            <button class="header-btn" onclick="routerNavigate('tags', {})" id="nav-tags">
-                <span>🏷️</span> Tags
+            <button class="header-btn mobile-icon-only" onclick="routerNavigate('tags', {})" id="nav-tags" title="Tags">
+                <span>🏷️</span> <span class="nav-label">Tags</span>
             </button>
-            <div class="search-box">
+            <div class="search-box" id="header-search-box">
                 <span class="search-icon">🔍</span>
                 <input type="text" class="search-input" id="searchInput" placeholder="Search titles..." oninput="handleSearch(this.value)">
                 <button class="search-scope-btn" id="search-scope-btn" onclick="toggleSearchScope()" title="Toggle search scope">
                     📍 Current
                 </button>
+                <button class="search-close-btn" onclick="toggleMobileSearch(false)">✕</button>
             </div>
+            <button class="header-btn mobile-search-toggle" onclick="toggleMobileSearch(true)" title="Search">
+                <span>🔍</span>
+            </button>
         </nav>
 
         <!-- Hamburger Menu Dropdown -->
@@ -384,6 +388,7 @@
 
     <div class="toast-container" id="toast-container"></div>
 
-    <script type="module" src="/static/js/main.js?v=3"></script>
+    <script src="/static/js/ui-utils.js"></script>
+    <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>
