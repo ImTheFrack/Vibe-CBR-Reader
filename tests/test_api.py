@@ -141,6 +141,11 @@ def test_series_rating_roundtrip(test_client, test_user, test_db):
     })
     assert login_response.status_code == 200
     
+    # Clear any existing series and ratings to ensure clean state
+    test_db.execute("DELETE FROM ratings")
+    test_db.execute("DELETE FROM series")
+    test_db.commit()
+    
     test_db.execute("""
         INSERT INTO series (id, name, category, title)
         VALUES (1, 'Test Series', 'Test Category', 'Test Title')

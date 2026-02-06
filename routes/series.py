@@ -7,10 +7,44 @@ from dependencies import get_current_user
 router = APIRouter(prefix="/api/series", tags=["series"])
 
 @router.get("")
-async def list_series(category: Optional[str] = None, subcategory: Optional[str] = None, current_user: Dict[str, Any] = Depends(get_current_user)) -> List[Dict[str, Any]]:
-    """List all series with optional filtering"""
-    series_list = get_all_series(category=category, subcategory=subcategory)
-    return series_list
+async def list_series(
+    limit: int = 100,
+    offset: int = 0,
+    category: Optional[str] = None,
+    subcategory: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """List all series with optional filtering and pagination"""
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    
+    # Get total count with filters
+    from database import get_db_connection
+    conn = get_db_connection()
+    
+    count_query = 'SELECT COUNT(*) as total FROM series WHERE 1=1'
+    params = []
+    
+    if category:
+        count_query += ' AND category = ?'
+        params.append(category)
+    if subcategory:
+        count_query += ' AND subcategory = ?'
+        params.append(subcategory)
+    
+    total = conn.execute(count_query, params).fetchone()['total']
+    conn.close()
+    
+    # Get paginated series list
+    series_list = get_all_series(category=category, subcategory=subcategory, limit=limit, offset=offset)
+    
+    return {
+        "items": series_list,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(series_list) < total
+    }
 
 @router.get("/metadata")
 async def get_metadata(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:

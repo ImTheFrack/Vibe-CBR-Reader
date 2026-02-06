@@ -41,6 +41,9 @@ database.warm_up_metadata_cache = lambda: None
 import db.users
 db.users.get_db_connection = get_test_connection
 
+import db.series
+db.series.get_db_connection = get_test_connection
+
 @pytest.fixture(scope="function")
 def test_db():
     global _test_conn
