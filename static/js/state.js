@@ -23,7 +23,11 @@ export const state = {
         zoom: 'fit',
         titleCardStyle: 'fan',
         brightness: 1.0,
-        sepia: 0.0,
+        contrast: 1.0,
+        saturation: 1.0,
+        invert: 0.0,
+        toneValue: 0.0,
+        toneMode: 'sepia',
         autoAdvanceActive: false,
         autoAdvanceInterval: 10,
         keybindings: {
@@ -37,10 +41,21 @@ export const state = {
         }
     },
     theme: localStorage.getItem('theme') || 'dark',
+    ereader: localStorage.getItem('ereader') === 'true',
     sortBy: 'alpha-asc',
     // Search state
     searchQuery: '',
     searchScope: 'current', // 'current' or 'everywhere'
+    apiSearchResults: [], // Results from FTS5 deep search
+    // Filters state
+    filters: {
+        genre: '',
+        status: '',
+        read: ''
+    },
+    // Selection state
+    selectionMode: false,
+    selectedIds: new Set(),
     // Authentication state
     currentUser: null,
     isAuthenticated: false,

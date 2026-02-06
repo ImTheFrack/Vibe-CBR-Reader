@@ -13,6 +13,63 @@
     flex-direction: column;
 }
 
+/* E-Reader Reader Overrides */
+[data-ereader="true"] .reader-header,
+[data-ereader="true"] .reader-footer,
+[data-ereader="true"] .reader-scrubber {
+    background: var(--bg-primary);
+    backdrop-filter: none;
+    border-width: 2px;
+}
+
+[data-ereader="true"] .reader-header {
+    height: 60px;
+}
+
+[data-ereader="true"] .reader-btn {
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 0;
+}
+
+[data-ereader="true"] .reader-btn:hover {
+    background: var(--text-primary);
+    color: var(--bg-primary);
+}
+
+[data-ereader="true"] .reader-title {
+    text-shadow: none;
+}
+
+[data-ereader="true"] .reader-content {
+    background: var(--bg-primary);
+}
+
+[data-ereader="true"] .scrubber-thumb {
+    border-radius: 0;
+}
+
+[data-ereader="true"] .scrubber-thumb.active {
+    border-color: var(--text-primary);
+    border-width: 3px;
+}
+
+[data-ereader="true"] .reader-tooltip {
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 0;
+}
+
+[data-ereader="true"] .progress-slider::-webkit-slider-thumb {
+    border-radius: 0;
+    width: 16px;
+    height: 24px;
+    background: var(--text-primary);
+    border: 1px solid var(--bg-primary);
+}
+
 .reader-container.active {
     display: flex;
 }
@@ -104,7 +161,12 @@
     height: 100%;
     width: 100%;
     position: relative;
-    filter: brightness(var(--reader-brightness, 1)) sepia(var(--reader-sepia, 0));
+    filter: brightness(var(--reader-brightness, 1)) 
+            contrast(var(--reader-contrast, 1))
+            sepia(var(--reader-sepia, 0)) 
+            grayscale(var(--reader-grayscale, 0)) 
+            saturate(var(--reader-saturate, 1)) 
+            invert(var(--reader-invert, 0));
 }
 
 .reader-loading {
@@ -238,6 +300,64 @@
     visibility: hidden;
 }
 
+/* Auto-Advance Progress Bar */
+.auto-advance-container {
+    position: absolute;
+    bottom: 154px; /* Above footer (64px) + scrubber (90px) */
+    left: 0;
+    right: 0;
+    padding: 0 20px;
+    z-index: 150;
+    transition: bottom 0.3s ease;
+    display: none;
+    pointer-events: none;
+}
+
+.reader-container.ui-hidden .auto-advance-container {
+    bottom: 10px;
+}
+
+.auto-advance-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--accent-primary);
+    margin-bottom: 2px;
+    text-align: center;
+    letter-spacing: 1px;
+}
+
+.auto-advance-progress {
+    height: 4px;
+    background: rgba(0, 0, 0, 0.2);
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.auto-advance-fill {
+    height: 100%;
+    background: var(--accent-primary);
+    width: 100%;
+}
+
+/* E-Reader mode overrides */
+[data-ereader="true"] .auto-advance-progress {
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    border-radius: 0;
+}
+
+[data-ereader="true"] .auto-advance-fill {
+    background: var(--text-primary);
+}
+
+[data-ereader="true"] .auto-advance-label {
+    color: var(--text-primary);
+}
+
 .scrubber-thumb {
     height: 70px;
     aspect-ratio: 2/3;
@@ -299,6 +419,18 @@
     background: var(--bg-tertiary);
     border-radius: 2px;
     cursor: pointer;
+}
+
+[data-ereader="true"] .progress-slider {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    height: 6px;
+}
+
+[data-ereader="true"] .progress-slider::-moz-range-track {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    height: 6px;
 }
 
 .reader-tooltip {
@@ -461,8 +593,8 @@
 .settings-panel {
     position: fixed;
     top: 56px;
-    right: -320px;
-    width: 320px;
+    right: -400px;
+    width: 400px;
     height: calc(100% - 56px);
     background: var(--bg-secondary);
     border-left: 1px solid var(--border-color);
@@ -470,6 +602,10 @@
     transition: right var(--transition-normal), transform 0.3s ease;
     overflow-y: auto;
     padding: 24px;
+}
+
+[data-ereader="true"] .settings-panel {
+    border-left: 3px solid var(--border-color);
 }
 
 .reader-container.ui-hidden .settings-panel {
@@ -492,6 +628,57 @@
     margin-bottom: 24px;
 }
 
+.setting-group.horizontal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px !important;
+    padding: 8px 0;
+}
+
+[data-ereader="true"] .setting-group.horizontal {
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 0;
+}
+
+.setting-group.horizontal .setting-label {
+    margin-bottom: 0;
+    flex: 0 0 100px;
+    font-weight: 500;
+}
+
+.setting-group.horizontal .setting-options,
+.setting-group.horizontal .progress-slider {
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.setting-group.horizontal .progress-slider {
+    margin: 0 8px;
+}
+
+.filters-header-compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.filters-header-compact .setting-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+[data-ereader="true"] .filters-header-compact .setting-btn {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-width: 2px;
+}
+
 .setting-label {
     font-size: 0.875rem;
     color: var(--text-secondary);
@@ -501,20 +688,56 @@
 
 .setting-options {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
 .setting-btn {
-    padding: 12px 16px;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    padding: 8px 12px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     color: var(--text-secondary);
     cursor: pointer;
-    text-align: left;
+    text-align: center;
     font-size: 0.875rem;
     transition: all var(--transition-fast);
+}
+
+.form-group.horizontal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 0;
+    margin-bottom: 8px;
+}
+
+[data-ereader="true"] .form-group.horizontal {
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 0;
+}
+
+.form-group.horizontal .setting-label,
+.form-group.horizontal label {
+    margin-bottom: 0;
+    white-space: nowrap;
+    flex: 0 0 120px;
+}
+
+.form-group.horizontal .setting-options {
+    flex: 1;
+    justify-content: flex-end;
+}
+
+[data-ereader="true"] .setting-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
 }
 
 .setting-btn:hover {
@@ -522,10 +745,21 @@
     color: var(--text-primary);
 }
 
+[data-ereader="true"] .setting-btn:hover {
+    background: var(--text-primary);
+    color: var(--bg-primary);
+}
+
 .setting-btn.active {
     background: var(--accent-primary);
     border-color: var(--accent-primary);
     color: white;
+}
+
+[data-ereader="true"] .setting-btn.active {
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    border-width: 2px;
 }
 
 /* Preferences */
@@ -1204,6 +1438,19 @@
 
 .chapter-card.in-progress {
     border-left: 3px solid var(--accent-primary);
+}
+
+/* Selection checkmark for chapters */
+.chapter-card .selection-checkbox {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 10;
+}
+
+/* Ensure checkmark is visible against dark covers */
+.chapter-card.selected {
+    border-color: var(--accent-primary);
 }
 
 /* Chapter Navigation Buttons */

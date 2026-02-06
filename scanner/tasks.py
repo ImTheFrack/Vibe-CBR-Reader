@@ -170,6 +170,10 @@ def sync_library_task(job_id=None):
             ''', batch)
             conn.commit()
     
+    # Invalidate tag cache so new metadata is reflected immediately
+    from database import invalidate_tag_cache
+    invalidate_tag_cache()
+
     conn.close()
     return len(new_comics) + len(changed_comics), deleted_count
 

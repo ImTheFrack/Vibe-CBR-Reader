@@ -11,6 +11,8 @@ let lastShowX = 0;
 let lastShowY = 0;
 let sessionStartTime = null;
 let autoAdvanceTimer = null;
+let autoAdvanceFrame = null;
+let autoAdvanceStartTime = null;
 
 function showReaderUI() {
     const reader = document.getElementById('reader');
@@ -215,6 +217,17 @@ export async function startReading(comicId, page = 0) {
     
     updateReaderToolbar();
     
+    // Apply global defaults for visual filters first
+    if (state.userPreferences) {
+        if (state.userPreferences.brightness !== undefined) state.settings.brightness = state.userPreferences.brightness;
+        if (state.userPreferences.contrast !== undefined) state.settings.contrast = state.userPreferences.contrast;
+        if (state.userPreferences.saturation !== undefined) state.settings.saturation = state.userPreferences.saturation;
+        if (state.userPreferences.invert !== undefined) state.settings.invert = state.userPreferences.invert;
+        if (state.userPreferences.tone_value !== undefined) state.settings.toneValue = state.userPreferences.tone_value;
+        if (state.userPreferences.tone_mode !== undefined) state.settings.toneMode = state.userPreferences.tone_mode;
+        if (state.userPreferences.auto_advance_interval !== undefined) state.settings.autoAdvanceInterval = state.userPreferences.auto_advance_interval;
+    }
+
     let startPage = page;
     if (state.isAuthenticated && page === 0) {
         const savedProgress = await loadProgressFromAPI(comicId);
@@ -226,6 +239,13 @@ export async function startReading(comicId, page = 0) {
             if (savedProgress.reader_display) setSetting('display', savedProgress.reader_display, false);
             if (savedProgress.reader_direction) setSetting('direction', savedProgress.reader_direction, false);
             if (savedProgress.reader_zoom) setSetting('zoom', savedProgress.reader_zoom, false);
+        } else {
+            // Apply global defaults from preferences for new comics
+            if (state.userPreferences) {
+                if (state.userPreferences.reader_display) setSetting('display', state.userPreferences.reader_display, false);
+                if (state.userPreferences.reader_direction) setSetting('direction', state.userPreferences.reader_direction, false);
+                if (state.userPreferences.reader_zoom) setSetting('zoom', state.userPreferences.reader_zoom, false);
+            }
         }
     }
     state.currentPage = startPage;
@@ -246,13 +266,15 @@ export async function startReading(comicId, page = 0) {
     updateReaderUI();
     
     // Sync slider UI
-    const bSlider = document.getElementById('brightness-slider');
-    if (bSlider) bSlider.value = state.settings.brightness;
-    const sSlider = document.getElementById('sepia-slider');
-    if (sSlider) sSlider.value = state.settings.sepia;
-    const aSlider = document.getElementById('auto-advance-slider');
+    const sliders = ['brightness', 'contrast', 'saturation', 'invert', 'toneValue'];
+    sliders.forEach(type => {
+        const slider = document.getElementById(`${type}-slider`);
+        if (slider) slider.value = state.settings[type];
+    });
+    
+    const aSlider = document.getElementById('autoAdvanceInterval-slider');
     if (aSlider) aSlider.value = state.settings.autoAdvanceInterval;
-    const aVal = document.getElementById('auto-advance-value');
+    const aVal = document.getElementById('autoAdvanceInterval-value');
     if (aVal) aVal.textContent = `${state.settings.autoAdvanceInterval}s`;
 }
 
@@ -604,8 +626,21 @@ function applyImageZoom(img, zoom) {
 function applyFilters() {
     const container = document.getElementById('reader-pages');
     if (!container) return;
-    container.style.setProperty('--reader-brightness', state.settings.brightness);
-    container.style.setProperty('--reader-sepia', state.settings.sepia);
+    
+    const s = state.settings;
+    container.style.setProperty('--reader-brightness', s.brightness);
+    container.style.setProperty('--reader-contrast', s.contrast);
+    container.style.setProperty('--reader-saturate', s.saturation);
+    container.style.setProperty('--reader-invert', s.invert);
+    
+    // Tone: Sepia vs Grayscale (mutually exclusive)
+    if (s.toneMode === 'grayscale') {
+        container.style.setProperty('--reader-grayscale', s.toneValue);
+        container.style.setProperty('--reader-sepia', 0);
+    } else {
+        container.style.setProperty('--reader-sepia', s.toneValue);
+        container.style.setProperty('--reader-grayscale', 0);
+    }
 }
 
 async function loadLongStrip() {
@@ -664,7 +699,7 @@ function renderScrubber() {
     updateScrubberActive();
 }
 
-function updateScrubberActive() {
+export function updateScrubberActive() {
     const scrubber = document.getElementById('reader-scrubber');
     if (!scrubber) return;
     
@@ -692,7 +727,7 @@ function updateScrubberActive() {
     });
 }
 
-function updateReaderUI() {
+export function updateReaderUI() {
     let indicatorText = `${state.currentPage + 1} / ${state.totalPages}`;
     
     if (state.settings.display === 'double' && state.currentPage > 0 && state.currentPage + 1 < state.totalPages) {
@@ -718,6 +753,35 @@ function updateReaderUI() {
         nextBtn.title = state.readerNavigation.nextComic ? `Next: ${state.readerNavigation.nextComic.title}` : 'No next chapter';
     }
 
+    // Update Reader Settings Buttons Active State
+    const themeDark = document.getElementById('reader-theme-dark');
+    const themeLight = document.getElementById('reader-theme-light');
+    if (themeDark && themeLight) {
+        themeDark.classList.toggle('active', state.theme === 'dark');
+        themeLight.classList.toggle('active', state.theme === 'light');
+    }
+
+    const ereaderOn = document.getElementById('reader-ereader-on');
+    const ereaderOff = document.getElementById('reader-ereader-off');
+    if (ereaderOn && ereaderOff) {
+        ereaderOn.classList.toggle('active', state.ereader === true);
+        ereaderOff.classList.toggle('active', state.ereader === false);
+    }
+
+    const toneSepia = document.getElementById('tone-mode-sepia');
+    const toneGray = document.getElementById('tone-mode-grayscale');
+    if (toneSepia && toneGray) {
+        toneSepia.classList.toggle('active', state.settings.toneMode === 'sepia');
+        toneGray.classList.toggle('active', state.settings.toneMode === 'grayscale');
+    }
+
+    // Update other buttons
+    document.querySelectorAll('.settings-panel [data-setting]').forEach(btn => {
+        const type = btn.dataset.setting;
+        const value = btn.dataset.value;
+        btn.classList.toggle('active', state.settings[type] === value);
+    });
+
     updateBookmarkUI();
     updateScrubberActive();
     saveProgress();
@@ -738,6 +802,7 @@ export function nextPage() {
     if (newPage < state.totalPages) {
         loadPage(newPage);
         router.replace('read', { comicId: state.currentComic.id });
+        if (state.settings.autoAdvanceActive) startAutoAdvanceTimer();
     } else {
         completeReading();
     }
@@ -757,6 +822,7 @@ export function prevPage() {
     if (newPage !== state.currentPage) {
         loadPage(newPage);
         router.replace('read', { comicId: state.currentComic.id });
+        if (state.settings.autoAdvanceActive) startAutoAdvanceTimer();
     }
 }
 
@@ -765,6 +831,7 @@ export function jumpToPage(pageNum) {
     loadPage(state.currentPage);
     updateReaderUI();
     router.replace('read', { comicId: state.currentComic.id });
+    if (state.settings.autoAdvanceActive) startAutoAdvanceTimer();
 }
 
 export function handleSliderInput(value) {
@@ -857,6 +924,10 @@ export function closeReader() {
     document.getElementById('reader').classList.remove('ui-hidden');
     if (uiTimer) clearTimeout(uiTimer);
     if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+    if (autoAdvanceFrame) cancelAnimationFrame(autoAdvanceFrame);
+    
+    const autoAdvanceBar = document.getElementById('auto-advance-bar');
+    if (autoAdvanceBar) autoAdvanceBar.style.display = 'none';
     
     saveProgress(); // Final save with time
     
@@ -887,12 +958,24 @@ export function toggleAutoAdvance() {
         startAutoAdvanceTimer();
     } else {
         if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+        if (autoAdvanceFrame) cancelAnimationFrame(autoAdvanceFrame);
+        const autoAdvanceBar = document.getElementById('auto-advance-bar');
+        if (autoAdvanceBar) autoAdvanceBar.style.display = 'none';
     }
 }
 
 function startAutoAdvanceTimer() {
     if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
-    if (!state.settings.autoAdvanceActive || !state.currentComic) return;
+    if (autoAdvanceFrame) cancelAnimationFrame(autoAdvanceFrame);
+    
+    const autoAdvanceBar = document.getElementById('auto-advance-bar');
+    if (!state.settings.autoAdvanceActive || !state.currentComic) {
+        if (autoAdvanceBar) autoAdvanceBar.style.display = 'none';
+        return;
+    }
+    
+    autoAdvanceStartTime = Date.now();
+    animateAutoAdvance();
     
     autoAdvanceTimer = setTimeout(() => {
         if (state.currentPage < state.totalPages - 1) {
@@ -904,7 +987,38 @@ function startAutoAdvanceTimer() {
     }, state.settings.autoAdvanceInterval * 1000);
 }
 
+function animateAutoAdvance() {
+    if (!state.settings.autoAdvanceActive || !state.currentComic) {
+        const bar = document.getElementById('auto-advance-bar');
+        if (bar) bar.style.display = 'none';
+        return;
+    }
+
+    const container = document.getElementById('auto-advance-bar');
+    const fill = document.getElementById('auto-advance-fill');
+    if (!container || !fill) return;
+
+    container.style.display = 'block';
+    
+    const now = Date.now();
+    const elapsed = now - autoAdvanceStartTime;
+    const duration = state.settings.autoAdvanceInterval * 1000;
+    const remaining = Math.max(0, 100 - (elapsed / duration * 100));
+    
+    fill.style.width = `${remaining}%`;
+
+    if (elapsed < duration) {
+        autoAdvanceFrame = requestAnimationFrame(animateAutoAdvance);
+    }
+}
+
 export function setSetting(type, value, syncPreference = true) {
+    // Parse numerical values
+    const numericTypes = ['brightness', 'contrast', 'saturation', 'invert', 'toneValue', 'autoAdvanceInterval', 'sepia'];
+    if (numericTypes.includes(type)) {
+        value = parseFloat(value);
+    }
+    
     state.settings[type] = value;
     
     // Update UI buttons if they exist
@@ -912,6 +1026,14 @@ export function setSetting(type, value, syncPreference = true) {
         btn.classList.toggle('active', btn.dataset.value === value);
     });
     
+    // Specific UI updates for toneMode buttons
+    if (type === 'toneMode') {
+        const toneSepia = document.getElementById('tone-mode-sepia');
+        const toneGray = document.getElementById('tone-mode-grayscale');
+        if (toneSepia) toneSepia.classList.toggle('active', value === 'sepia');
+        if (toneGray) toneGray.classList.toggle('active', value === 'grayscale');
+    }
+
     // Update UI sliders if they exist
     const slider = document.getElementById(`${type}-slider`);
     if (slider) slider.value = value;
@@ -949,20 +1071,60 @@ export function setSetting(type, value, syncPreference = true) {
         }
     }
 
-    if (type === 'brightness' || type === 'sepia') {
+    if (['brightness', 'contrast', 'saturation', 'invert', 'toneValue', 'toneMode'].includes(type)) {
         applyFilters();
     }
 
     if (type === 'autoAdvanceInterval' && state.settings.autoAdvanceActive) {
         startAutoAdvanceTimer(); // Reset timer with new interval
     }
-    
+
     if (syncPreference && state.isAuthenticated) {
-        const prefMap = { 'direction': 'reader_direction', 'display': 'reader_display', 'zoom': 'reader_zoom' };
+        const prefMap = { 
+            'direction': 'reader_direction', 
+            'display': 'reader_display', 
+            'zoom': 'reader_zoom',
+            'brightness': 'brightness',
+            'contrast': 'contrast',
+            'saturation': 'saturation',
+            'invert': 'invert',
+            'toneValue': 'tone_value',
+            'toneMode': 'tone_mode',
+            'autoAdvanceInterval': 'auto_advance_interval'
+        };
         if (prefMap[type]) setPreference(prefMap[type], value, false);
     }
     
-    // Always save per-comic progress when setting changes in reader
+    // Always save per-comic progress when setting changes in reader (Layout only)
+    if (state.currentComic) {
+        saveProgress();
+    }
+}
+
+export function resetAllFilters() {
+    state.settings.brightness = 1.0;
+    state.settings.contrast = 1.0;
+    state.settings.saturation = 1.0;
+    state.settings.invert = 0.0;
+    state.settings.toneValue = 0.0;
+    state.settings.toneMode = 'sepia';
+    
+    // Update all sliders
+    const sliders = ['brightness', 'contrast', 'saturation', 'invert', 'toneValue'];
+    sliders.forEach(type => {
+        const slider = document.getElementById(`${type}-slider`);
+        if (slider) slider.value = state.settings[type];
+    });
+    
+    // Update tone buttons
+    const toneSepia = document.getElementById('tone-mode-sepia');
+    const toneGray = document.getElementById('tone-mode-grayscale');
+    if (toneSepia) toneSepia.classList.add('active');
+    if (toneGray) toneGray.classList.remove('active');
+    
+    applyFilters();
+    showToast('Visual filters reset', 'info');
+    
     if (state.currentComic) {
         saveProgress();
     }

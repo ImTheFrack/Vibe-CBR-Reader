@@ -48,12 +48,45 @@ export async function loadLibrary() {
         }
         state.comics = await response.json();
         buildFolderTree();
+        await initFilters();
     } catch (error) {
         showToast('Failed to load library', 'error');
         console.error(error);
         state.comics = [];
     }
 }
+
+export async function initFilters() {
+    try {
+        const metadata = await apiGet('/api/series/metadata');
+        if (metadata.error) return;
+
+        const genreSelect = document.getElementById('filter-genre');
+        const statusSelect = document.getElementById('filter-status');
+
+        if (genreSelect) {
+            genreSelect.innerHTML = '<option value="">All Genres</option>' + 
+                metadata.genres.map(g => `<option value="${g}">${g}</option>`).join('');
+        }
+
+        if (statusSelect) {
+            statusSelect.innerHTML = '<option value="">All Statuses</option>' + 
+                metadata.statuses.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+    } catch (err) {
+        console.error('Failed to init filters:', err);
+    }
+}
+
+export function handleFilterChange() {
+    state.filters.genre = document.getElementById('filter-genre').value;
+    state.filters.status = document.getElementById('filter-status').value;
+    state.filters.read = document.getElementById('filter-read').value;
+    
+    updateLibraryView();
+}
+
+window.handleFilterChange = handleFilterChange;
 
 export async function scanLibrary(e) {
     if (e && e.shiftKey) {
@@ -229,6 +262,52 @@ export function getTitlesInLocation() {
             }
         }
     }
+
+    // Apply Filters
+    const { genre, status, read } = state.filters;
+    if (genre || status || read) {
+        titles = titles.filter(title => {
+            const firstComic = title.comics[0];
+            
+            // Genre/Status filters require metadata (from state.comics or cached series data)
+            // But state.folderTree titles have comics, and comics have category which is often the source of genre if not in series.json
+            // Actually, we should ideally have series metadata loaded for all titles.
+            // For now, let's use the metadata we have in state.comics (though it's limited).
+            
+            // Note: genres/status are usually in the series table, but we don't have them all in state.comics for every title yet.
+            // Let's assume for now that if we are filtering by genre/status, it's a global filter and we might need to fetch series data.
+            // But wait, state.comics has 'category' which we use as a rough genre.
+            
+            if (genre) {
+                // Check if any comic in title has the genre
+                // Genres is now an array in comic metadata
+                const hasGenre = title.comics.some(c => 
+                    (c.genres && c.genres.includes(genre)) || 
+                    c.category === genre
+                );
+                if (!hasGenre) return false;
+            }
+            
+            if (status) {
+                // Check series status
+                const hasStatus = title.comics.some(c => c.series_status === status);
+                if (!hasStatus) return false;
+            }
+            
+            if (read) {
+                const progress = title.comics.map(c => state.readingProgress[c.id]).filter(Boolean);
+                const allCompleted = progress.length === title.comics.length && progress.every(p => p.completed);
+                const someStarted = progress.some(p => p.page > 0 || p.completed);
+                
+                if (read === 'completed' && !allCompleted) return false;
+                if (read === 'unread' && someStarted) return false;
+                if (read === 'reading' && (!someStarted || allCompleted)) return false;
+            }
+            
+            return true;
+        });
+    }
+
     return titles;
 }
 
@@ -240,7 +319,23 @@ export function getComicsInTitle() {
         const sub = cat.subcategories[state.currentLocation.subcategory];
         if (sub) {
             const title = sub.titles[state.currentLocation.title];
-            if (title) return title.comics;
+            if (title) {
+                let comics = title.comics;
+                
+                // Apply Read Filter to individual comics
+                const readFilter = state.filters.read;
+                if (readFilter) {
+                    comics = comics.filter(c => {
+                        const prog = state.readingProgress[c.id];
+                        if (readFilter === 'completed') return prog && prog.completed;
+                        if (readFilter === 'unread') return !prog || (!prog.completed && prog.page === 0);
+                        if (readFilter === 'reading') return prog && !prog.completed && prog.page > 0;
+                        return true;
+                    });
+                }
+                
+                return comics;
+            }
         }
     }
     return [];
@@ -255,6 +350,7 @@ export function toggleFlattenMode() {
     const flattenCheckbox = document.getElementById('flatten-checkbox');
     if (flattenCheckbox) flattenCheckbox.checked = state.flattenMode;
     updateLibraryView();
+    if (window.updateSelectionButtonState) window.updateSelectionButtonState();
     showToast(state.flattenMode ? 'Flatten mode enabled' : 'Flatten mode disabled', 'info');
 }
 
@@ -384,18 +480,49 @@ export async function loadRecentProgressFromAPI() {
 }
 
 export async function loadRecentReads() {
+    // If state.comics is empty, wait a moment and try again once (in case loadLibrary is finishing)
+    if (state.comics.length === 0) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (state.comics.length === 0) {
+            const grid = document.getElementById('recent-grid');
+            if (grid) grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📖</div><div class="empty-title">Library is loading...</div></div>';
+            return;
+        }
+    }
+
     let recentComics = [];
     if (state.isAuthenticated) {
         const apiRecent = await loadRecentProgressFromAPI();
         recentComics = apiRecent.map(item => {
             const comic = state.comics.find(c => c.id === item.comic_id);
-            return comic ? { ...comic, progress: { page: item.current_page, completed: item.completed, lastRead: new Date(item.last_read).getTime() } } : null;
+            if (!comic) return null;
+            
+            // Handle potentially missing pages count
+            const totalPages = comic.pages || 0;
+            const currentPage = item.current_page || 0;
+            const percent = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
+            
+            return { 
+                ...comic, 
+                progress: { 
+                    page: currentPage, 
+                    completed: item.completed, 
+                    lastRead: item.last_read ? new Date(item.last_read).getTime() : Date.now(),
+                    percent: percent
+                } 
+            };
         }).filter(Boolean);
     } else {
         const recentIds = Object.keys(state.readingProgress).sort((a, b) => state.readingProgress[b].lastRead - state.readingProgress[a].lastRead).slice(0, 12);
         recentComics = recentIds.map(id => {
             const comic = state.comics.find(c => c.id === id);
-            return comic ? { ...comic, progress: state.readingProgress[id] } : null;
+            if (!comic) return null;
+            
+            const prog = state.readingProgress[id];
+            const totalPages = comic.pages || 0;
+            const percent = totalPages > 0 ? Math.round((prog.page / totalPages) * 100) : 0;
+            
+            return { ...comic, progress: { ...prog, percent: percent } };
         }).filter(Boolean);
     }
     
@@ -407,7 +534,26 @@ export async function loadRecentReads() {
         grid.innerHTML = recentComics.map(comic => {
             const prog = comic.progress;
             const chText = comic.chapter ? `Ch. ${comic.chapter}` : (comic.volume ? `Vol. ${comic.volume}` : 'One-shot');
-            return `<div class="comic-card" onclick="continueReading('${comic.id}')"><button class="card-remove-btn" onclick="event.stopPropagation(); removeSingleHistory('${comic.id}')">×</button><div class="comic-cover"><img src="/api/cover/${comic.id}" loading="lazy"><div class="comic-progress"><div class="comic-progress-bar" style="width: ${(prog.page / comic.pages * 100)}%"></div></div><div class="comic-badge">${Math.round((prog.page / comic.pages) * 100)}%</div></div><div class="comic-info"><div class="comic-title">${comic.title}</div><div class="comic-meta"><span>${chText}</span> • <span>Page ${prog.page + 1}</span></div></div></div>`;
+            const percent = prog.percent || 0;
+            
+            return `
+                <div class="comic-card" onclick="continueReading('${comic.id}')">
+                    <button class="card-remove-btn" onclick="event.stopPropagation(); removeSingleHistory('${comic.id}')">×</button>
+                    <div class="comic-cover">
+                        <img src="/api/cover/${comic.id}" loading="lazy">
+                        <div class="comic-progress">
+                            <div class="comic-progress-bar" style="width: ${percent}%"></div>
+                        </div>
+                        <div class="comic-badge">${percent}%</div>
+                    </div>
+                    <div class="comic-info">
+                        <div class="comic-title">${comic.title}</div>
+                        <div class="comic-meta">
+                            <span>${chText}</span> • <span>Page ${prog.page + 1}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
         }).join('');
     }
 }
@@ -459,6 +605,18 @@ export function handleLibraryClick() {
     navigate('library', {});
 }
 
+export async function handleRateSeries(seriesId, rating) {
+    try {
+        const result = await apiPost('/api/series/rating', { series_id: seriesId, rating: rating });
+        if (result.error) throw new Error(result.error);
+        showToast("Rating saved!", "success");
+        // Re-render detail view to show updated rating
+        if (window.renderTitleDetailView) await window.renderTitleDetailView();
+    } catch (error) { showToast("Failed to rate: " + error.message, "error"); }
+}
+
+window.handleRateSeries = handleRateSeries;
+
 async function purgeHistory() {
     try {
         const result = await apiDelete('/api/progress');
@@ -492,3 +650,5 @@ window.navigateToRoot = navigateToRoot;
 window.navigateToFolder = navigateToFolder;
 window.navigateTitleComic = navigateTitleComic;
 window.renderTitleFan = renderTitleFan;
+window.loadRecentReads = loadRecentReads;
+window.continueReading = continueReading;

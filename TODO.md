@@ -41,23 +41,27 @@ This file tracks the project's outstanding tasks, known bugs, and future roadmap
         3. [x] **Code Reuse**: Identify and extract common patterns into shared utility functions.
 
 ## 📚 Phase 2: Enhanced Library Management
-- [ ] **User Profile & Personalization**:
-    - **Profile Page**: Central view for account settings, `POST /api/users/me/password` (requires current password validation), and stats.
-    - **Integrated Stats**: Dashboard showing reading speed, completion rates, and library growth metrics.
+- [x] **User Profile & Personalization**:
+    - **Profile Page**: [Implemented] Central view for account settings, `POST /api/users/me/password` (requires current password validation), and stats.
+    - **Integrated Stats**: [Implemented] Dashboard showing reading speed, completion rates, and library growth metrics.
     - **History**: [Implemented] Purge entire reading history or remove individual items from the "Recent" tab. Includes confirmation for full purge and toast notifications.
 - [ ] **Collections & Discovery**:
     - **Shared Lists**: Custom lists with `is_public` flags; community view to browse public collections.
-    - **Advanced Search**: Deep metadata search (synopsis, authors) using SQLite FTS5.
+    - [x] **Advanced Search**: [Implemented] Deep metadata search (synopsis, authors) using SQLite FTS5. Supports multi-word prefix matching.
     - [x] **Optimized Tagging System**: 
-        - **Features**: Multi-word consolidation (e.g., "Fantasy" matches "Urban Fantasy"), metadata-based matching (searching titles/synopses), and deep-linking support (`#/tags?tags=...`).
-        - **Performance**: 128x speedup achieved via module-level caching of containment maps and a word-set tokenization algorithm for metadata search.
-        - **Task**: Trigger cache invalidation in `database.py` at the end of library scan jobs to ensure new tags/metadata are reflected without server restart.
-    - **Filters**: UI filters for genre, status, and read/unread state.
-- [ ] **Anonymous Star Ratings**: 5-star system for series/comics; individual votes are private, only averages are public.
-- [ ] **Modular Batch Operations Framework**:
-    - **Selection Mode**: UI checkboxes on cards to trigger an "Action Queue".
-    - [x] **Export as CBZ**: Backend implemented in `/api/export/cbz`. Supports streaming multi-comic exports with numerical sorting and zero-compression (ZIP_STORED) for efficiency. [Frontend UI pending]
-- [ ] **Sequence Gap Detection**: Identify numerical jumps in chapter/volume sequences (e.g., Vol 1, 2, 4 -> 3 is missing) and provide a "Gaps Report".
+        - **Features**: Multi-word consolidation, metadata-based matching, and deep-linking support.
+        - **Performance**: 128x speedup via module-level caching and word-set tokenization.
+        - **Task**: [Implemented] Trigger cache invalidation in `database.py` at the end of library scan jobs.
+    - [x] **Filters**: [Implemented] UI filters for genre, status, and read/unread state.
+- [x] **Anonymous Star Ratings**: [Implemented] 5-star system for series with average scores and individual user vote memory.
+- [x] **Modular Batch Operations Framework**:
+    - [x] **Selection Mode**: [Implemented] Context-aware selection (Titles in library, Chapters in series view) with visual checkmarks and auto-clearing on navigation.
+    - [x] **Export as CBZ**: [Implemented] Robust background system using UUID-based jobs.
+        - **Features**: Streaming ZIP creation (low RAM), path-preservation (relative to Title), sorted export (Volumes first).
+        - **Reliability**: Heartbeat-based zombie cleanup (30s timeout) and `beforeunload` cancellation.
+        - **UI**: Progress modal with percentage, detail logs, live temp-disk space reporting, and cancellation support.
+- [x] **Sequence Gap Detection**: [Implemented] Admin report identifying numerical jumps in chapter/volume sequences.
+- [x] **Boot Optimization**: [Implemented] Pre-calculating tag metadata and rebuilding FTS index on server start; consolidated frontend loading to prevent duplicate heavy API hits.
 
 ## 📖 Phase 3: Reader Enhancements
 - [X] **Performance & Preloading**: Prefetch the next 2-3 pages into a background buffer using a `PrefetchManager` class.
@@ -65,9 +69,10 @@ This file tracks the project's outstanding tasks, known bugs, and future roadmap
 - [X] **Reading Environment**:
     - **Memory**: Per-comic settings memory (remember zoom mode and direction per title).
     - **Visual Navigation**: Thumbnail-based "scrubber" bar for rapid jumping.
-    - **Auto-advance**: Configurable timer for automatic page turning.
-    - **Filters**: Brightness and Warmth (sepia) CSS filters for night reading.
-- [X] **Utility**: Track time spent reading per session and per series; support custom remappable keybindings.
+    - **Auto-advance**: [Implemented] Configurable timer for automatic page turning. Includes a dynamic decreasing countdown bar that reposition based on UI visibility; manual page flips automatically reset the timer.
+    - **Visual Filters**: [Implemented] Independent sliders for Brightness, Contrast, Saturation (Color), Inversion, and Tone (Sepia/Grayscale). Includes a "Reset All" function and compact horizontal UI. Settings persist globally in user profile.
+- [x] **Utility**: Track time spent reading per session and per series; support custom remappable keybindings.
+- [x] **E-Reader Aesthetic**: [Implemented] Added a persistent toggle for high-contrast, cleanly-lined light/dark modes that removes shadows and rounded corners.
 
 ## 🔍 Phase 4: Metadata & Discovery - BASED ON VIBEMANGA PROJECT TO BE IMPORTED - FUTURE
 - [ ] **Page Annotations**: Save notes, snippets, or highlights on specific pages.

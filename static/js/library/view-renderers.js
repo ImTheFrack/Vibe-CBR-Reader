@@ -355,8 +355,32 @@ export async function renderTitleDetailView() {
     const synonyms = seriesData.synonyms || [];
     const synonymsHtml = synonyms.length > 0 ? `<div class="synonyms">Also known as: ${synonyms.join(', ')}</div>` : '';
     
+    // Fetch Rating info
+    const ratingData = await apiGet(`/api/series/rating/${seriesData.id}`);
+    const userRating = ratingData.user_rating || 0;
+    const avgRating = ratingData.series ? ratingData.series.avg_rating : 0;
+    const ratingCount = ratingData.series ? ratingData.series.rating_count : 0;
+
+    const ratingHtml = `
+        <div class="series-rating-container" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 12px;">
+            <div class="stars-row" style="display: flex; gap: 4px; font-size: 1.25rem;">
+                ${[1, 2, 3, 4, 5].map(i => `
+                    <span class="star ${i <= userRating ? 'active' : ''}" 
+                          onclick="handleRateSeries(${seriesData.id}, ${i})" 
+                          style="cursor: pointer; color: ${i <= userRating ? 'var(--accent-primary)' : 'var(--text-tertiary)'}; transition: color 0.2s;">
+                        ★
+                    </span>
+                `).join('')}
+            </div>
+            <div class="rating-stats" style="font-size: 0.85rem; color: var(--text-secondary);">
+                <span style="font-weight: 600; color: var(--text-primary);">${avgRating}</span> (${ratingCount} votes)
+            </div>
+        </div>
+    `;
+
     const metadataSection = `
         <div class="title-metadata-compact">
+            ${ratingHtml}
             <div class="meta-header-row">
                 <div class="meta-toggle-btn" onclick="window.toggleMeta('${uniqueId}')">
                     <span class="meta-expand-icon" id="meta-icon-${uniqueId}">▶</span>
@@ -417,7 +441,8 @@ export async function renderTitleDetailView() {
         const nextBtn = comic.next_comic ? `<button class="chapter-nav next" onclick="event.stopPropagation(); startReading('${comic.next_comic.id}')" title="Next: ${comic.next_comic.title}">→</button>` : '';
         
         return `
-            <div class="chapter-card ${readStatus}" onclick="startReading('${comic.id}')">
+            <div class="chapter-card ${readStatus}" onclick="handleCardClick(this, event)" data-id="${comic.id}" data-onclick="startReading('${comic.id}')">
+                <div class="selection-checkbox" onclick="event.stopPropagation(); toggleItemSelection(this.parentElement.dataset.id, event)"></div>
                 <div class="chapter-nav-buttons">${prevBtn}${nextBtn}</div>
                 <div class="chapter-cover">
                     <img src="/api/cover/${comic.id}" alt="${chapterText}" loading="lazy">
@@ -484,10 +509,45 @@ export function showView(viewName) {
     if (viewName === 'recent') {
         if (window.loadRecentReads) window.loadRecentReads();
     }
+    
+    updateSelectionButtonState();
+}
+
+export function updateSelectionButtonState() {
+    const btn = document.getElementById('btn-selection-mode');
+    if (!btn) return;
+
+    let allowed = false;
+    
+    // Always allowed if searching (search results are titles)
+    if (state.searchQuery) {
+        allowed = true;
+    } else if (state.currentView === 'library') {
+        // Allowed if we are showing titles (subcategory level or flatten mode)
+        if (state.flattenMode || state.currentLevel === 'subcategory' || state.currentLevel === 'title') {
+            allowed = true;
+        }
+    } else if (state.currentView === 'tags' || state.currentView === 'search') {
+        // These views show titles
+        allowed = true;
+    } else if (state.currentView === 'recent') {
+        // Shows comic cards
+        allowed = true;
+    }
+
+    btn.disabled = !allowed;
+    btn.style.opacity = allowed ? '1' : '0.3';
+    btn.style.cursor = allowed ? 'pointer' : 'not-allowed';
+    
+    // If we were in selection mode but it's no longer allowed, clear it
+    if (!allowed && state.selectionMode) {
+        if (window.clearSelection) window.clearSelection();
+    }
 }
 
 // Make globally available
 window.showView = showView;
+window.updateSelectionButtonState = updateSelectionButtonState;
 
 export function renderTitleFan(title) {
     return renderFan(getTitleCoverIds(title));

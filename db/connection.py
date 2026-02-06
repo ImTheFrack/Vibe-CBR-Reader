@@ -101,6 +101,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER UNIQUE NOT NULL,
             theme TEXT DEFAULT 'dark' CHECK(theme IN ('dark', 'light')),
+            ereader BOOLEAN DEFAULT 0,
             default_view_mode TEXT DEFAULT 'grid' CHECK(default_view_mode IN ('grid', 'list', 'detailed')),
             default_nav_mode TEXT DEFAULT 'hierarchy' CHECK(default_nav_mode IN ('hierarchy', 'flat')),
             default_sort_by TEXT DEFAULT 'alpha-asc',
@@ -108,6 +109,13 @@ def init_db():
             reader_display TEXT DEFAULT 'single' CHECK(reader_display IN ('single', 'double', 'long')),
             reader_zoom TEXT DEFAULT 'fit' CHECK(reader_zoom IN ('fit', 'width', 'height')),
             title_card_style TEXT DEFAULT 'fan' CHECK(title_card_style IN ('fan', 'single')),
+            brightness REAL DEFAULT 1.0,
+            contrast REAL DEFAULT 1.0,
+            saturation REAL DEFAULT 1.0,
+            invert REAL DEFAULT 0.0,
+            tone_value REAL DEFAULT 0.0,
+            tone_mode TEXT DEFAULT 'sepia',
+            auto_advance_interval INTEGER DEFAULT 10,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
@@ -118,6 +126,28 @@ def init_db():
         conn.execute("ALTER TABLE user_preferences ADD COLUMN title_card_style TEXT DEFAULT 'fan' CHECK(title_card_style IN ('fan', 'single'))")
     except sqlite3.OperationalError:
         pass
+
+    # Add ereader column if not exists
+    try:
+        conn.execute("ALTER TABLE user_preferences ADD COLUMN ereader BOOLEAN DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+    # Add visual filter columns to user_preferences
+    filter_cols = [
+        ('brightness', 'REAL DEFAULT 1.0'),
+        ('contrast', 'REAL DEFAULT 1.0'),
+        ('saturation', 'REAL DEFAULT 1.0'),
+        ('invert', 'REAL DEFAULT 0.0'),
+        ('tone_value', 'REAL DEFAULT 0.0'),
+        ('tone_mode', "TEXT DEFAULT 'sepia'"),
+        ('auto_advance_interval', 'INTEGER DEFAULT 10')
+    ]
+    for col, col_def in filter_cols:
+        try:
+            conn.execute(f'ALTER TABLE user_preferences ADD COLUMN {col} {col_def}')
+        except sqlite3.OperationalError:
+            pass
     
     # Sessions table for token-based auth
     conn.execute('''
@@ -231,11 +261,68 @@ def init_db():
     # Index on comics.processed for fast Phase 2 pending queries
     conn.execute('CREATE INDEX IF NOT EXISTS idx_comics_processed ON comics(processed)')
     
+    # FTS5 table for series search (Deep metadata search)
+    try:
+        conn.execute('''
+            CREATE VIRTUAL TABLE IF NOT EXISTS series_fts USING fts5(
+                name, title, title_english, synonyms, authors, synopsis,
+                content='series',
+                content_rowid='id'
+            )
+        ''')
+        
+        # Triggers to keep FTS index in sync with series table
+        conn.execute('''
+            CREATE TRIGGER IF NOT EXISTS series_ai AFTER INSERT ON series BEGIN
+                INSERT INTO series_fts(rowid, name, title, title_english, synonyms, authors, synopsis)
+                VALUES (new.id, new.name, new.title, new.title_english, new.synonyms, new.authors, new.synopsis);
+            END;
+        ''')
+        conn.execute('''
+            CREATE TRIGGER IF NOT EXISTS series_ad AFTER DELETE ON series BEGIN
+                INSERT INTO series_fts(series_fts, rowid, name, title, title_english, synonyms, authors, synopsis)
+                VALUES('delete', old.id, old.name, old.title, old.title_english, old.synonyms, old.authors, old.synopsis);
+            END;
+        ''')
+        conn.execute('''
+            CREATE TRIGGER IF NOT EXISTS series_au AFTER UPDATE ON series BEGIN
+                INSERT INTO series_fts(series_fts, rowid, name, title, title_english, synonyms, authors, synopsis)
+                VALUES('delete', old.id, old.name, old.title, old.title_english, old.synonyms, old.authors, old.synopsis);
+                INSERT INTO series_fts(rowid, name, title, title_english, synonyms, authors, synopsis)
+                VALUES (new.id, new.name, new.title, new.title_english, new.synonyms, new.authors, new.synopsis);
+            END;
+        ''')
+        
+        # Initial population if empty
+        fts_count = conn.execute("SELECT COUNT(*) FROM series_fts").fetchone()[0]
+        if fts_count == 0:
+            conn.execute('''
+                INSERT INTO series_fts(rowid, name, title, title_english, synonyms, authors, synopsis)
+                SELECT id, name, title, title_english, synonyms, authors, synopsis FROM series
+            ''')
+    except sqlite3.OperationalError:
+        # FTS5 might not be enabled in all SQLite builds
+        pass
+
     # Migrate data: set has_thumbnail = TRUE for already processed comics
     try:
         conn.execute('UPDATE comics SET has_thumbnail = 1 WHERE processed = 1')
     except sqlite3.OperationalError:
         pass  # Migration already done or column doesn't exist yet
+    
+    # Ratings table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            series_id INTEGER NOT NULL,
+            rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE CASCADE,
+            UNIQUE(user_id, series_id)
+        )
+    ''')
     
     conn.commit()
     conn.close()

@@ -7,6 +7,8 @@ export function navigateToRoot() {
     state.searchQuery = '';
     // This will be defined in a separate module but we need to call it
     if (window.updateLibraryView) window.updateLibraryView();
+    if (window.updateSelectionButtonState) window.updateSelectionButtonState();
+    if (window.clearSelection) window.clearSelection();
 }
 
 export function navigateToFolder(type, name) {
@@ -52,6 +54,8 @@ export function navigateToFolder(type, name) {
     }
     state.searchQuery = '';
     if (window.updateLibraryView) window.updateLibraryView();
+    if (window.updateSelectionButtonState) window.updateSelectionButtonState();
+    if (window.clearSelection) window.clearSelection();
 }
 
 export function navigateUp() {

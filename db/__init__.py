@@ -8,11 +8,13 @@ from .users import (
 from .progress import (
     get_reading_progress, update_reading_progress, clear_reading_progress,
     delete_reading_progress, get_user_preferences, update_user_preferences,
-    get_bookmarks, add_bookmark, remove_bookmark
+    get_bookmarks, add_bookmark, remove_bookmark, get_user_stats
 )
 from .series import (
     create_or_update_series, get_series_by_name, get_series_with_comics,
-    update_comic_series_id, get_all_series, get_series_by_tags
+    update_comic_series_id, get_all_series, get_series_by_tags, invalidate_tag_cache,
+    search_series, get_gaps_report, add_rating, get_series_rating, get_user_rating,
+    force_rebuild_fts, warm_up_metadata_cache
 )
 from .jobs import (
     create_scan_job, update_scan_progress, complete_scan_job,

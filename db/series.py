@@ -3,6 +3,7 @@ import re
 import time
 from collections import defaultdict
 from .connection import get_db_connection
+from logger import logger
 
 def create_or_update_series(name, metadata=None, category=None, subcategory=None, cover_comic_id=None, conn=None):
     """Create or update a series with metadata from series.json"""
@@ -287,6 +288,208 @@ def _refresh_tag_cache(conn=None):
     
     if close_conn:
         conn.close()
+
+def invalidate_tag_cache():
+    """Invalidate the tag metadata cache to force a refresh on next use"""
+    global _TAG_CACHE
+    _TAG_CACHE['system_tags'] = None
+    _TAG_CACHE['containment_map'] = None
+    _TAG_CACHE['tag_lookup'] = None
+    _TAG_CACHE['last_updated'] = 0
+
+def warm_up_metadata_cache():
+    """Warm up the tag and search caches on server boot"""
+    import time
+    start = time.time()
+    logger.info("Warming up metadata caches...")
+    
+    # 1. Rebuild FTS Index
+    force_rebuild_fts()
+    
+    # 2. Warm up Tag Cache
+    _refresh_tag_cache()
+    
+    elapsed = time.time() - start
+    logger.info(f"Metadata caches warmed up in {elapsed:.2f}s")
+
+def force_rebuild_fts():
+    """Manually rebuild the FTS5 search index"""
+    conn = get_db_connection()
+    try:
+        conn.execute("INSERT INTO series_fts(series_fts) VALUES('rebuild')")
+        conn.commit()
+        return True
+    except:
+        return False
+    finally:
+        conn.close()
+
+def search_series(query, limit=50):
+    """Search for series using FTS5 with fallback to LIKE"""
+    if not query or not query.strip():
+        return []
+        
+    conn = get_db_connection()
+    import sqlite3
+    
+    results = []
+    try:
+        # Prepare query for FTS5
+        # 1. Remove special FTS5 characters to prevent syntax errors
+        # 2. Split into words and add * to each for prefix matching
+        clean_query = re.sub(r'[^\w\s]', ' ', query).strip()
+        words = clean_query.split()
+        if not words:
+            return []
+            
+        # Format: "word1"* "word2"*
+        fts_query = ' '.join([f'"{w}"*' for w in words])
+        
+        rows = conn.execute('''
+            SELECT s.*, rank
+            FROM series_fts f
+            JOIN series s ON s.id = f.rowid
+            WHERE series_fts MATCH ?
+            ORDER BY rank
+            LIMIT ?
+        ''', (fts_query, limit)).fetchall()
+        results = [dict(r) for r in rows]
+    except sqlite3.OperationalError:
+        # FTS table might not exist or FTS not supported
+        pass
+
+    if not results:
+        # Fallback to LIKE (simple substring match)
+        like_query = f'%{query}%'
+        rows = conn.execute('''
+            SELECT * FROM series 
+            WHERE name LIKE ? OR title LIKE ? OR title_english LIKE ? OR synopsis LIKE ? OR authors LIKE ?
+            LIMIT ?
+        ''', (like_query, like_query, like_query, like_query, like_query, limit)).fetchall()
+        results = [dict(r) for r in rows]
+    
+    conn.close()
+    
+    # Process JSON fields
+    for s in results:
+        for field in ['synonyms', 'authors', 'genres', 'tags', 'demographics', 'title_japanese']:
+            if s.get(field):
+                try:
+                    s[field] = json.loads(s[field])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+    return results
+
+def get_gaps_report():
+    """Identify numerical jumps in chapter/volume sequences"""
+    conn = get_db_connection()
+    
+    # Get all comics ordered by series, volume, chapter
+    rows = conn.execute('''
+        SELECT series, volume, chapter, filename
+        FROM comics
+        WHERE series IS NOT NULL
+        ORDER BY series, volume, chapter
+    ''').fetchall()
+    conn.close()
+    
+    series_comics = defaultdict(list)
+    for row in rows:
+        series_comics[row['series']].append(dict(row))
+        
+    report = []
+    
+    for series_name, comics in series_comics.items():
+        # Chapter gaps
+        chapters = sorted([c['chapter'] for c in comics if c['chapter'] is not None])
+        if len(chapters) > 1:
+            gaps = []
+            for i in range(len(chapters) - 1):
+                curr = chapters[i]
+                nxt = chapters[i+1]
+                # If gap is > 1 and both are integers (or .0)
+                if nxt - curr > 1 and int(curr) == curr and int(nxt) == nxt:
+                    for g in range(int(curr) + 1, int(nxt)):
+                        gaps.append(g)
+            
+            if gaps:
+                report.append({
+                    'series': series_name,
+                    'type': 'chapter',
+                    'gaps': gaps,
+                    'count': len(gaps)
+                })
+                
+        # Volume gaps
+        volumes = sorted(list(set([c['volume'] for c in comics if c['volume'] is not None])))
+        if len(volumes) > 1:
+            v_gaps = []
+            for i in range(len(volumes) - 1):
+                curr = volumes[i]
+                nxt = volumes[i+1]
+                if nxt - curr > 1 and int(curr) == curr and int(nxt) == nxt:
+                    for g in range(int(curr) + 1, int(nxt)):
+                        v_gaps.append(g)
+            
+            if v_gaps:
+                report.append({
+                    'series': series_name,
+                    'type': 'volume',
+                    'gaps': v_gaps,
+                    'count': len(v_gaps)
+                })
+                
+    return report
+
+def add_rating(user_id, series_id, rating):
+    """Add or update a user's rating for a series"""
+    conn = get_db_connection()
+    conn.execute('''
+        INSERT INTO ratings (user_id, series_id, rating)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id, series_id) DO UPDATE SET rating = excluded.rating, created_at = CURRENT_TIMESTAMP
+    ''', (user_id, series_id, rating))
+    conn.commit()
+    conn.close()
+
+def get_series_rating(series_id):
+    """Get average rating and count for a series"""
+    conn = get_db_connection()
+    row = conn.execute('''
+        SELECT AVG(rating) as avg_rating, COUNT(*) as rating_count
+        FROM ratings WHERE series_id = ?
+    ''', (series_id,)).fetchone()
+    conn.close()
+    return {
+        'avg_rating': round(row['avg_rating'], 1) if row['avg_rating'] else 0,
+        'rating_count': row['rating_count']
+    }
+
+def get_user_rating(user_id, series_id):
+    """Get a specific user's rating for a series"""
+    conn = get_db_connection()
+    row = conn.execute('''
+        SELECT rating FROM ratings WHERE user_id = ? AND series_id = ?
+    ''', (user_id, series_id)).fetchone()
+    conn.close()
+    return row['rating'] if row else None
+
+def get_series_metadata():
+    """Get unique genres, tags, and statuses for filtering"""
+    conn = get_db_connection()
+    
+    # Get unique statuses
+    statuses = [row[0] for row in conn.execute("SELECT DISTINCT status FROM series WHERE status IS NOT NULL").fetchall()]
+    
+    # Get unique genres and tags from cache
+    _refresh_tag_cache(conn)
+    genres = sorted(list(_TAG_CACHE['system_tags'].values()))
+    
+    conn.close()
+    return {
+        "statuses": sorted(statuses),
+        "genres": genres
+    }
 
 def get_series_by_tags(selected_tags=None):
     """Get series stats filtered by tags/genres"""

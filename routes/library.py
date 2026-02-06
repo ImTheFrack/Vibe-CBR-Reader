@@ -6,7 +6,9 @@ import threading
 import tempfile
 import shutil
 import mimetypes
+import uuid
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 
 # Explicitly register JXL if not present
 if not mimetypes.types_map.get('.jxl'):
@@ -26,6 +28,9 @@ from dependencies import get_current_user, get_admin_user
 from logger import logger
 
 router = APIRouter(prefix="/api", tags=["library"])
+
+# Global state for export progress
+export_jobs = {}
 
 # Cleanup stuck scans on startup
 def cleanup_stuck_scans():
@@ -159,6 +164,12 @@ async def get_config():
     norm_path = os.path.normpath(os.path.abspath(COMICS_DIR))
     return {"comics_dir": norm_path}
 
+@router.get("/search")
+async def search(q: str, current_user: dict = Depends(get_current_user)):
+    """Search for series using FTS5"""
+    from db.series import search_series
+    return search_series(q)
+
 @router.post("/scan")
 async def scan_library(background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
     if not os.path.exists(COMICS_DIR):
@@ -219,9 +230,31 @@ async def rescan_library(background_tasks: BackgroundTasks, current_user: dict =
 @router.get("/books")
 async def list_books(current_user: dict = Depends(get_current_user)):
     conn = get_db_connection()
-    books = conn.execute("SELECT * FROM comics ORDER BY category, series, volume, chapter, filename").fetchall()
+    # Join with series to get metadata like genres and status
+    query = '''
+        SELECT c.*, s.genres, s.status as series_status, s.tags, s.authors
+        FROM comics c
+        LEFT JOIN series s ON c.series_id = s.id
+        ORDER BY c.category, c.series, c.volume, c.chapter, c.filename
+    '''
+    books = conn.execute(query).fetchall()
     conn.close()
-    return [dict(row) for row in books]
+    
+    result = []
+    import json
+    for row in books:
+        d = dict(row)
+        # Parse JSON fields if present
+        for field in ['genres', 'tags', 'authors']:
+            if d.get(field):
+                try:
+                    d[field] = json.loads(d[field])
+                except:
+                    d[field] = []
+            else:
+                d[field] = []
+        result.append(d)
+    return result
 
 @router.get("/cover/{comic_id}")
 async def get_cover(comic_id: str, current_user: dict = Depends(get_current_user)):
@@ -356,71 +389,96 @@ class ExportCBZRequest(BaseModel):
     comic_ids: List[str]
     filename: Optional[str] = "export.cbz"
 
-@router.post("/export/cbz")
-async def export_cbz(
-    request: ExportCBZRequest, 
-    background_tasks: BackgroundTasks, 
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Export one or more comics as a single CBZ file.
-    Streams contents to avoid high memory usage.
-    Uses ZIP_STORED (no compression) for speed and compatibility.
-    """
-    if not request.comic_ids:
-        raise HTTPException(status_code=400, detail="No comic IDs provided")
-    
-    conn = get_db_connection()
-    comics = []
-    # Preserve order of IDs provided in request
-    for cid in request.comic_ids:
-        c = conn.execute("SELECT * FROM comics WHERE id = ?", (cid,)).fetchone()
-        if c:
-            comics.append(dict(c))
-    conn.close()
-    
-    if not comics:
-        raise HTTPException(status_code=404, detail="No valid comics found")
-        
-    # Create a temporary file for the export
-    fd, temp_path = tempfile.mkstemp(suffix=".cbz")
-    os.close(fd)
-    
+def create_export_task(job_id: str, comic_ids: List[str], export_filename: str):
+    """Background task to build the CBZ file with timeout protection"""
     try:
-        # ZIP_STORED (0) is very fast and ideal for images already compressed (jpg/png/webp)
+        conn = get_db_connection()
+        comics = []
+        for cid in comic_ids:
+            c = conn.execute("SELECT * FROM comics WHERE id = ?", (cid,)).fetchone()
+            if c:
+                comics.append(dict(c))
+        conn.close()
+        
+        if not comics:
+            export_jobs[job_id].update({'status': 'failed', 'error': 'No valid comics found'})
+            return
+
+        # Sort: Volumes first, then others naturally
+        comics.sort(key=lambda c: (0 if (c.get('volume') or 0) > 0 else 1, natural_sort_key(c.get('filename'))))
+
+        fd, temp_path = tempfile.mkstemp(suffix=".cbz")
+        os.close(fd)
+        
+        total = len(comics)
+        export_jobs[job_id]['file_path'] = temp_path
+        
         with zipfile.ZipFile(temp_path, 'w', compression=zipfile.ZIP_STORED) as out_zip:
             for idx, comic in enumerate(comics):
+                # 1. Check for explicit cancellation
+                # 2. Check for Heartbeat Timeout (User closed browser)
+                last_ping = export_jobs.get(job_id, {}).get('last_ping')
+                is_timeout = last_ping and (datetime.now() - last_ping).total_seconds() > 30
+                
+                if export_jobs.get(job_id, {}).get('status') == 'cancelled' or is_timeout:
+                    reason = "cancelled" if not is_timeout else "timeout (browser disconnected)"
+                    logger.info(f"Export job {job_id} stopped: {reason}")
+                    out_zip.close()
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                    if is_timeout:
+                        export_jobs[job_id]['status'] = 'cancelled'
+                    return
+
                 filepath = comic['path']
                 if not os.path.exists(filepath):
                     continue
                 
-                # Sanitize title for use as folder name
-                clean_title = re.sub(r'[\\/*?:"<>|]', "_", comic['title'])
-                # If multiple comics, put each in its own numbered folder to maintain order and avoid collisions
-                folder_prefix = f"{idx+1:03d}_{clean_title}/" if len(comics) > 1 else ""
+                # Internal structure reflects path beneath [TITLE]
+                try:
+                    # Normalize path and get relative to COMICS_DIR
+                    norm_path = filepath.replace('\\', '/')
+                    norm_root = COMICS_DIR.replace('\\', '/')
+                    rel_path = os.path.relpath(norm_path, norm_root).replace('\\', '/')
+                    parts = rel_path.split('/')
+                    
+                    series_name = comic['series']
+                    
+                    # Find where the Title (Series) folder is in the path
+                    series_idx = -1
+                    for i, part in enumerate(parts):
+                        if part == series_name:
+                            series_idx = i
+                            break
+                    
+                    # If found and not the last part (which is the file itself)
+                    if series_idx != -1 and series_idx < len(parts) - 1:
+                        # Sub-path is everything AFTER the Series folder
+                        remainder = parts[series_idx+1:]
+                        # e.g. ["Vol 1", "Ch 1.cbz"] -> "Vol 1/Ch 1"
+                        inner_path = "/".join(remainder)
+                        folder_name = os.path.splitext(inner_path)[0]
+                        folder_prefix = folder_name + "/"
+                    else:
+                        # Fallback: Just the filename without extension
+                        folder_prefix = os.path.splitext(parts[-1])[0] + "/"
+                except Exception as e:
+                    logger.error(f"Path resolution error for {filepath}: {e}")
+                    folder_prefix = os.path.splitext(comic['filename'])[0] + "/"
                 
                 try:
                     file_ext = os.path.splitext(filepath)[1].lower()
                     if file_ext == '.cbz':
                         with zipfile.ZipFile(filepath, 'r') as in_zip:
-                            # Filter and sort image files naturally
-                            img_names = sorted(
-                                [n for n in in_zip.namelist() if n.lower().endswith(IMG_EXTENSIONS)], 
-                                key=natural_sort_key
-                            )
+                            img_names = [n for n in in_zip.namelist() if n.lower().endswith(IMG_EXTENSIONS)]
                             for img_name in img_names:
                                 with in_zip.open(img_name) as f_in:
-                                    # Create the entry in out_zip and stream from f_in to f_out
                                     target_name = f"{folder_prefix}{os.path.basename(img_name)}"
                                     with out_zip.open(target_name, 'w') as f_out:
                                         shutil.copyfileobj(f_in, f_out)
-                                        
                     elif file_ext == '.cbr':
                         with rarfile.RarFile(filepath) as in_rar:
-                            img_names = sorted(
-                                [n for n in in_rar.namelist() if n.lower().endswith(IMG_EXTENSIONS)], 
-                                key=natural_sort_key
-                            )
+                            img_names = [n for n in in_rar.namelist() if n.lower().endswith(IMG_EXTENSIONS)]
                             for img_name in img_names:
                                 with in_rar.open(img_name) as f_in:
                                     target_name = f"{folder_prefix}{os.path.basename(img_name)}"
@@ -428,22 +486,95 @@ async def export_cbz(
                                         shutil.copyfileobj(f_in, f_out)
                 except Exception as e:
                     logger.error(f"Error adding {filepath} to export: {e}")
-                    # Continue with other comics even if one fails
+                
+                # Update progress
+                export_jobs[job_id]['progress'] = int(((idx + 1) / total) * 100)
+
+        export_jobs[job_id]['status'] = 'completed'
+        export_jobs[job_id]['progress'] = 100
+        logger.info(f"Export job {job_id} complete: {temp_path}")
+        
     except Exception as e:
+        logger.error(f"Export task {job_id} failed: {e}", exc_info=True)
+        export_jobs[job_id] = {'status': 'failed', 'error': str(e)}
+
+@router.post("/export/cbz")
+async def start_export_cbz(
+    request: ExportCBZRequest, 
+    background_tasks: BackgroundTasks, 
+    current_user: dict = Depends(get_current_user)
+):
+    """Start an export job in the background"""
+    job_id = str(uuid.uuid4())
+    export_jobs[job_id] = {
+        'status': 'processing',
+        'progress': 0,
+        'filename': request.filename if request.filename else "export.cbz",
+        'created_at': datetime.now(),
+        'last_ping': datetime.now()
+    }
+    
+    background_tasks.add_task(create_export_task, job_id, request.comic_ids, export_jobs[job_id]['filename'])
+    return {"job_id": job_id}
+
+@router.get("/export/status/{job_id}")
+async def get_export_status(job_id: str, current_user: dict = Depends(get_current_user)):
+    """Check the status of an export job and provide disk info"""
+    if job_id not in export_jobs:
+        raise HTTPException(status_code=404, detail="Export job not found")
+    
+    # Update heartbeat
+    export_jobs[job_id]['last_ping'] = datetime.now()
+    
+    status = export_jobs[job_id].copy()
+    
+    # Add disk usage info for the temp directory
+    try:
+        temp_dir = tempfile.gettempdir()
+        usage = shutil.disk_usage(temp_dir)
+        status['disk'] = {
+            'total': usage.total,
+            'used': usage.used,
+            'free': usage.free,
+            'percent': round((usage.used / usage.total) * 100, 1)
+        }
+    except Exception:
+        status['disk'] = None
+        
+    return status
+
+@router.delete("/export/cancel/{job_id}")
+async def cancel_export(job_id: str, current_user: dict = Depends(get_current_user)):
+    """Cancel a running export job"""
+    if job_id not in export_jobs:
+        raise HTTPException(status_code=404, detail="Export job not found")
+    
+    export_jobs[job_id]['status'] = 'cancelled'
+    return {"message": "Export cancellation requested"}
+
+@router.get("/export/download/{job_id}")
+async def download_export(job_id: str, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
+    """Download a completed export file"""
+    if job_id not in export_jobs or export_jobs[job_id]['status'] != 'completed':
+        raise HTTPException(status_code=404, detail="Export not ready or not found")
+    
+    job = export_jobs[job_id]
+    temp_path = job['file_path']
+    
+    if not os.path.exists(temp_path):
+        raise HTTPException(status_code=404, detail="Export file missing on server")
+        
+    # Schedule cleanup of the temp file and job info after response
+    def cleanup():
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        raise HTTPException(status_code=500, detail=f"Export creation failed: {str(e)}")
-
-    # Prepare response filename
-    download_filename = request.filename if request.filename else "export.cbz"
-    if not download_filename.lower().endswith(".cbz"):
-        download_filename += ".cbz"
-        
-    # Schedule cleanup of the temp file after response is sent
-    background_tasks.add_task(os.remove, temp_path)
+        if job_id in export_jobs:
+            del export_jobs[job_id]
+            
+    background_tasks.add_task(cleanup)
     
     return FileResponse(
         temp_path, 
-        filename=download_filename, 
+        filename=job['filename'], 
         media_type="application/vnd.comicbook+zip"
     )

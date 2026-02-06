@@ -1,17 +1,43 @@
 import { state } from '../state.js';
 import { renderItems, getTitleCoverIds } from '../components/index.js';
 import { aggregateProgress } from '../utils/progress.js';
+import { apiGet } from '../api.js';
 
-export function handleSearch(query) {
+export async function handleSearch(query) {
     state.searchQuery = query.trim();
+    
+    // If scope is everywhere and we have a query, fetch deep search results from API
+    if (state.searchQuery && state.searchScope === 'everywhere') {
+        const results = await apiGet(`/api/search?q=${encodeURIComponent(state.searchQuery)}`);
+        if (!results.error) {
+            state.apiSearchResults = results;
+        }
+    } else {
+        state.apiSearchResults = [];
+    }
+    
     if (window.updateLibraryView) window.updateLibraryView();
 }
 
-export function toggleSearchScope() {
+export async function toggleSearchScope() {
     state.searchScope = state.searchScope === 'current' ? 'everywhere' : 'current';
     const scopeBtn = document.getElementById('search-scope-btn');
-    if (scopeBtn) scopeBtn.textContent = state.searchScope === 'current' ? '📍 Current' : '🌐 Everywhere';
-    if (state.searchQuery && window.updateLibraryView) window.updateLibraryView();
+    const searchInput = document.getElementById('searchInput');
+    
+    if (scopeBtn) {
+        scopeBtn.textContent = state.searchScope === 'current' ? '📍 Current' : '🌐 Everywhere';
+    }
+    
+    if (searchInput) {
+        searchInput.placeholder = state.searchScope === 'current' ? 
+            'Search titles in this folder...' : 
+            'Deep search (synopsis, authors, etc)...';
+    }
+    
+    // Re-run search with new scope
+    if (state.searchQuery) {
+        await handleSearch(state.searchQuery);
+    }
 }
 
 export function getSearchResults() {
@@ -20,8 +46,25 @@ export function getSearchResults() {
     const titles = [];
     const seenTitles = new Set();
     
+    // 1. First, add any results from deep metadata search (API)
+    if (state.searchScope === 'everywhere' && state.apiSearchResults) {
+        state.apiSearchResults.forEach(series => {
+            // Find this series in our folder tree
+            const titleName = series.name;
+            if (!seenTitles.has(titleName)) {
+                // We need to find the title object in our folder tree to have the comics list
+                const titleObj = findTitleInTree(titleName);
+                if (titleObj) {
+                    titles.push(titleObj);
+                    seenTitles.add(titleName);
+                }
+            }
+        });
+    }
+
+    // 2. Add results from local folder tree (simple name match)
     let categoriesToSearch;
-    if (!state.folderTree) return [];
+    if (!state.folderTree) return titles;
     
     if (state.searchScope === 'current') {
         if (state.currentLevel === 'root') categoriesToSearch = Object.keys(state.folderTree.categories || {});
@@ -44,10 +87,12 @@ export function getSearchResults() {
                 const sub = cat.subcategories[state.currentLocation.subcategory];
                 if (sub) {
                     const title = sub.titles[state.currentLocation.title];
-                    if (title && title.name.toLowerCase().includes(lowerQuery)) return [title];
+                    if (title && title.name.toLowerCase().includes(lowerQuery)) {
+                         if (!seenTitles.has(title.name)) { titles.push(title); seenTitles.add(title.name); }
+                    }
                 }
             }
-            return [];
+            return titles;
         }
     } else {
         categoriesToSearch = Object.keys(state.folderTree.categories || {});
@@ -60,7 +105,8 @@ export function getSearchResults() {
             Object.values(subcategory.titles).forEach(title => {
                 if (title.name.toLowerCase().includes(lowerQuery)) {
                     if (!seenTitles.has(title.name)) { titles.push(title); seenTitles.add(title.name); }
-                } else {
+                } else if (state.searchScope === 'everywhere') {
+                    // Only do deep comic search if everywhere? Or always?
                     const matchingComics = title.comics.filter(comic => 
                         comic.title.toLowerCase().includes(lowerQuery) ||
                         (comic.series && comic.series.toLowerCase().includes(lowerQuery)) ||
@@ -75,6 +121,21 @@ export function getSearchResults() {
         });
     });
     return titles;
+}
+
+/**
+ * Helper to find a title object by name anywhere in the folder tree
+ */
+function findTitleInTree(titleName) {
+    if (!state.folderTree) return null;
+    for (const cat of Object.values(state.folderTree.categories)) {
+        for (const sub of Object.values(cat.subcategories)) {
+            if (sub.titles[titleName]) {
+                return sub.titles[titleName];
+            }
+        }
+    }
+    return null;
 }
 
 export function renderSearchResults() {
@@ -139,6 +200,10 @@ export function renderSearchResults() {
         });
         
         renderItems(comicsContainer, items, state.viewMode);
+        
+        // Sync selection state if we are already in selection mode
+        if (window.updateSelectionUI) window.updateSelectionUI();
+        if (window.updateSelectionButtonState) window.updateSelectionButtonState();
     }
 }
 

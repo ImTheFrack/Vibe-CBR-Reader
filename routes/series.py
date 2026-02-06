@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
-from typing import Optional
+from pydantic import BaseModel
+from typing import Optional, List
 from database import get_all_series, get_series_with_comics
 from dependencies import get_current_user
 
@@ -11,8 +12,33 @@ async def list_series(category: Optional[str] = None, subcategory: Optional[str]
     series_list = get_all_series(category=category, subcategory=subcategory)
     return series_list
 
-from pydantic import BaseModel
-from typing import List
+@router.get("/metadata")
+async def get_metadata(current_user: dict = Depends(get_current_user)):
+    """Get unique genres, tags, and statuses for filtering"""
+    from db.series import get_series_metadata
+    return get_series_metadata()
+
+class RatingCreate(BaseModel):
+    series_id: int
+    rating: int
+
+@router.post("/rating")
+async def rate_series(data: RatingCreate, current_user: dict = Depends(get_current_user)):
+    """Rate a series"""
+    from database import add_rating
+    if not (1 <= data.rating <= 5):
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+    add_rating(current_user['id'], data.series_id, data.rating)
+    return {"message": "Rating saved"}
+
+@router.get("/rating/{series_id}")
+async def get_rating(series_id: int, current_user: dict = Depends(get_current_user)):
+    """Get rating info for a series"""
+    from database import get_series_rating, get_user_rating
+    return {
+        "series": get_series_rating(series_id),
+        "user_rating": get_user_rating(current_user['id'], series_id)
+    }
 
 class TagFilterRequest(BaseModel):
     selected_tags: List[str] = []

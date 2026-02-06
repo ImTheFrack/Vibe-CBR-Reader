@@ -56,6 +56,11 @@
                 <span>Toggle Theme</span>
             </div>
 
+            <div class="menu-item" onclick="toggleEReader()">
+                <span class="menu-icon" id="ereader-icon-menu">🕶️</span>
+                <span>E-Reader Mode</span>
+            </div>
+
             <div class="menu-item sidebar-toggle-menu" onclick="toggleMobileSidebar()">
                 <span class="menu-icon">📁</span>
                 <span>Toggle Folders</span>
@@ -88,7 +93,24 @@
                 </div>
                 
                 <div class="header-controls">
-                    <div class="view-toggle">
+                    <div class="filters-row" id="library-filters" style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; justify-content: flex-end;">
+                        <select class="sort-select" id="filter-genre" onchange="handleFilterChange()" style="min-width: 120px;">
+                            <option value="">All Genres</option>
+                        </select>
+                        <select class="sort-select" id="filter-status" onchange="handleFilterChange()" style="min-width: 110px;">
+                            <option value="">All Statuses</option>
+                        </select>
+                        <select class="sort-select" id="filter-read" onchange="handleFilterChange()" style="min-width: 120px;">
+                            <option value="">Any Progress</option>
+                            <option value="unread">Unread</option>
+                            <option value="reading">In Progress</option>
+                            <option value="completed">Completed</option>
+                        </select>
+                        <button class="header-btn" id="btn-selection-mode" onclick="toggleSelectionMode()" title="Selection Mode">
+                            <span>☑</span>
+                        </button>
+                    </div>
+                    <div class="view-toggle" style="margin-bottom: 8px;">
                         <button class="view-btn active" data-view="grid" onclick="setViewMode('grid')" title="Grid View">
                             <span>⊞</span>
                         </button>
@@ -304,9 +326,134 @@
                         </tbody>
                     </table>
                 </div>
+
+                <div class="admin-section-header" style="margin-top: 3rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 class="section-title">
+                        <span>🕳️</span>
+                        Sequence Gaps
+                    </h2>
+                    <button class="btn-secondary" onclick="loadGapsReport()">🔄 Refresh Report</button>
+                </div>
+                <p class="section-subtitle" style="margin-bottom: 1.5rem;">Identify missing chapters or volumes in your collection</p>
+                
+                <div id="admin-gaps-container" class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
+                    <div class="empty-state" style="padding: 2rem;">
+                        <p>Click "Refresh Report" to scan for gaps.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile View -->
+        <div id="view-profile" class="view">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>👤</span>
+                    User Profile
+                </h2>
+                <p class="section-subtitle">Manage your account and view statistics</p>
+            </div>
+            
+            <div class="profile-container" style="padding: 1rem 2rem; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                <!-- Account Info -->
+                <div class="profile-card" style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border);">
+                    <h3 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1.2rem;">🆔</span> Account Information
+                    </h3>
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem;">
+                            <span style="color: var(--text-secondary);">Username</span>
+                            <span id="profile-username" style="font-weight: 600;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem;">
+                            <span style="color: var(--text-secondary);">Email</span>
+                            <span id="profile-email" style="font-weight: 600;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem;">
+                            <span style="color: var(--text-secondary);">Role</span>
+                            <span id="profile-role" style="font-weight: 600; text-transform: capitalize;">-</span>
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 2rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1.2rem;">🔒</span> Change Password
+                    </h3>
+                    <form onsubmit="handleProfilePasswordChange(event)" id="profile-password-form">
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-tertiary);">CURRENT PASSWORD</label>
+                            <input type="password" id="profile-current-password" class="search-input" style="width: 100%; padding: 0.8rem; border-radius: 8px;" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-tertiary);">NEW PASSWORD</label>
+                            <input type="password" id="profile-new-password" class="search-input" style="width: 100%; padding: 0.8rem; border-radius: 8px;" required minlength="6">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-tertiary);">CONFIRM NEW PASSWORD</label>
+                            <input type="password" id="profile-confirm-password" class="search-input" style="width: 100%; padding: 0.8rem; border-radius: 8px;" required minlength="6">
+                        </div>
+                        <button type="submit" class="btn-primary" style="width: 100%; padding: 0.8rem; border-radius: 8px;">
+                            Update Password
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Statistics -->
+                <div class="profile-card" style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border);">
+                    <h3 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1.2rem;">📊</span> Reading Statistics
+                    </h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent);" id="stats-comics-started">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Comics Started</div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);" id="stats-comics-completed">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Comics Completed</div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent);" id="stats-pages-read">0</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Approx. Pages Read</div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent);" id="stats-time-spent">0h</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Time Spent Reading</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 1.5rem; background: var(--bg-tertiary); padding: 1.25rem; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <span style="font-weight: 600;">Completion Rate</span>
+                            <span id="stats-completion-rate" style="color: var(--success); font-weight: 700;">0%</span>
+                        </div>
+                        <div style="width: 100%; height: 8px; background: var(--bg-secondary); border-radius: 4px; overflow: hidden;">
+                            <div id="stats-completion-bar" style="width: 0%; height: 100%; background: var(--success); transition: width 0.5s ease-out;"></div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 2rem;">
+                         <h3 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.2rem;">⚙️</span> Account Actions
+                        </h3>
+                        <button class="btn-secondary" onclick="confirmPurgeHistory()" style="width: 100%; margin-bottom: 1rem; color: var(--danger); border-color: var(--danger-low);">
+                            🗑️ Clear Reading History
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
+
+    <!-- Selection Action Bar -->
+    <div id="selection-action-bar" class="selection-action-bar">
+        <div class="selection-info">
+            <span id="selection-count">0</span> items selected
+        </div>
+        <div class="selection-actions">
+            <button class="btn-primary" onclick="handleBatchExport()">📦 Export as CBZ</button>
+            <button class="btn-secondary" onclick="clearSelection()">Cancel</button>
+        </div>
+    </div>
 
     <!-- Reader Container -->
     <div id="reader" class="reader-container">
@@ -349,6 +496,13 @@
 
         <div id="reader-scrubber" class="reader-scrubber"></div>
 
+        <div id="auto-advance-bar" class="auto-advance-container">
+            <div class="auto-advance-label">AutoAdvance</div>
+            <div class="auto-advance-progress">
+                <div id="auto-advance-fill" class="auto-advance-fill"></div>
+            </div>
+        </div>
+
         <div class="reader-footer">
             <button class="reader-btn footer-nav-btn prev-chapter" id="footer-prev-chapter" onclick="navigateReaderComic('prev')" title="Previous Chapter">
                 <span>⏮</span>
@@ -369,56 +523,100 @@
         <div class="settings-panel" id="settings-panel">
             <div class="settings-title">Reader Settings</div>
             
-            <div class="setting-group">
-                <label class="setting-label">Reading Direction</label>
+            <div class="setting-group horizontal">
+                <label class="setting-label">E-Reader</label>
+                <div class="setting-options">
+                    <button class="setting-btn" id="reader-ereader-on" onclick="toggleEReader()">👓 On</button>
+                    <button class="setting-btn" id="reader-ereader-off" onclick="toggleEReader()">🕶️ Off</button>
+                </div>
+            </div>
+
+            <div class="setting-group horizontal">
+                <label class="setting-label">Theme</label>
+                <div class="setting-options">
+                    <button class="setting-btn" id="reader-theme-dark" onclick="toggleTheme()">🌙 Dark</button>
+                    <button class="setting-btn" id="reader-theme-light" onclick="toggleTheme()">☀️ Light</button>
+                </div>
+            </div>
+
+            <div class="setting-group horizontal">
+                <label class="setting-label">Direction</label>
                 <div class="setting-options">
                     <button class="setting-btn active" data-setting="direction" data-value="ltr" onclick="setSetting('direction', 'ltr')">
-                        ➡️ Left to Right
+                        ➡️ LTR
                     </button>
                     <button class="setting-btn" data-setting="direction" data-value="rtl" onclick="setSetting('direction', 'rtl')">
-                        ⬅️ Right to Left (Manga)
+                        ⬅️ RTL
                     </button>
                 </div>
             </div>
 
-            <div class="setting-group">
-                <label class="setting-label">Page Display</label>
+            <div class="setting-group horizontal">
+                <label class="setting-label">Display</label>
                 <div class="setting-options">
                     <button class="setting-btn active" data-setting="display" data-value="single" onclick="setSetting('display', 'single')">
-                        📄 Single Page
+                        📄 1P
                     </button>
                     <button class="setting-btn" data-setting="display" data-value="double" onclick="setSetting('display', 'double')">
-                        📖 Double Page
+                        📖 2P
                     </button>
                     <button class="setting-btn" data-setting="display" data-value="long" onclick="setSetting('display', 'long')">
-                        📜 Long Strip
+                        📜 Long
                     </button>
                 </div>
             </div>
 
-            <div class="setting-group">
+            <div class="setting-group horizontal">
                 <label class="setting-label">Zoom</label>
                 <div class="setting-options">
                     <button class="setting-btn active" data-setting="zoom" data-value="fit" onclick="setSetting('zoom', 'fit')">
-                        Fit to Screen
+                        🔲 W+H
                     </button>
                     <button class="setting-btn" data-setting="zoom" data-value="width" onclick="setSetting('zoom', 'width')">
-                        Fit Width
+                        ↔️ W
                     </button>
                     <button class="setting-btn" data-setting="zoom" data-value="height" onclick="setSetting('zoom', 'height')">
-                        Fit Height
+                        ↕️ H
                     </button>
                 </div>
             </div>
 
-            <div class="setting-group">
-                <label class="setting-label">Brightness</label>
-                <input type="range" min="0.2" max="1.5" step="0.05" value="1.0" class="progress-slider" oninput="setSetting('brightness', this.value)" id="brightness-slider">
-            </div>
+            <div class="setting-group" style="margin-bottom: 24px;">
+                <div class="filters-header-compact">
+                    <span style="font-size: 0.9rem; font-weight: 600;">Visual Filters</span>
+                    <button class="setting-btn" style="padding: 4px 12px; font-size: 0.75rem; font-weight: 600; flex: none; min-width: auto; width: auto;" onclick="resetAllFilters()">Reset All</button>
+                </div>
 
-            <div class="setting-group">
-                <label class="setting-label">Warmth (Sepia)</label>
-                <input type="range" min="0" max="1" step="0.05" value="0" class="progress-slider" oninput="setSetting('sepia', this.value)" id="sepia-slider">
+                <div class="setting-group horizontal" style="padding: 4px 0;">
+                    <label class="setting-label" style="flex: 0 0 80px;">Brightness</label>
+                    <input type="range" min="0.2" max="1.5" step="0.05" value="1.0" class="progress-slider" oninput="setSetting('brightness', this.value, false)" onchange="setSetting('brightness', this.value, true)" id="brightness-slider">
+                </div>
+
+                <div class="setting-group horizontal" style="padding: 4px 0;">
+                    <label class="setting-label" style="flex: 0 0 80px;">Contrast</label>
+                    <input type="range" min="0.2" max="2.0" step="0.05" value="1.0" class="progress-slider" oninput="setSetting('contrast', this.value, false)" onchange="setSetting('contrast', this.value, true)" id="contrast-slider">
+                </div>
+
+                <div class="setting-group horizontal" style="padding: 4px 0;">
+                    <label class="setting-label" style="flex: 0 0 80px;">Color</label>
+                    <input type="range" min="0" max="3.0" step="0.1" value="1.0" class="progress-slider" oninput="setSetting('saturation', this.value, false)" onchange="setSetting('saturation', this.value, true)" id="saturation-slider">
+                </div>
+
+                <div class="setting-group horizontal" style="padding: 4px 0;">
+                    <label class="setting-label" style="flex: 0 0 80px;">Invert</label>
+                    <input type="range" min="0" max="1" step="0.05" value="0" class="progress-slider" oninput="setSetting('invert', this.value, false)" onchange="setSetting('invert', this.value, true)" id="invert-slider">
+                </div>
+
+                <div class="setting-group" style="padding: 4px 0; margin-bottom: 0;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <label class="setting-label" style="flex: 0 0 80px; margin-bottom: 0;">Tone</label>
+                        <input type="range" min="0" max="1" step="0.05" value="0" class="progress-slider" oninput="setSetting('toneValue', this.value, false)" onchange="setSetting('toneValue', this.value, true)" id="toneValue-slider" style="flex: 1;">
+                    </div>
+                    <div class="setting-options" style="margin-left: 96px; margin-top: 8px; justify-content: flex-start;">
+                        <button class="setting-btn" style="padding: 2px 8px; font-size: 0.65rem; max-width: 60px;" id="tone-mode-sepia" onclick="setSetting('toneMode', 'sepia')">Sepia</button>
+                        <button class="setting-btn" style="padding: 2px 8px; font-size: 0.65rem; max-width: 60px;" id="tone-mode-grayscale" onclick="setSetting('toneMode', 'grayscale')">Gray</button>
+                    </div>
+                </div>
             </div>
 
             <div class="setting-group">
@@ -430,8 +628,8 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <span style="font-size: 0.8rem; color: var(--text-secondary); min-width: 60px;">Interval:</span>
-                    <input type="range" min="3" max="60" step="1" value="10" class="progress-slider" oninput="setSetting('autoAdvanceInterval', this.value)" id="auto-advance-slider" style="flex: 1;">
-                    <span id="auto-advance-value" style="font-size: 0.8rem; color: var(--text-secondary); min-width: 30px;">10s</span>
+                    <input type="range" min="3" max="60" step="1" value="10" class="progress-slider" oninput="setSetting('autoAdvanceInterval', this.value, false)" onchange="setSetting('autoAdvanceInterval', this.value, true)" id="autoAdvanceInterval-slider" style="flex: 1;">
+                    <span id="autoAdvanceInterval-value" style="font-size: 0.8rem; color: var(--text-secondary); min-width: 30px;">10s</span>
                 </div>
             </div>
 
@@ -451,6 +649,39 @@
     </div>
 
     <div class="toast-container" id="toast-container"></div>
+
+    <!-- Progress Modal -->
+    <div id="progress-modal" class="modal-overlay" style="display: none; z-index: 10001;">
+        <div class="modal" style="max-width: 400px; padding: 2.5rem; border: 1px solid var(--accent);">
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <h2 id="progress-title" style="margin-bottom: 0.5rem; color: var(--accent);">Exporting...</h2>
+                <p id="progress-subtitle" style="color: var(--text-secondary); font-size: 0.9rem;">Preparing your manga archive</p>
+            </div>
+            
+            <div class="progress-bar-container" style="width: 100%; height: 12px; background: var(--bg-tertiary); border-radius: 6px; overflow: hidden; margin-bottom: 1rem;">
+                <div id="progress-bar-fill" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.3s ease-out;"></div>
+            </div>
+            
+            <div id="progress-status" style="text-align: center; font-weight: 600; font-size: 1.1rem; margin-bottom: 0.5rem;">0%</div>
+            <div id="progress-detail" style="text-align: center; font-size: 0.8rem; color: var(--text-tertiary); margin-bottom: 1.25rem;">Please wait while we pack your files.</div>
+            
+            <div id="disk-info" style="margin-bottom: 1.5rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; font-size: 0.75rem; display: none;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--text-tertiary);">Temp Disk Space:</span>
+                    <span id="disk-free" style="font-weight: 600;">- GB Free</span>
+                </div>
+                <div style="width: 100%; height: 4px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden;">
+                    <div id="disk-bar-fill" style="width: 0%; height: 100%; background: var(--text-tertiary); opacity: 0.5;"></div>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: center;">
+                <button class="btn-secondary" onclick="handleCancelExport()" style="width: 100%; border-color: var(--danger-low); color: var(--danger);">
+                    Cancel Export
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Forced Password Change Modal -->
     <div id="forced-password-modal" class="modal-overlay" style="display: none; z-index: 10000; background: rgba(0,0,0,0.9); backdrop-filter: blur(5px);">

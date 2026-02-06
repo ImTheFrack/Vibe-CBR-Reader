@@ -51,3 +51,9 @@ async def admin_delete_user(user_id: int, admin_user: dict = Depends(get_admin_u
     
     delete_user(user_id)
     return {"message": "User deleted"}
+
+@router.get("/gaps")
+async def get_all_gaps(admin_user: dict = Depends(get_admin_user)):
+    """Identify missing chapters/volumes across all series"""
+    from db.series import get_gaps_report
+    return get_gaps_report()

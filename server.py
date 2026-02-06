@@ -18,6 +18,10 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 # Initialize DB on startup
 init_db()
 
+# Warm up metadata caches (Tag counts, FTS search index)
+from database import warm_up_metadata_cache
+warm_up_metadata_cache()
+
 # Include Routers
 app.include_router(auth.router)
 app.include_router(library.router)

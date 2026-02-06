@@ -28,6 +28,7 @@ class BookmarkCreate(BaseModel):
 
 class PreferencesUpdate(BaseModel):
     theme: Optional[str] = None
+    ereader: Optional[bool] = None
     default_view_mode: Optional[str] = None
     default_nav_mode: Optional[str] = None
     default_sort_by: Optional[str] = None
@@ -35,6 +36,39 @@ class PreferencesUpdate(BaseModel):
     reader_display: Optional[str] = None
     reader_zoom: Optional[str] = None
     title_card_style: Optional[str] = None
+    brightness: Optional[float] = None
+    contrast: Optional[float] = None
+    saturation: Optional[float] = None
+    invert: Optional[float] = None
+    tone_value: Optional[float] = None
+    tone_mode: Optional[str] = None
+    auto_advance_interval: Optional[int] = None
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+# --- User Account Routes ---
+
+@router.post("/users/me/password")
+async def change_password(data: PasswordChange, current_user: dict = Depends(get_current_user)):
+    """Change current user's password"""
+    from db.users import authenticate_user, update_user_password
+    
+    # Verify current password
+    user = authenticate_user(current_user['username'], data.current_password)
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid current password")
+    
+    # Update to new password
+    update_user_password(current_user['id'], data.new_password)
+    return {"message": "Password updated successfully"}
+
+@router.get("/users/me/stats")
+async def get_my_stats(current_user: dict = Depends(get_current_user)):
+    """Get reading statistics for the current user"""
+    from db.progress import get_user_stats
+    return get_user_stats(current_user['id'])
 
 # --- Reading Progress Routes ---
 

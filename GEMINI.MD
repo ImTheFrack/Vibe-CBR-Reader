@@ -37,6 +37,25 @@ This file provides the technical context for AI agents and developers working on
 - **static/js/state.js**: Centralized global state object.
 - **static/css/**: Modularized CSS files (base, layout, views, components).
 
+## MANGA LIBARAY Structure[
+[CATEGORY]
+    +--[SUBCATEGORY]
+        +--[TITLE]
+            +--[TITLE] v01.cbz
+            +--[TITLE] v02.cbz [...] etc.
+OR
+            +--[TITLE] [c001/unit001/001].cbz
+            +--[TITLE] [c002/unit002/002].cbz
+OR
+           +-- [TITLE] [v01-vXX]
+                +-- [TITLE] v01.cbz
+                +-- [TITLE] v02.cbz
+                [...]
+                +-- [TITLE] vXX.cbz
+            +-- [TITLE] [vXX+1]
+                +-- [TITLE] [c100/unit100/100].cbz
+                +-- [TITLE] [c101/unit101/101].cbz [...]
+
 ## Database Schema (9 tables)
 
 ```sql
@@ -83,6 +102,23 @@ CREATE TABLE series (
     subcategory TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+
+-- FTS5 Virtual Table for deep search
+CREATE VIRTUAL TABLE series_fts USING fts5(
+    name, title, title_english, synonyms, authors, synopsis,
+    content='series',
+    content_rowid='id'
+)
+
+-- User ratings
+CREATE TABLE ratings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    series_id INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, series_id)
 )
 
 -- User accounts
@@ -133,12 +169,21 @@ CREATE TABLE user_preferences (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     theme TEXT DEFAULT 'dark' CHECK(theme IN ('dark', 'light')),
+    ereader BOOLEAN DEFAULT 0,
     default_view_mode TEXT DEFAULT 'grid' CHECK(default_view_mode IN ('grid', 'list', 'detailed')),
     default_nav_mode TEXT DEFAULT 'hierarchy' CHECK(default_nav_mode IN ('hierarchy', 'flat')),
     default_sort_by TEXT DEFAULT 'alpha-asc',
     reader_direction TEXT DEFAULT 'ltr' CHECK(reader_direction IN ('ltr', 'rtl')),
     reader_display TEXT DEFAULT 'single' CHECK(reader_display IN ('single', 'double', 'long')),
     reader_zoom TEXT DEFAULT 'fit' CHECK(reader_zoom IN ('fit', 'width', 'height')),
+    title_card_style TEXT DEFAULT 'fan' CHECK(title_card_style IN ('fan', 'single')),
+    brightness REAL DEFAULT 1.0,
+    contrast REAL DEFAULT 1.0,
+    saturation REAL DEFAULT 1.0,
+    invert REAL DEFAULT 0.0,
+    tone_value REAL DEFAULT 0.0,
+    tone_mode TEXT DEFAULT 'sepia',
+    auto_advance_interval INTEGER DEFAULT 10,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 
@@ -171,44 +216,57 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 ## API Endpoints (Complete)
 
 ### Auth (`routes/auth.py`)
-- `POST /api/auth/register`: Create user (⚠️ accepts arbitrary role — bug)
+- `POST /api/auth/register`: Create user
 - `POST /api/auth/login`: Login, returns 30-day session cookie
 - `POST /api/auth/logout`: Invalidate session
 - `GET /api/auth/me`: Current user info (requires auth)
-- `GET /api/auth/check`: Auth status check (returns null if not logged in)
+- `GET /api/auth/check`: Auth status check
 
 ### Library (`routes/library.py`)
-- `GET /api/config`: Exposes normalized `COMICS_DIR` for frontend path relativization
-- `GET /api/books`: List all comics (requires auth)
+- `GET /api/config`: Exposes normalized `COMICS_DIR`
+- `GET /api/books`: List all comics with series metadata (requires auth)
+- `GET /api/search`: FTS5 deep metadata search (requires auth)
 - `GET /api/cover/{comic_id}`: Serve cached thumbnail or generate on-demand (requires auth)
 - `GET /api/read/{comic_id}`: Reader metadata with lazy page counting (requires auth)
 - `GET /api/read/{comic_id}/page/{page_num}`: Serve page image binary (requires auth)
+- `POST /api/export/cbz`: Start background export job (requires auth)
+- `GET /api/export/status/{job_id}`: Poll export progress + disk stats (requires auth)
+- `DELETE /api/export/cancel/{job_id}`: Stop export task (requires auth)
+- `GET /api/export/download/{job_id}`: Stream final CBZ (requires auth)
 - `POST /api/scan`: Start fast scan in background (admin only)
 - `POST /api/rescan`: Full database wipe + rescan (admin only)
-- `GET /api/scan/status`: Latest scan job metrics (⚠️ no auth check — bug)
+- `GET /api/scan/status`: Latest scan job metrics (admin only)
 
 ### Users (`routes/users.py`)
 - `GET /api/progress`: All reading progress for current user
 - `GET /api/progress/recent`: Last 12 read comics
-- `GET /api/progress/{comic_id}`: Single comic progress (returns default if none)
+- `GET /api/progress/{comic_id}`: Single comic progress
 - `POST /api/progress`: Update reading progress
+- `DELETE /api/progress`: Clear all reading history
+- `DELETE /api/progress/{comic_id}`: Delete specific comic history
+- `GET /api/users/me/stats`: Dashboard metrics (started, completed, pages, time)
+- `POST /api/users/me/password`: Change own password (requires verification)
 - `GET /api/preferences`: User settings
-- `PUT /api/preferences`: Update settings (whitelisted fields only)
+- `PUT /api/preferences`: Update settings
 - `GET /api/bookmarks`: All bookmarks for user
 - `GET /api/bookmarks/{comic_id}`: Comic-specific bookmarks
 - `POST /api/bookmarks`: Add bookmark
 - `DELETE /api/bookmarks/{comic_id}/{page_number}`: Remove bookmark
 
 ### Series (`routes/series.py`)
-- `GET /api/series`: All series with optional category/subcategory filtering
-- `POST /api/series/tags/filter`: Filter by tags, returns matching series + related tag counts
-- `GET /api/series/{series_name}`: Full series detail with comics, stats, and continue-reading
+- `GET /api/series`: All series with filtering
+- `GET /api/series/metadata`: Unique genres and statuses for UI filters
+- `POST /api/series/rating`: Rate a series (1-5 stars)
+- `GET /api/series/rating/{series_id}`: Get avg/user rating
+- `POST /api/series/tags/filter`: Filter by tags
+- `GET /api/series/{series_name}`: Full series detail
 
 ### Admin (`routes/admin.py`)
 - `GET /api/admin/users`: List all users (admin only)
 - `PUT /api/admin/users/{user_id}/role`: Update role (admin only)
 - `PUT /api/admin/users/{user_id}/password`: Force password reset (admin only)
 - `DELETE /api/admin/users/{user_id}`: Delete user (admin only)
+- `GET /api/admin/gaps`: Sequence gap detection report (admin only)
 
 ## Security Implementation
 - **Hashing**: `bcrypt` with automated lazy migration from SHA256.
@@ -293,6 +351,8 @@ For a detailed list of planned features, known bugs, and code quality goals, ple
 - Cover "fan" display on folder and title cards
 
 ## Recent Changes
+- **2026-02-05**: ENHANCED - Phase 2 completion (User Profile, Stats, FTS5 Deep Search, Background Export, Ratings, Selection Mode).
+- **2026-02-05**: OPTIMIZED - Boot sequence warming (FTS rebuild + Tag cache) and consolidated frontend loading.
 - **2026-02-03**: AUDIT - Full codebase review. 8 bugs confirmed and documented. Roadmap expanded to 7 phases.
 - **2026-02-01**: IMPLEMENTED - Robust two-phase scanner with change detection (`mtime`/`size`) and deletion handling.
 - **2026-02-01**: IMPLEMENTED - Real-time scan metrics dashboard (Phase tracking, New/Changed/Deleted counts, Success/Error rates).

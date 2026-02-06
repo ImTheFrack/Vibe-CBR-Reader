@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { initTheme, toggleTheme } from './theme.js';
+import { initTheme, toggleTheme, toggleEReader } from './theme.js';
 import {
     checkAuthStatus, setupAuthEventListeners, toggleUserMenu,
     showLoginModal, closeLoginModal, handleLogin, handleRegister,
@@ -17,11 +17,14 @@ import {
     prevPage, nextPage, jumpToPage, handleSliderInput, toggleBookmark, 
     showBookmarksList, closeBookmarksModal, removeBookmark, 
     toggleSettings, setSetting, navigateReaderComic, closeComicEndModal,
-    toggleFullscreen, toggleAutoAdvance
+    toggleFullscreen, toggleAutoAdvance, resetAllFilters
 } from './reader.js';
 import { 
-    showPreferences, closePreferencesModal, setPreference 
+    showPreferences, closePreferencesModal, setPreference, resetDefaultFilters 
 } from './preferences.js';
+import { 
+    toggleSelectionMode, clearSelection, handleBatchExport 
+} from './library/selection.js';
 import { showToast } from './utils.js';
 import { initTagsView } from './tags.js';
 import { showScanStatus, startScanPolling } from './scan-status.js';
@@ -42,6 +45,7 @@ export function closeHamburger() {
 window.toggleHamburger = toggleHamburger;
 window.closeHamburger = closeHamburger;
 window.toggleTheme = toggleTheme;
+window.toggleEReader = toggleEReader;
 window.toggleUserMenu = toggleUserMenu;
 window.showLoginModal = showLoginModal;
 window.closeLoginModal = closeLoginModal;
@@ -86,12 +90,14 @@ window.removeBookmark = removeBookmark;
 window.toggleSettings = toggleSettings;
 window.setSetting = setSetting;
 window.toggleAutoAdvance = toggleAutoAdvance;
+window.resetAllFilters = resetAllFilters;
 window.readerToggleFullscreen = toggleFullscreen;
 window.navigateReaderComic = navigateReaderComic;
 window.closeComicEndModal = closeComicEndModal;
 window.showPreferences = showPreferences;
 window.closePreferencesModal = closePreferencesModal;
 window.setPreference = setPreference;
+window.resetDefaultFilters = resetDefaultFilters;
 window.showToast = showToast;
 window.showScanStatus = showScanStatus;
 
@@ -109,6 +115,9 @@ function onHashChange() {
     
     const oldRoute = router.parseHash(oldHash);
     const route = router.handleRouteChange(newHash, oldHash);
+    
+    // Clear selection on any navigation/route change
+    if (window.clearSelection) window.clearSelection();
     
     if (oldRoute.view === 'read' && route.view !== 'read') {
         console.log("[DEBUG] Closing reader, oldRoute:", oldRoute, "new route:", route);
@@ -180,6 +189,11 @@ function onHashChange() {
             showView('admin');
             import('./admin.js').then(m => m.initAdminView());
             break;
+
+        case 'profile':
+            showView('profile');
+            import('./profile.js').then(m => m.renderProfileView());
+            break;
     }
 }
 
@@ -213,6 +227,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupKeyboardShortcuts();
     setupAuthEventListeners();
     
+    if (window.updateSelectionButtonState) window.updateSelectionButtonState();
+
     // Close hamburger when clicking outside
     document.addEventListener('click', (e) => {
         const menu = document.getElementById('hamburger-menu');

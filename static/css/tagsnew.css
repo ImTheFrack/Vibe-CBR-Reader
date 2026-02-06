@@ -34,9 +34,22 @@
     transition: all var(--transition-fast);
 }
 
+[data-ereader="true"] .tag-chip {
+    border-radius: 0;
+    border-width: 2px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
 .tag-chip:hover {
     background: var(--accent-primary);
     color: white;
+}
+
+[data-ereader="true"] .tag-chip:hover {
+    background: var(--text-primary);
+    color: var(--bg-primary);
 }
 
 .tag-chip:hover .tag-remove {

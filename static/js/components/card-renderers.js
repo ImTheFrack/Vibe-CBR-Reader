@@ -28,9 +28,17 @@ const CARD_SCHEMAS = {
             const titleClass = isFolder ? 'folder-card-name' : 'comic-title';
             const metaClass = isFolder ? 'folder-card-meta' : 'comic-meta';
             
+            const itemId = data.id || (data.title ? data.title.replace(/'/g, "\\'") : 'unknown');
+            const encodedOnClick = encodeURIComponent(data.onClick || '');
+
             return `
-                <div class="${cardClass}" onclick="${data.onClick}" ${data.dataAttrs || ''}>
+                <div class="${cardClass}" 
+                     onclick="handleCardClick(this, event)" 
+                     data-onclick="${encodedOnClick}"
+                     data-id="${data.id || data.title}" 
+                     ${data.dataAttrs || ''}>
                     <div class="${iconClass}">
+                        ${!isFolder ? `<div class="selection-checkbox" onclick="event.stopPropagation(); toggleItemSelection(this.parentElement.parentElement.dataset.id, event)"></div>` : ''}
                         ${coverHtml}
                         ${!isFolder ? progressHtml : ''}
                         ${!isFolder ? badgeHtml : ''}

@@ -90,6 +90,44 @@ def delete_reading_progress(user_id, comic_id):
     conn.commit()
     conn.close()
 
+def get_user_stats(user_id):
+    """Calculate reading statistics for a user"""
+    conn = get_db_connection()
+    
+    # Total comics started
+    total_comics = conn.execute(
+        'SELECT COUNT(*) FROM reading_progress WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()[0]
+    
+    # Total comics completed
+    completed_comics = conn.execute(
+        'SELECT COUNT(*) FROM reading_progress WHERE user_id = ? AND completed = 1',
+        (user_id,)
+    ).fetchone()[0]
+    
+    # Total pages read (sum of current_page for all comics)
+    total_pages_read = conn.execute(
+        'SELECT SUM(current_page) FROM reading_progress WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()[0] or 0
+    
+    # Total time spent reading (seconds)
+    total_seconds = conn.execute(
+        'SELECT SUM(seconds_read) FROM reading_progress WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()[0] or 0
+    
+    conn.close()
+    
+    return {
+        "total_comics": total_comics,
+        "completed_comics": completed_comics,
+        "total_pages_read": total_pages_read,
+        "total_seconds": total_seconds,
+        "completion_rate": round((completed_comics / total_comics * 100), 1) if total_comics > 0 else 0
+    }
+
 # User preferences functions
 def get_user_preferences(user_id):
     """Get user preferences"""
@@ -103,8 +141,9 @@ def get_user_preferences(user_id):
 
 def update_user_preferences(user_id, **kwargs):
     """Update user preferences"""
-    allowed_fields = ['theme', 'default_view_mode', 'default_nav_mode', 'default_sort_by', 
-                      'reader_direction', 'reader_display', 'reader_zoom', 'title_card_style']
+    allowed_fields = ['theme', 'ereader', 'default_view_mode', 'default_nav_mode', 'default_sort_by', 
+                      'reader_direction', 'reader_display', 'reader_zoom', 'title_card_style',
+                      'brightness', 'contrast', 'saturation', 'invert', 'tone_value', 'tone_mode', 'auto_advance_interval']
     
     updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
     if not updates:

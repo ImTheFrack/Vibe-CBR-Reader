@@ -16,7 +16,6 @@ export async function checkAuthStatus() {
         state.currentUser = result.user || null;
         if (state.isAuthenticated) {
             await loadUserData();
-            await loadLibrary();
             
             // Check if password change is forced
             if (state.currentUser && state.currentUser.must_change_password) {
@@ -32,15 +31,27 @@ export async function checkAuthStatus() {
 export async function loadUserData() {
     // Load progress from API
     const progressResult = await apiGet('/api/progress');
-    if (!progressResult.error && Array.isArray(progressResult)) {
+    if (!progressResult.error && progressResult && typeof progressResult === 'object') {
         state.readingProgress = {};
-        progressResult.forEach(p => {
-            state.readingProgress[p.comic_id] = {
-                page: p.current_page,
-                lastRead: new Date(p.last_read).getTime(),
-                completed: p.completed
-            };
-        });
+        // If it's an object {comic_id: progress_data}
+        if (!Array.isArray(progressResult)) {
+            Object.entries(progressResult).forEach(([comicId, p]) => {
+                state.readingProgress[comicId] = {
+                    page: p.current_page,
+                    lastRead: new Date(p.last_read).getTime(),
+                    completed: p.completed
+                };
+            });
+        } else {
+            // Fallback for array if it ever changes
+            progressResult.forEach(p => {
+                state.readingProgress[p.comic_id] = {
+                    page: p.current_page,
+                    lastRead: new Date(p.last_read).getTime(),
+                    completed: p.completed
+                };
+            });
+        }
     }
 
     // Load preferences from API
@@ -58,10 +69,21 @@ export async function loadUserData() {
         if (prefsResult.reader_zoom) {
             state.settings.zoom = prefsResult.reader_zoom;
         }
+        if (prefsResult.brightness !== undefined) state.settings.brightness = prefsResult.brightness;
+        if (prefsResult.contrast !== undefined) state.settings.contrast = prefsResult.contrast;
+        if (prefsResult.saturation !== undefined) state.settings.saturation = prefsResult.saturation;
+        if (prefsResult.invert !== undefined) state.settings.invert = prefsResult.invert;
+        if (prefsResult.tone_value !== undefined) state.settings.toneValue = prefsResult.tone_value;
+        if (prefsResult.tone_mode !== undefined) state.settings.toneMode = prefsResult.tone_mode;
+        if (prefsResult.auto_advance_interval !== undefined) state.settings.autoAdvanceInterval = prefsResult.auto_advance_interval;
+
         if (prefsResult.theme && prefsResult.theme !== state.theme) {
             state.theme = prefsResult.theme;
-            initTheme();
         }
+        if (prefsResult.ereader !== undefined) {
+            state.ereader = !!prefsResult.ereader;
+        }
+        initTheme();
 
         // Apply View Mode Preference
         if (prefsResult.default_view_mode) {
@@ -101,9 +123,9 @@ export function updateAuthUI() {
         if (headerInfo) headerInfo.textContent = `(User: ${state.currentUser.username})`;
         
         authSection.innerHTML = `
-            <div class="menu-item" style="cursor: default; opacity: 0.8;">
+            <div class="menu-item" onclick="routerNavigate('profile', {}); toggleHamburger()">
                 <span class="menu-icon">👤</span>
-                <span>${state.currentUser.username}</span>
+                <span>Profile (${state.currentUser.username})</span>
             </div>
             <div class="menu-item" onclick="showPreferences(); toggleHamburger()">
                 <span class="menu-icon">⚙️</span>
@@ -283,6 +305,10 @@ export async function logout() {
     state.userPreferences = null;
     updateAuthUI();
     showToast('Logged out successfully', 'success');
+    
+    // Show login modal
+    showLoginModal();
+
     // Refresh view
     if (state.currentView === 'library') {
         navigateToRoot();

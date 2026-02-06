@@ -101,3 +101,45 @@ window.adminResetPassword = async (userId, username) => {
         showToast('Password reset successful. User must change it on next login.');
     }
 };
+
+export async function loadGapsReport() {
+    const container = document.getElementById('admin-gaps-container');
+    if (!container) return;
+
+    container.innerHTML = '<div class="spinner" style="margin: 2rem auto;"></div>';
+
+    const gaps = await apiGet('/api/admin/gaps');
+    
+    if (gaps.error) {
+        container.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--danger);">Error loading gaps: ${gaps.error}</div>`;
+        return;
+    }
+
+    if (gaps.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding: 2rem;"><div class="empty-icon">✅</div><div class="empty-title">No gaps detected!</div><p>Your collection appears to be continuous.</p></div>';
+        return;
+    }
+
+    let html = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+    `;
+
+    gaps.forEach(item => {
+        html += `
+            <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; border-left: 4px solid var(--accent);">
+                <div style="font-weight: 600; margin-bottom: 0.5rem;">${item.series}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                    Missing ${item.type}s: <span style="color: var(--accent); font-weight: 600;">${item.count}</span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    ${item.gaps.map(g => `<span style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">${g}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+window.loadGapsReport = loadGapsReport;

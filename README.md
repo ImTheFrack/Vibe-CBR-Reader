@@ -9,12 +9,25 @@ A modern, web-based comic book reader designed for CBR and CBZ archives. Featuri
 - **Contextual Sidebar**: Always know where you are with a sidebar that adapts to your current location.
 - **Flatten Mode**: View all comics in a subtree with a single toggle.
 - **Rich Metadata**: Automatic parsing of `series.json` to display synopses, authors, genres, and external links (MAL/AniList).
+- **Deep Search & Filtering**: 
+  - **FTS5 Search**: Global search through synopses, authors, and alternative titles.
+  - **Live Filters**: Filter by Genre, Publication Status, and Read/Unread state.
+- **Selection & Batch Export**:
+  - **Selection Mode**: Select multiple series or individual chapters.
+  - **Background Packing**: UUID-based background export system with progress tracking and cancellation.
+  - **Internal Structuring**: Preserves folder hierarchy inside exported CBZ files.
+- **Anonymous Ratings**: 5-star rating system with average score tracking.
+- **E-Reader Mode**: A high-contrast, cleanly-lined interface designed for minimalist reading or e-ink displays, featuring pure black/white themes with no shadows or rounded corners.
 - **Advanced Reader**:
-  - Single page, double page (spread), and long strip (webtoon) modes.
+  - Single page (1P), double page (2P), and long strip (webtoon) modes.
   - Left-to-right (Western) and Right-to-left (Manga) reading directions.
+  - **Dynamic Filters**: Independent sliders for Brightness, Contrast, Saturation, Invert, and Tone (Sepia/Grayscale).
+  - **Auto-Advance**: Smart timer with a decreasing progress countdown that resets on manual page flips.
   - Page bookmarks and progress tracking saved to your user account.
+- **User Dashboard**: Real-time reading statistics (started, completed, pages read, time spent).
 - **Dark/Light Themes**: Customizable interface with persistent user preferences.
-- **Global Search**: Search across titles, series, and categories with scoped or global options.
+- **Global Visual Tuning**: Set your baseline Brightness, Contrast, Saturation, and Tone (Sepia/Grayscale) in your user profile; these apply automatically to every comic you read.
+- **Smart Precedence Logic**: Direction, Display Mode, and Zoom are remembered per-comic to suit specific artistic styles, while visual filters remain consistent across your library for a stable reading environment.
 
 ## Technical Considerations
 
@@ -54,22 +67,44 @@ For a detailed list of planned features, known bugs, and project roadmap, please
 
 ## Recent Changes
 
+### 2026-02-06
+- **Global Preference Sync**: Expanded the user profile system to persist all visual filters (Brightness, Contrast, Saturation, Invert, Tone) and auto-advance settings across devices.
+- **Intelligent Precedence**: Refined the reader to balance per-comic memory (for layout) with global defaults (for environment), ensuring a consistent experience without manual re-adjustment.
+- **E-Reader Mode**: Launched a dedicated high-contrast mode that eliminates all shadows, rounded corners, and transitions for a "cleanly lined" aesthetic.
+- **Expanded Visual Engine**: Implemented independent hardware-accelerated filters for Brightness, Contrast, Saturation, Inversion, and Tone (Sepia/Grayscale) with a consolidated "Reset All" control.
+- **Auto-Advance Progress**: Added a dynamic decreasing countdown bar that reposition based on UI visibility and resets on manual navigation.
+- **Performance & UX**: Optimized slider persistence to be "network-quiet" during movement and implemented in-place UI updates for the preferences modal to eliminate jarring reloads.
+- **UI Compression**: Refactored the preferences and reader settings into a compact horizontal layout, significantly reducing vertical footprint.
+- **Database Migrations**: Integrated 7 new preference columns into the user profile system for full filter persistence.
+
 ### 2026-02-05
 - **Security Hardening**: Migrated to `bcrypt` hashing with lazy migration, audited and fixed all SQL queries for full parameterization, and hardened registration logic.
+- **Phase 2 Completion**: 
+    - **User Profile**: Central view for account settings, stats dashboard, and password changes.
+    - **Deep Search**: Implemented SQLite FTS5 for full-text search across synopses and authors.
+    - **Background Export**: New UUID-based background zipper with progress modal, cancellation, and heartbeat zombie cleanup.
+    - **Ratings**: 5-star rating system for series.
+    - **Selection Mode**: Context-aware selection for series or individual chapters.
+    - **Live Filters**: Added UI dropdowns for Genre, Status, and Progress filtering.
+    - **Gap Detection**: Admin tool to find missing volumes or chapters in sequences.
+- **Performance & Stability**:
+    - **Boot Warming**: Pre-calculates tag metadata and search index on startup.
+    - **Logic Consolidation**: Eliminated redundant API calls during the boot sequence for 2x faster loads.
 - **Admin & Setup**: Implemented forced password changes for default accounts, supported environment-based admin credentials, and added a non-dismissible security update flow.
-- **Modular Architecture**: Refactored monolithic files (`database.py`, `scanner.py`, `library.js`) into clean, maintainable packages (`db/`, `scanner/`, `library/`).
+- **Modular Architecture**: Refactored monolithic files (`database.py`, `scanner.py`, `library.js`) into clean, maintainable packages (`db/`, `scanner/`, `library`)
 - **User Management**: Added a full-stack administrative dashboard for managing user roles, deletions, and forced password resets.
 - **Infrastructure**: Integrated `python-dotenv` for portable configuration, implemented structured logging (Console + Rotating File), and added randomized secret key fallbacks.
 - **Format Support**: Added support for **Jpeg XL (.jxl)** image archives with automatic MIME type detection and proper content-type responses.
 - **Optimized Tagging**: Implemented a high-performance tagging system with a 128x speedup using module-level caching and word-set tokenization.
 - **Reading History**: Added ability to purge entire reading history or remove individual items from the "Recent" tab.
 - **Export System**: Implemented backend for streaming multi-comic exports as CBZ files using zero-compression for speed.
-- **Reader Enhancements**:
-    - **Performance**: Added background preloading for the next 2-3 pages.
-    - **Gestures**: Implemented native mobile gestures for swipes and pinch-to-zoom.
-    - **Per-Comic Memory**: Reader now remembers specific settings (zoom, direction) for each title.
-    - **Utility**: Added session/series time tracking and custom remappable keybindings.
-
+- **Reader Enhancements**: 
+  - **Performance**: Added background preloading for the next 2-3 pages.
+  - **Gestures**: Implemented native mobile gestures for swipes and pinch-to-zoom.
+  - **Per-Comic Memory**: Reader now remembers specific settings (zoom, direction) for each title.
+  - **Utility**: Added session/series time tracking and custom remappable keybindings. 
+  - **Sliders and Adjustments**: Readability (sepia, gray, invert, contrast, color); auto-advance
+  
 ### 2026-02-03
 - **Audit**: Full codebase review with 8 confirmed bugs documented.
 - **Updated**: Roadmap expanded from 3 to 7 phases reflecting actual feature state.
