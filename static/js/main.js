@@ -235,6 +235,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupKeyboardShortcuts();
     setupAuthEventListeners();
     
+    // Register Service Worker for PWA support
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js')
+            .then(registration => {
+                console.log('Service Worker registered successfully:', registration.scope);
+            })
+            .catch(error => {
+                console.error('Service Worker registration failed:', error);
+            });
+    }
+    
     // Global event delegation for data-action elements (catches clicks from any view)
     document.addEventListener('click', (event) => {
         const actionElement = event.target.closest('[data-action]');
