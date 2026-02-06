@@ -463,7 +463,7 @@ export async function renderTitleDetailView() {
         const nextBtn = comic.next_comic ? `<button class="chapter-nav next" onclick="event.stopPropagation(); startReading('${comic.next_comic.id}')" title="Next: ${comic.next_comic.title}">→</button>` : '';
         
         return `
-            <div class="chapter-card ${readStatus}" onclick="handleCardClick(this, event)" data-id="${comic.id}" data-onclick="startReading('${comic.id}')">
+            <div class="chapter-card ${readStatus}" onclick="handleCardClick(this, event)" data-id="${comic.id}" data-action="card-click">
                 <div class="selection-checkbox" onclick="event.stopPropagation(); toggleItemSelection(this.parentElement.dataset.id, event)"></div>
                 <div class="chapter-nav-buttons">${prevBtn}${nextBtn}</div>
                 <div class="chapter-cover">

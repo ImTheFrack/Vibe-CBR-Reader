@@ -4,6 +4,20 @@ import { apiGet, apiPost, apiDelete } from '../api.js';
 
 let currentExportJobId = null;
 
+// Action dispatcher - maps action names to handler functions
+const actionDispatcher = {
+    'card-click': (id, event) => {
+        // Default card click action: navigate to comic/series
+        if (window.startReading) {
+            window.startReading(id);
+        }
+    }
+};
+
+export function registerAction(name, handler) {
+    actionDispatcher[name] = handler;
+}
+
 // Clean up if user closes window
 window.addEventListener('beforeunload', () => {
     if (currentExportJobId) {
@@ -48,13 +62,12 @@ export function handleCardClick(el, event) {
     if (state.selectionMode) {
         toggleItemSelection(id, event);
     } else {
-        const originalOnClick = el.dataset.onclick ? decodeURIComponent(el.dataset.onclick) : null;
-        if (originalOnClick && originalOnClick !== 'undefined' && originalOnClick !== '') {
+        const action = el.dataset.action || 'card-click';
+        if (actionDispatcher[action]) {
             try {
-                const fn = new Function('event', originalOnClick);
-                fn.call(null, event);
+                actionDispatcher[action](id, event);
             } catch (err) {
-                console.error("Failed to execute card click:", err, originalOnClick);
+                console.error("Failed to execute card action:", err, action, id);
             }
         }
     }

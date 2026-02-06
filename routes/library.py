@@ -52,7 +52,7 @@ cleanup_stuck_scans()
 
 def create_placeholder_image():
     """Create a 'Generating...' placeholder image if it doesn't exist"""
-    placeholder_path = os.path.join(BASE_CACHE_DIR, "_placeholder.jpg")
+    placeholder_path = os.path.join(BASE_CACHE_DIR, "_placeholder.webp")
     if not os.path.exists(placeholder_path):
         try:
             # Create a simple gray placeholder image
@@ -73,7 +73,7 @@ def create_placeholder_image():
             position = ((300 - text_width) // 2, (450 - text_height) // 2)
             draw.text(position, text, fill=(255, 255, 255), font=font)
             
-            img.save(placeholder_path, format="JPEG", quality=85)
+            img.save(placeholder_path, format="WEBP", quality=70)
         except Exception as e:
             logger.error(f"Error creating placeholder image: {e}")
     return placeholder_path
@@ -288,7 +288,7 @@ async def get_cover(comic_id: str, current_user: dict = Depends(get_current_user
     
     if result['timeout']:
         # Timeout occurred - return placeholder and continue generation in background
-        placeholder_path = os.path.join(BASE_CACHE_DIR, "_placeholder.jpg")
+        placeholder_path = os.path.join(BASE_CACHE_DIR, "_placeholder.webp")
         return FileResponse(placeholder_path)
     
     if result['success']:

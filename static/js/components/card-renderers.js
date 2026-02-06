@@ -29,12 +29,11 @@ const CARD_SCHEMAS = {
             const metaClass = isFolder ? 'folder-card-meta' : 'comic-meta';
             
             const itemId = data.id || (data.title ? data.title.replace(/'/g, "\\'") : 'unknown');
-            const encodedOnClick = encodeURIComponent(data.onClick || '');
 
             return `
                 <div class="${cardClass}" 
                      onclick="handleCardClick(this, event)" 
-                     data-onclick="${encodedOnClick}"
+                     data-action="card-click"
                      data-id="${data.id || data.title}" 
                      ${data.dataAttrs || ''}>
                     <div class="${iconClass}">

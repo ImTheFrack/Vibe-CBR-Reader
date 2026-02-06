@@ -16,7 +16,8 @@ def save_thumbnail(f_img, comic_id, item_name, target_size=300):
         cache_path = get_thumbnail_path(comic_id)
         if not cache_path:
             return False
-        img.save(cache_path, format="JPEG", quality=85)
+        # Use WebP with 70% quality and optimization for much smaller file sizes
+        img.save(cache_path, format="WEBP", quality=70, optimize=True)
         return True
     except Exception as e:
         error_msg = f"Thumbnail error: {item_name} - {e}"

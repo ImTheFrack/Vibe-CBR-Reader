@@ -39,7 +39,7 @@ def get_thumbnail_path(comic_id: str):
     first_char = comic_id[0]
     thumb_dir = os.path.join(BASE_CACHE_DIR, first_char)
     os.makedirs(thumb_dir, exist_ok=True) # Ensure the subdirectory exists
-    return os.path.join(thumb_dir, f"{comic_id}.jpg")
+    return os.path.join(thumb_dir, f"{comic_id}.webp")
 
 # Ensure base cache directory exists
 os.makedirs(BASE_CACHE_DIR, exist_ok=True)
