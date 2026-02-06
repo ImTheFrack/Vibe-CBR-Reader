@@ -4,7 +4,7 @@ from datetime import datetime
 from config import DB_PATH
 
 # Schema version for migration tracking
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -379,6 +379,13 @@ def init_db() -> None:
                 UNIQUE(user_id, comic_id, page_number, x, y)
             )
         ''')
+    
+    if current_version < 5:
+        # Migration 5: Add file_hash column to comics table
+        try:
+            conn.execute('ALTER TABLE comics ADD COLUMN file_hash TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
     
     if current_version < SCHEMA_VERSION:
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')

@@ -58,3 +58,11 @@ async def get_all_gaps(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> 
     """Identify missing chapters/volumes across all series"""
     from db.series import get_gaps_report
     return get_gaps_report()
+
+@router.get("/duplicates")
+async def get_duplicates(
+    current_user: Dict[str, Any] = Depends(get_admin_user)
+) -> List[Dict[str, Any]]:
+    """Get duplicate comics report"""
+    from db.comics import get_duplicate_comics
+    return get_duplicate_comics()
