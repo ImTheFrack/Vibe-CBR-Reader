@@ -705,3 +705,4 @@ window.navigateTitleComic = navigateTitleComic;
 window.renderTitleFan = renderTitleFan;
 window.loadRecentReads = loadRecentReads;
 window.continueReading = continueReading;
+window.titleMatchesFilter = titleMatchesFilter;

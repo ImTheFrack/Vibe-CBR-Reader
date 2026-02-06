@@ -130,7 +130,20 @@ export function renderSearchResults() {
     const statsSummary = document.getElementById('stats-summary');
     
     if (statsSummary) statsSummary.style.display = 'grid';
-    const results = getSearchResults();
+    let results = getSearchResults();
+    
+    // Apply filters to search results
+    const { genre, status, read } = state.filters;
+    if (genre || status || read) {
+        results = results.filter(title => {
+            if (window.titleMatchesFilter) {
+                return window.titleMatchesFilter(title, 'genre', genre) &&
+                       window.titleMatchesFilter(title, 'status', status) &&
+                       window.titleMatchesFilter(title, 'read', read);
+            }
+            return true;
+        });
+    }
     
     let totalComics = 0;
     let totalPages = 0;
