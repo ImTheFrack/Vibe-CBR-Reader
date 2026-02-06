@@ -6,12 +6,12 @@ import {
     logout, showRegisterForm, showLoginForm
 } from './auth.js';
 import { 
-    loadLibrary, scanLibrary, navigateToRoot, navigateToFolder, 
-    navigateUp, toggleFlattenMode, setViewMode, handleSort, 
-    handleSearch, toggleSearchScope, showView, openComic, 
-    toggleMobileSidebar, navigateTitleComic, renderTitleFan, toggleSynopsis, toggleMeta, continueReading,
-    handleLibraryClick
-} from './library.js';
+     loadLibrary, scanLibrary, navigateToRoot, navigateToFolder, 
+     navigateUp, toggleFlattenMode, setViewMode, handleSort, 
+     handleSearch, toggleSearchScope, showView, openComic, 
+     toggleMobileSidebar, navigateTitleComic, renderTitleFan, toggleMeta, continueReading,
+     handleLibraryClick
+ } from './library.js';
 import { 
     setupKeyboardShortcuts, startReading, closeReader, 
     prevPage, nextPage, jumpToPage, handleSliderInput, toggleBookmark, 
@@ -75,7 +75,6 @@ window.openComic = openComic;
 window.continueReading = continueReading;
 window.toggleMobileSidebar = toggleMobileSidebar;
 window.navigateTitleComic = navigateTitleComic;
-window.toggleSynopsis = toggleSynopsis;
 window.toggleMeta = toggleMeta;
 window.startReading = startReading;
 window.closeReader = closeReader;

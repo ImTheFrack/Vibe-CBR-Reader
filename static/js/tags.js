@@ -3,6 +3,7 @@ import { navigateToFolder, showView } from './library.js';
 import { state } from './state.js';
 import { renderItems, renderFan, getTitleCoverIds } from './components/index.js';
 import { navigate } from './router.js';
+import { updateSelectOptions } from './utils.js';
 
 // State for tags view
 const tagsState = {
@@ -199,18 +200,7 @@ function matchesFilter(series, type, value) {
         // For now, if we don't have enough info, return true or implement basic check.
         return true; 
     }
-    return true;
-}
-
-function updateSelectOptions(elementId, options, currentValue, defaultText) {
-    const select = document.getElementById(elementId);
-    if (!select) return;
-    let html = `<option value="">${defaultText}</option>`;
-    options.forEach(opt => {
-        const isSelected = opt === currentValue ? 'selected' : '';
-        html += `<option value="${opt}" ${isSelected}>${opt}</option>`;
-    });
-    select.innerHTML = html;
+     return true;
 }
 
 // Render the bar of selected filter tags
