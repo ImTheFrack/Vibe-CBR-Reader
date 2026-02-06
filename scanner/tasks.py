@@ -126,12 +126,24 @@ def sync_library_task(job_id: Optional[int] = None) -> Tuple[int, int]:
     
     if changed_comics:
         update_data = [(c['size_str'], c['size_bytes'], c['mtime'], c['id']) for c in changed_comics]
-        conn.executemany('''
-            UPDATE comics SET 
-                size_str = ?, size_bytes = ?, mtime = ?, pages = NULL, processed = 0, has_thumbnail = 0
-            WHERE id = ?
-        ''', update_data)
-        conn.commit()
+        batch_size = 50
+        for i in range(0, len(update_data), batch_size):
+            batch = update_data[i:i+batch_size]
+            conn.executemany('''
+                UPDATE comics SET 
+                    size_str = ?, size_bytes = ?, mtime = ?, pages = NULL, processed = 0, has_thumbnail = 0
+                WHERE id = ?
+            ''', batch)
+            conn.commit()
+            if job_id:
+                update_scan_progress(
+                    job_id, file_count,
+                    current_file=f"Updating {min(i+batch_size, len(update_data))}/{len(update_data)} changed comics",
+                    phase="Phase 1: Syncing",
+                    new_comics=new_count, changed_comics=changed_count,
+                    conn=conn
+                )
+                conn.commit()
 
     if new_comics:
         series_id_map = {}
@@ -212,7 +224,19 @@ def process_library_task(job_id: Optional[int] = None) -> None:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {executor.submit(_process_single_comic, comic['id'], comic['path']): comic for comic in pending}
                 for future in as_completed(futures):
-                    result = future.result()
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        comic = futures[future]
+                        logger.error(f"Failed to process comic {comic['id']}: {e}", exc_info=True)
+                        processed_count += 1
+                        pages_err += 1
+                        thumb_err += 1
+                        update_buffer.append((0, 1, 0, comic['id']))
+                        if len(all_scan_errors) < 100:
+                            all_scan_errors.append({'comic_id': comic['id'], 'filepath': comic['path'], 'errors': [str(e)]})
+                        continue
+                    
                     processed_count += 1
                     if result['file_missing'] or (result['errors'] and result['pages'] == 0):
                         pages_err += 1
@@ -225,7 +249,7 @@ def process_library_task(job_id: Optional[int] = None) -> None:
                         else: thumb_err += 1
                         update_buffer.append((result['pages'], 1, 1 if result['has_thumb'] else 0, result['comic_id']))
                     
-                    if result['errors']:
+                    if result['errors'] and len(all_scan_errors) < 100:
                         all_scan_errors.append({'comic_id': result['comic_id'], 'filepath': result['filepath'], 'errors': result['errors']})
             
             if update_buffer:
