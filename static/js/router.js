@@ -103,6 +103,9 @@ export function parseHash(hash) {
         case 'profile':
             return { view: 'profile', params };
 
+        case 'discovery':
+            return { view: 'discovery', params };
+
         default:
             // Unknown route - fall back to library
             console.warn(`Unknown route: ${view}, falling back to library`);
