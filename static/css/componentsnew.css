@@ -498,7 +498,7 @@
 
 .title-card .comic-badge {
     background: var(--accent-primary);
-    color: white;
+    color: var(--bg-primary);
 }
 
 /* Search Info */
