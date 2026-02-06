@@ -44,9 +44,14 @@ db.users.get_db_connection = get_test_connection
 @pytest.fixture(scope="function")
 def test_db():
     global _test_conn
-    _test_conn.execute("DELETE FROM users")
+    _test_conn.execute("DELETE FROM bookmarks")
+    _test_conn.execute("DELETE FROM reading_progress")
+    _test_conn.execute("DELETE FROM ratings")
+    _test_conn.execute("DELETE FROM user_preferences")
     _test_conn.execute("DELETE FROM sessions")
+    _test_conn.execute("DELETE FROM users")
     _test_conn.execute("DELETE FROM comics")
+    _test_conn.execute("DELETE FROM series")
     _test_conn.commit()
     yield _test_conn
 
