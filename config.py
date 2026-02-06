@@ -17,13 +17,25 @@ LOG_LEVEL_STR = os.environ.get("VIBE_LOG_LEVEL", "INFO").upper()
 LOG_LEVEL = getattr(logging, LOG_LEVEL_STR, logging.INFO)
 
 # Security
-# In production, this SHOULD be set. If not, we generate a random one for this session.
-SECRET_KEY = os.environ.get("VIBE_SECRET_KEY")
-if not SECRET_KEY:
-    # Generate a temporary random secret on startup if none is provided
-    SECRET_KEY = secrets.token_urlsafe(32)
-    # We don't print the key for security, but we can log that it's temporary
-    # print("Warning: VIBE_SECRET_KEY not set. Using a temporary random key.")
+VIBE_ENV = os.environ.get("VIBE_ENV", "development").lower()
+
+# In production, VIBE_SECRET_KEY MUST be set to a strong random value
+_secret_key = os.environ.get("VIBE_SECRET_KEY")
+
+# Production guard: refuse to start without a proper SECRET_KEY
+if VIBE_ENV == "production":
+    if not _secret_key or (isinstance(_secret_key, str) and _secret_key.strip() in ("", "default", "changeme", "secret")):
+        raise RuntimeError(
+            "FATAL: Running in production mode but VIBE_SECRET_KEY is not set or is using a weak default value.\n"
+            "Set a strong random secret key:\n"
+            "  export VIBE_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(32))')\n"
+            "Then restart the application."
+        )
+elif not _secret_key:
+    # In development, generate a temporary random secret on startup if none is provided
+    _secret_key = secrets.token_urlsafe(32)
+
+SECRET_KEY = _secret_key
 
 # Supported Image Extensions
 IMG_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.jxl')

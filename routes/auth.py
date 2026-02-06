@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Cookie
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
+import os
 from database import create_user, authenticate_user, create_session, delete_session
 from dependencies import get_current_user, get_optional_user
 
@@ -56,10 +57,13 @@ async def login(user_data: UserLogin):
     })
     
     # Set session cookie
+    # VIBE_COOKIE_SECURE controls whether to require HTTPS (default: False for localhost dev)
+    cookie_secure = os.environ.get("VIBE_COOKIE_SECURE", "false").lower() == "true"
     response.set_cookie(
         key="session_token",
         value=token,
         httponly=True,
+        secure=cookie_secure,
         max_age=2592000,  # 30 days
         samesite="lax"
     )

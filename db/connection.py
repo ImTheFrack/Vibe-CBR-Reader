@@ -36,6 +36,7 @@ def init_db():
     ''')
     
     # Add new columns to comics table if they don't exist
+    # Column names are hardcoded (not user input) - safe from SQL injection
     for col, col_type in [('size_bytes', 'INTEGER'), ('mtime', 'INTEGER')]:
         try:
             conn.execute(f'ALTER TABLE comics ADD COLUMN {col} {col_type}')
@@ -83,6 +84,7 @@ def init_db():
     ''')
     
     # Add new columns to reading_progress table if they don't exist
+    # Column names are hardcoded (not user input) - safe from SQL injection
     for col, col_type, default in [
         ('reader_display', 'TEXT', None),
         ('reader_direction', 'TEXT', None),
@@ -134,6 +136,7 @@ def init_db():
         pass
 
     # Add visual filter columns to user_preferences
+    # Column names are hardcoded (not user input) - safe from SQL injection
     filter_cols = [
         ('brightness', 'REAL DEFAULT 1.0'),
         ('contrast', 'REAL DEFAULT 1.0'),

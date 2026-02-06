@@ -24,6 +24,9 @@ def update_scan_progress(job_id, processed_comics, errors=None, conn=None, **kwa
     updates = ["processed_comics = ?", "errors = ?"]
     params = [processed_comics, errors_json]
     
+    # Whitelist of allowed metric columns for scan_jobs table updates.
+    # Only these columns can be updated via kwargs to prevent SQL injection.
+    # All values are parameterized in the UPDATE statement.
     allowed_metrics = [
         'current_file', 'phase', 'new_comics', 'deleted_comics', 'changed_comics',
         'processed_pages', 'page_errors', 'processed_thumbnails', 'thumbnail_errors'
