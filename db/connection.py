@@ -4,7 +4,7 @@ from datetime import datetime
 from config import DB_PATH
 
 # Schema version for migration tracking
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -387,6 +387,38 @@ def init_db() -> None:
         except sqlite3.OperationalError:
             pass  # Column already exists
     
+    if current_version < 6:
+        # Migration 6: Multi-library support
+        try:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS libraries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    path TEXT UNIQUE NOT NULL,
+                    is_default BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            conn.execute('ALTER TABLE comics ADD COLUMN library_id INTEGER REFERENCES libraries(id) ON DELETE SET NULL')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            from config import COMICS_DIR
+            conn.execute(
+                'INSERT OR IGNORE INTO libraries (name, path, is_default) VALUES (?, ?, ?)',
+                ('Default', COMICS_DIR, 1)
+            )
+            default_lib = conn.execute('SELECT id FROM libraries WHERE is_default = 1').fetchone()
+            if default_lib:
+                conn.execute('UPDATE comics SET library_id = ? WHERE library_id IS NULL', (default_lib['id'],))
+        except:
+            pass
+     
     if current_version < SCHEMA_VERSION:
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     
