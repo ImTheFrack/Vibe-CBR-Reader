@@ -59,8 +59,8 @@ def create_default_admin():
         else:
             logger.info(f"Admin user '{admin_user}' created from environment variables.")
 
-# Create default admin on startup
-create_default_admin()
+if not os.environ.get("TESTING"):
+    create_default_admin()
 
 def is_port_in_use(port):
     import socket
