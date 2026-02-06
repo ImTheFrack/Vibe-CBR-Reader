@@ -521,6 +521,10 @@ export function showView(viewName) {
         const el = document.getElementById('nav-tags');
         if (el) el.classList.add('active');
     }
+    if (viewName === 'discovery') {
+        const el = document.getElementById('nav-discovery');
+        if (el) el.classList.add('active');
+    }
 
     document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
     const viewEl = document.getElementById(`view-${viewName}`);
