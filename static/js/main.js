@@ -29,6 +29,7 @@ import { showToast } from './utils.js';
 import { initTagsView } from './tags.js';
 import { showScanStatus, startScanPolling } from './scan-status.js';
 import * as router from './router.js';
+import { loadDiscoveryData, scrollCarousel } from './discovery.js';
 
 // Hamburger Menu
 export function toggleHamburger() {
@@ -99,6 +100,7 @@ window.setPreference = setPreference;
 window.resetDefaultFilters = resetDefaultFilters;
 window.showToast = showToast;
 window.showScanStatus = showScanStatus;
+window.scrollCarousel = scrollCarousel;
 
 // Hash Change Handler
 function onHashChange() {
@@ -194,6 +196,11 @@ function onHashChange() {
         case 'profile':
             showView('profile');
             import('./profile.js').then(m => m.renderProfileView());
+            break;
+        
+        case 'discovery':
+            showView('discovery');
+            loadDiscoveryData();
             break;
     }
 }

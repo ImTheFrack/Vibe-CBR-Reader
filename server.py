@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from config import COMICS_DIR
 from database import init_db, get_db_connection, create_user
-from routes import auth, library, users, series, admin
+from routes import auth, library, users, series, admin, discovery
 from logger import logger
 
 app = FastAPI(title="Vibe CBR Reader")
@@ -29,6 +29,7 @@ app.include_router(library.router)
 app.include_router(users.router)
 app.include_router(series.router)
 app.include_router(admin.router)
+app.include_router(discovery.router)
 
 # --- Main Routes ---
 

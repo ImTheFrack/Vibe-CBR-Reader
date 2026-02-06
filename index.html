@@ -170,6 +170,47 @@
             </div>
         </div>
 
+        <!-- Discovery View -->
+        <div id="view-discovery" class="view">
+            <div class="section-header">
+                <div class="header-info">
+                    <h2 class="section-title">
+                        <span>✨</span>
+                        Discover
+                    </h2>
+                    <p class="section-subtitle">Continue reading or explore new additions</p>
+                </div>
+            </div>
+            
+            <!-- Continue Reading Section -->
+            <div class="discovery-section">
+                <div class="discovery-section-header">
+                    <h3>📖 Continue Reading</h3>
+                    <div class="carousel-nav">
+                        <button class="carousel-btn prev" onclick="scrollCarousel('continue', -1)">←</button>
+                        <button class="carousel-btn next" onclick="scrollCarousel('continue', 1)">→</button>
+                    </div>
+                </div>
+                <div class="carousel-container" id="discovery-continue-grid">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+            
+            <!-- New Additions Section -->
+            <div class="discovery-section">
+                <div class="discovery-section-header">
+                    <h3>🆕 New Additions</h3>
+                    <div class="carousel-nav">
+                        <button class="carousel-btn prev" onclick="scrollCarousel('new', -1)">←</button>
+                        <button class="carousel-btn next" onclick="scrollCarousel('new', 1)">→</button>
+                    </div>
+                </div>
+                <div class="carousel-container" id="discovery-new-grid">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Recent View -->
         <div id="view-recent" class="view">
             <div class="section-header">

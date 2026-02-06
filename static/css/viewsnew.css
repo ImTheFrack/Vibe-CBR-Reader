@@ -1800,5 +1800,171 @@
 }
 
 .reader-container[data-display="double"][data-direction="rtl"] .reader-image:last-child {
-    object-position: right center;
+	object-position: right center;
+}
+
+/* ============================================
+   DISCOVERY VIEW
+   ============================================ */
+
+.discovery-section {
+	margin-bottom: 40px;
+}
+
+.discovery-section-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 16px;
+	padding: 0 16px;
+}
+
+.discovery-section-header h3 {
+	font-size: 1.25rem;
+	font-weight: 600;
+	margin: 0;
+}
+
+.carousel-nav {
+	display: flex;
+	gap: 8px;
+}
+
+.carousel-btn {
+	width: 36px;
+	height: 36px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--bg-secondary);
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-md);
+	color: var(--text-secondary);
+	font-size: 1.2rem;
+	cursor: pointer;
+	transition: all var(--transition-fast);
+}
+
+.carousel-btn:hover {
+	background: var(--accent-primary);
+	border-color: var(--accent-primary);
+	color: white;
+}
+
+.carousel-container {
+	display: flex;
+	gap: 16px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scroll-behavior: smooth;
+	padding: 8px 16px;
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE and Edge */
+}
+
+.carousel-container::-webkit-scrollbar {
+	display: none; /* Chrome, Safari, Opera */
+}
+
+/* Carousel Card Styles */
+.carousel-card {
+	flex: 0 0 160px;
+	background: var(--bg-secondary);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	cursor: pointer;
+	transition: all var(--transition-fast);
+	border: 1px solid var(--border-color);
+}
+
+.carousel-card:hover {
+	transform: translateY(-4px);
+	box-shadow: var(--shadow-md);
+	border-color: var(--accent-primary);
+}
+
+.carousel-card-cover {
+	position: relative;
+	aspect-ratio: 2/3;
+	overflow: hidden;
+	background: var(--bg-tertiary);
+}
+
+.carousel-card-cover img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* Progress bar for continue reading */
+.carousel-card-progress {
+	margin-top: 8px;
+}
+
+.carousel-card-progress .progress-bar {
+	height: 4px;
+	background: var(--bg-tertiary);
+	border-radius: 2px;
+	overflow: hidden;
+}
+
+.carousel-card-progress .progress-fill {
+	height: 100%;
+	background: var(--accent-primary);
+	transition: width var(--transition-fast);
+}
+
+.carousel-card-progress .progress-text {
+	font-size: 0.7rem;
+	color: var(--text-tertiary);
+	margin-top: 4px;
+	text-align: center;
+}
+
+/* "New" badge */
+.carousel-card-badge {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	padding: 4px 8px;
+	background: var(--success);
+	color: white;
+	font-size: 0.7rem;
+	font-weight: 600;
+	border-radius: var(--radius-sm);
+	text-transform: uppercase;
+}
+
+.carousel-card-info {
+	padding: 12px;
+}
+
+.carousel-card-title {
+	font-weight: 500;
+	font-size: 0.85rem;
+	margin-bottom: 4px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.carousel-card-series {
+	color: var(--text-tertiary);
+	font-size: 0.75rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+	.carousel-card {
+		flex: 0 0 140px;
+	}
+	
+	.carousel-btn {
+		width: 32px;
+		height: 32px;
+		font-size: 1rem;
+	}
 }
