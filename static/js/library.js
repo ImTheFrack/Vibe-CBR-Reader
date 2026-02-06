@@ -38,7 +38,7 @@ export async function loadLibrary() {
             state.libraryRoot = config.comics_dir;
         }
 
-        const response = await fetch('/api/books', { credentials: 'include' });
+        const response = await fetch('/api/books?limit=0', { credentials: 'include' });
         if (!response.ok) {
             if (response.status === 401) {
                 state.comics = [];
