@@ -2,12 +2,14 @@
 // Toggle Synopsis Function
 window.toggleSynopsis = function(id) {
     const textEl = document.getElementById(`synopsis-${id}`);
-    const btn = event.target; // Simple access to clicked element
+    const iconEl = document.getElementById(`toggle-icon-${id}`);
     
     if (textEl) {
         textEl.classList.toggle('expanded');
         const isExpanded = textEl.classList.contains('expanded');
-        btn.textContent = isExpanded ? '▲' : '▼';
+        if (iconEl) {
+            iconEl.textContent = isExpanded ? '▼' : '▶';
+        }
     }
 };
 

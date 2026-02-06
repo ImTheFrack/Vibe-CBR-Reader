@@ -228,34 +228,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupKeyboardShortcuts();
     setupAuthEventListeners();
     
-    const contentArea = document.getElementById('content-area');
-    if (contentArea) {
-        contentArea.addEventListener('click', (event) => {
-            const actionElement = event.target.closest('[data-action]');
-            if (!actionElement) return;
-            
-            const action = actionElement.dataset.action;
-            
-            if (action === 'card-click') {
-                handleCardClick(actionElement, event);
-            } else if (action === 'toggle-selection') {
-                event.stopPropagation();
-                toggleItemSelection(actionElement.dataset.id, event);
-            } else if (action === 'rate-series') {
-                event.stopPropagation();
-                const seriesId = parseInt(actionElement.dataset.seriesId);
-                const rating = parseInt(actionElement.dataset.rating);
-                if (window.handleRateSeries) {
-                    window.handleRateSeries(seriesId, rating);
-                }
-            } else if (action === 'start-reading') {
-                event.stopPropagation();
-                const comicId = actionElement.dataset.comicId;
-                const page = actionElement.dataset.page ? parseInt(actionElement.dataset.page) : undefined;
-                startReading(comicId, page);
+    // Global event delegation for data-action elements (catches clicks from any view)
+    document.addEventListener('click', (event) => {
+        const actionElement = event.target.closest('[data-action]');
+        if (!actionElement) return;
+        
+        const action = actionElement.dataset.action;
+        
+        if (action === 'card-click') {
+            handleCardClick(actionElement, event);
+        } else if (action === 'toggle-selection') {
+            event.stopPropagation();
+            toggleItemSelection(actionElement.dataset.id, event);
+        } else if (action === 'rate-series') {
+            event.stopPropagation();
+            const seriesId = parseInt(actionElement.dataset.seriesId);
+            const rating = parseInt(actionElement.dataset.rating);
+            if (window.handleRateSeries) {
+                window.handleRateSeries(seriesId, rating);
             }
-        });
-    }
+        } else if (action === 'start-reading') {
+            event.stopPropagation();
+            const comicId = actionElement.dataset.comicId;
+            const page = actionElement.dataset.page ? parseInt(actionElement.dataset.page) : undefined;
+            startReading(comicId, page);
+        }
+    });
     
     if (window.updateSelectionButtonState) window.updateSelectionButtonState();
 

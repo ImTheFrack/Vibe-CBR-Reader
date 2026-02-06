@@ -135,6 +135,9 @@ export function showPreferences() {
     document.body.appendChild(overlay);
     setTimeout(() => overlay.classList.add('active'), 10);
     
+    // Initialize UI with current preferences
+    updatePreferencesUI();
+    
     // Close on overlay click
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) closePreferencesModal();
