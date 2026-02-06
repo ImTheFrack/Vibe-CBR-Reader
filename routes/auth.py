@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Cookie
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 import os
 from database import create_user, authenticate_user, create_session, delete_session
 from dependencies import get_current_user, get_optional_user
@@ -19,7 +19,7 @@ class UserLogin(BaseModel):
     password: str
 
 @router.post("/register")
-async def register(user_data: UserCreate):
+async def register(user_data: UserCreate) -> Dict[str, Any]:
     """Register a new user account"""
     if len(user_data.username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
@@ -35,7 +35,7 @@ async def register(user_data: UserCreate):
     return {"message": "User created successfully", "user_id": user_id}
 
 @router.post("/login")
-async def login(user_data: UserLogin):
+async def login(user_data: UserLogin) -> JSONResponse:
     """Login and create session"""
     user = authenticate_user(user_data.username, user_data.password)
     
@@ -71,7 +71,7 @@ async def login(user_data: UserLogin):
     return response
 
 @router.post("/logout")
-async def logout(token: Optional[str] = Cookie(None, alias="session_token")):
+async def logout(token: Optional[str] = Cookie(None, alias="session_token")) -> JSONResponse:
     """Logout and invalidate session"""
     if token:
         delete_session(token)
@@ -81,7 +81,7 @@ async def logout(token: Optional[str] = Cookie(None, alias="session_token")):
     return response
 
 @router.get("/me")
-async def get_me(current_user: dict = Depends(get_current_user)):
+async def get_me(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """Get current user info"""
     return {
         "id": current_user['id'],
@@ -92,7 +92,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     }
 
 @router.get("/check")
-async def check_auth(current_user: Optional[dict] = Depends(get_optional_user)):
+async def check_auth(current_user: Optional[Dict[str, Any]] = Depends(get_optional_user)) -> Dict[str, Any]:
     """Check if user is authenticated (returns user or null)"""
     if current_user:
         return {

@@ -1,6 +1,7 @@
 import os
 import hashlib
 import json
+from typing import Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import COMICS_DIR
 from database import (
@@ -15,7 +16,7 @@ from logger import logger
 # Normalize COMICS_DIR
 COMICS_DIR = os.path.normpath(os.path.abspath(COMICS_DIR))
 
-def sync_library_task(job_id=None):
+def sync_library_task(job_id: Optional[int] = None) -> Tuple[int, int]:
     """PHASE 1: Synchronize file system with database."""
     logger.info("Phase 1: Synchronizing library structure...")
     conn = get_db_connection()
@@ -177,7 +178,7 @@ def sync_library_task(job_id=None):
     conn.close()
     return len(new_comics) + len(changed_comics), deleted_count
 
-def process_library_task(job_id=None):
+def process_library_task(job_id: Optional[int] = None) -> None:
     """PHASE 2: Background processing of pending items."""
     logger.info("Phase 2: Processing metadata and thumbnails...")
     conn = get_db_connection()
@@ -248,7 +249,7 @@ def process_library_task(job_id=None):
     if job_id:
         complete_scan_job(job_id, status='completed', errors=json.dumps(all_scan_errors) if all_scan_errors else None)
 
-def full_scan_library_task():
+def full_scan_library_task() -> None:
     from database import get_running_scan_job
     if get_running_scan_job(): return
     job_id = create_scan_job(scan_type='full', total_comics=0)
@@ -263,7 +264,7 @@ def full_scan_library_task():
         logger.error(f"Scan failed: {e}", exc_info=True)
         complete_scan_job(job_id, status='failed', errors=str(e))
 
-def rescan_library_task():
+def rescan_library_task() -> None:
     logger.info("Starting full library rescan...")
     conn = get_db_connection()
     try:

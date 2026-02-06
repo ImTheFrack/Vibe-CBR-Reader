@@ -1,7 +1,8 @@
+from typing import Optional, Dict, Any, List
 from .connection import get_db_connection
 
 # Reading progress functions
-def get_reading_progress(user_id, comic_id=None):
+def get_reading_progress(user_id: int, comic_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Get reading progress for a user. If comic_id is None, get all progress."""
     conn = get_db_connection()
     
@@ -24,8 +25,8 @@ def get_reading_progress(user_id, comic_id=None):
         conn.close()
         return {p['comic_id']: dict(p) for p in progress_list}
 
-def update_reading_progress(user_id, comic_id, current_page, total_pages=None, completed=None, 
-                            reader_display=None, reader_direction=None, reader_zoom=None, additional_seconds=0):
+def update_reading_progress(user_id: int, comic_id: str, current_page: int, total_pages: Optional[int] = None, completed: Optional[bool] = None, 
+                            reader_display: Optional[str] = None, reader_direction: Optional[str] = None, reader_zoom: Optional[str] = None, additional_seconds: int = 0) -> None:
     """Update or insert reading progress"""
     conn = get_db_connection()
     
@@ -38,7 +39,7 @@ def update_reading_progress(user_id, comic_id, current_page, total_pages=None, c
     if existing:
         # Update
         updates = ["current_page = ?", "last_read = CURRENT_TIMESTAMP", "seconds_read = seconds_read + ?"]
-        params = [current_page, additional_seconds]
+        params: List[Any] = [current_page, additional_seconds]
         
         if total_pages is not None:
             updates.append("total_pages = ?")
@@ -73,14 +74,14 @@ def update_reading_progress(user_id, comic_id, current_page, total_pages=None, c
     conn.commit()
     conn.close()
 
-def clear_reading_progress(user_id):
+def clear_reading_progress(user_id: int) -> None:
     """Delete all reading progress for a user (Purge History)"""
     conn = get_db_connection()
     conn.execute('DELETE FROM reading_progress WHERE user_id = ?', (user_id,))
     conn.commit()
     conn.close()
 
-def delete_reading_progress(user_id, comic_id):
+def delete_reading_progress(user_id: int, comic_id: str) -> None:
     """Delete reading progress for a specific comic and user"""
     conn = get_db_connection()
     conn.execute(
@@ -90,7 +91,7 @@ def delete_reading_progress(user_id, comic_id):
     conn.commit()
     conn.close()
 
-def get_user_stats(user_id):
+def get_user_stats(user_id: int) -> Dict[str, Any]:
     """Calculate reading statistics for a user"""
     conn = get_db_connection()
     
@@ -129,7 +130,7 @@ def get_user_stats(user_id):
     }
 
 # User preferences functions
-def get_user_preferences(user_id):
+def get_user_preferences(user_id: int) -> Optional[Dict[str, Any]]:
     """Get user preferences"""
     conn = get_db_connection()
     prefs = conn.execute(
@@ -139,7 +140,7 @@ def get_user_preferences(user_id):
     conn.close()
     return dict(prefs) if prefs else None
 
-def update_user_preferences(user_id, **kwargs):
+def update_user_preferences(user_id: int, **kwargs: Any) -> bool:
     """Update user preferences"""
     allowed_fields = ['theme', 'ereader', 'default_view_mode', 'default_nav_mode', 'default_sort_by', 
                       'reader_direction', 'reader_display', 'reader_zoom', 'title_card_style',
@@ -164,7 +165,7 @@ def update_user_preferences(user_id, **kwargs):
     return True
 
 # Bookmark functions
-def get_bookmarks(user_id, comic_id=None):
+def get_bookmarks(user_id: int, comic_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get bookmarks for a user"""
     conn = get_db_connection()
     
@@ -184,7 +185,7 @@ def get_bookmarks(user_id, comic_id=None):
     conn.close()
     return [dict(b) for b in bookmarks]
 
-def add_bookmark(user_id, comic_id, page_number, note=None):
+def add_bookmark(user_id: int, comic_id: str, page_number: int, note: Optional[str] = None) -> bool:
     """Add a bookmark"""
     conn = get_db_connection()
     import sqlite3
@@ -200,7 +201,7 @@ def add_bookmark(user_id, comic_id, page_number, note=None):
     finally:
         conn.close()
 
-def remove_bookmark(user_id, comic_id, page_number):
+def remove_bookmark(user_id: int, comic_id: str, page_number: int) -> None:
     """Remove a bookmark"""
     conn = get_db_connection()
     conn.execute(

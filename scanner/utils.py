@@ -1,21 +1,23 @@
 import os
 import re
+from typing import List, Union, Tuple, Optional, Dict, Any
 
 def is_cbr_or_cbz(filename: str) -> bool:
     return filename.lower().endswith(('.cbz', '.cbr'))
 
 def get_file_size_str(size_bytes: int) -> str:
+    size: float = float(size_bytes)
     for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.1f} TB"
+        if size < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} TB"
 
-def natural_sort_key(s):
+def natural_sort_key(s: str) -> List[Union[int, str]]:
     return [int(text) if text.isdigit() else text.lower()
             for text in re.split(r'(\d+)', s)]
 
-def parse_filename_info(filename):
+def parse_filename_info(filename: str) -> Tuple[Optional[float], Optional[float]]:
     name = os.path.splitext(filename)[0]
     vol = None
     ch = None
@@ -35,7 +37,7 @@ def parse_filename_info(filename):
 
     return vol, ch
 
-def parse_series_json(filepath):
+def parse_series_json(filepath: str) -> Dict[str, Any]:
     import json
     from logger import logger
     try:

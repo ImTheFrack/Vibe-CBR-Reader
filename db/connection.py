@@ -3,14 +3,14 @@ import os
 from datetime import datetime
 from config import DB_PATH
 
-def get_db_connection():
+def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     # Ensure WAL mode is active for this connection
     conn.execute('PRAGMA journal_mode=WAL')
     return conn
 
-def init_db():
+def init_db() -> None:
     conn = get_db_connection()
     
     # Enable WAL mode for better concurrency

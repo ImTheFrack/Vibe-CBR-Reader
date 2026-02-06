@@ -2,9 +2,10 @@ import hashlib
 import secrets
 import bcrypt
 import sqlite3
+from typing import Optional, Dict, Any, List
 from .connection import get_db_connection
 
-def create_user(username, password, email=None, role='reader', must_change_password=False):
+def create_user(username: str, password: str, email: Optional[str] = None, role: str = 'reader', must_change_password: bool = False) -> Optional[int]:
     """Create a new user with hashed password"""
     conn = get_db_connection()
     # Hash password with bcrypt
@@ -31,7 +32,7 @@ def create_user(username, password, email=None, role='reader', must_change_passw
     finally:
         conn.close()
 
-def authenticate_user(username, password):
+def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
     """Authenticate user and return user data if valid"""
     conn = get_db_connection()
     
@@ -80,7 +81,7 @@ def authenticate_user(username, password):
     conn.close()
     return None
 
-def create_session(user_id, expires_hours=24):
+def create_session(user_id: int, expires_hours: int = 24) -> str:
     """Create a new session token"""
     conn = get_db_connection()
     token = secrets.token_urlsafe(32)
@@ -94,7 +95,7 @@ def create_session(user_id, expires_hours=24):
     conn.close()
     return token
 
-def validate_session(token):
+def validate_session(token: str) -> Optional[int]:
     """Validate session token and return user_id if valid"""
     conn = get_db_connection()
     session = conn.execute(
@@ -105,14 +106,14 @@ def validate_session(token):
     conn.close()
     return session['user_id'] if session else None
 
-def delete_session(token):
+def delete_session(token: str) -> None:
     """Delete a session (logout)"""
     conn = get_db_connection()
     conn.execute('DELETE FROM sessions WHERE token = ?', (token,))
     conn.commit()
     conn.close()
 
-def get_all_users():
+def get_all_users() -> List[Dict[str, Any]]:
     """Get all users (admin only)"""
     conn = get_db_connection()
     users = conn.execute(
@@ -121,14 +122,14 @@ def get_all_users():
     conn.close()
     return [dict(u) for u in users]
 
-def delete_user(user_id):
+def delete_user(user_id: int) -> None:
     """Delete a user and all associated data"""
     conn = get_db_connection()
     conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
     conn.commit()
     conn.close()
 
-def update_user_role(user_id, role):
+def update_user_role(user_id: int, role: str) -> bool:
     """Update a user's role (admin only)"""
     if role not in ['admin', 'reader']:
         return False
@@ -138,7 +139,7 @@ def update_user_role(user_id, role):
     conn.close()
     return True
 
-def update_user_password(user_id, new_password, must_change=False):
+def update_user_password(user_id: int, new_password: str, must_change: bool = False) -> bool:
     """Update a user's password (admin force reset or user change)"""
     conn = get_db_connection()
     salt = bcrypt.gensalt()
@@ -152,7 +153,7 @@ def update_user_password(user_id, new_password, must_change=False):
     conn.close()
     return True
 
-def user_exists(username):
+def user_exists(username: str) -> bool:
     """Check if a username exists"""
     conn = get_db_connection()
     result = conn.execute('SELECT 1 FROM users WHERE username = ?', (username,)).fetchone()

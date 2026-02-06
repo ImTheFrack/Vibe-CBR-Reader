@@ -1,6 +1,8 @@
+from typing import Optional, List, Dict, Any
+import sqlite3
 from .connection import get_db_connection
 
-def delete_comics_by_ids(comic_ids, conn=None):
+def delete_comics_by_ids(comic_ids: List[str], conn: Optional[sqlite3.Connection] = None) -> None:
     """Delete multiple comics by their IDs"""
     if not comic_ids:
         return
@@ -14,7 +16,7 @@ def delete_comics_by_ids(comic_ids, conn=None):
         conn.commit()
         conn.close()
 
-def get_pending_comics(limit=100, conn=None):
+def get_pending_comics(limit: int = 100, conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
     """Get comics that need page counting or thumbnail extraction"""
     own_conn = conn is None
     if own_conn:
@@ -28,7 +30,7 @@ def get_pending_comics(limit=100, conn=None):
         conn.close()
     return [dict(c) for c in comics]
 
-def update_comic_metadata(comic_id, pages, processed):
+def update_comic_metadata(comic_id: str, pages: int, processed: bool) -> None:
     """Update comic with counted pages and processed (thumbnail) status"""
     conn = get_db_connection()
     conn.execute('''

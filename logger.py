@@ -4,7 +4,7 @@ import os
 from logging.handlers import RotatingFileHandler
 from config import LOG_LEVEL
 
-def setup_logger(name="vibe", level=LOG_LEVEL):
+def setup_logger(name: str = "vibe", level: int = LOG_LEVEL) -> logging.Logger:
     """Set up a logger with console and file handlers"""
     logger = logging.getLogger(name)
     

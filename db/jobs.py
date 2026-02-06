@@ -1,7 +1,9 @@
 import json
+import sqlite3
+from typing import Optional, Dict, Any, List
 from .connection import get_db_connection
 
-def create_scan_job(scan_type='fast', total_comics=0):
+def create_scan_job(scan_type: str = 'fast', total_comics: int = 0) -> int:
     """Create a new scan job and return its ID"""
     conn = get_db_connection()
     cursor = conn.execute(
@@ -9,12 +11,13 @@ def create_scan_job(scan_type='fast', total_comics=0):
            VALUES (?, ?, 'running')''',
         (scan_type, total_comics)
     )
+    assert cursor.lastrowid is not None
     job_id = cursor.lastrowid
     conn.commit()
     conn.close()
     return job_id
 
-def update_scan_progress(job_id, processed_comics, errors=None, conn=None, **kwargs):
+def update_scan_progress(job_id: int, processed_comics: int, errors: Optional[List[str]] = None, conn: Optional[sqlite3.Connection] = None, **kwargs: Any) -> None:
     """Update scan job progress with flexible metrics"""
     own_conn = conn is None
     if own_conn:
@@ -22,7 +25,7 @@ def update_scan_progress(job_id, processed_comics, errors=None, conn=None, **kwa
     errors_json = json.dumps(errors) if errors else None
     
     updates = ["processed_comics = ?", "errors = ?"]
-    params = [processed_comics, errors_json]
+    params: List[Any] = [processed_comics, errors_json]
     
     # Whitelist of allowed metric columns for scan_jobs table updates.
     # Only these columns can be updated via kwargs to prevent SQL injection.
@@ -45,7 +48,7 @@ def update_scan_progress(job_id, processed_comics, errors=None, conn=None, **kwa
         conn.commit()
         conn.close()
 
-def complete_scan_job(job_id, status='completed', errors=None, conn=None):
+def complete_scan_job(job_id: int, status: str = 'completed', errors: Optional[List[str]] = None, conn: Optional[sqlite3.Connection] = None) -> None:
     """Mark scan job as completed or failed"""
     own_conn = conn is None
     if own_conn:
@@ -62,7 +65,7 @@ def complete_scan_job(job_id, status='completed', errors=None, conn=None):
         conn.commit()
         conn.close()
 
-def _parse_job(job):
+def _parse_job(job: Any) -> Optional[Dict[str, Any]]:
     if not job:
         return None
     result = dict(job)
@@ -73,7 +76,7 @@ def _parse_job(job):
             pass
     return result
 
-def get_scan_status(job_id):
+def get_scan_status(job_id: int) -> Optional[Dict[str, Any]]:
     """Get status of a specific scan job"""
     conn = get_db_connection()
     job = conn.execute(
@@ -83,7 +86,7 @@ def get_scan_status(job_id):
     conn.close()
     return _parse_job(job)
 
-def get_latest_scan_job():
+def get_latest_scan_job() -> Optional[Dict[str, Any]]:
     """Get the most recent scan job"""
     conn = get_db_connection()
     job = conn.execute(
@@ -92,7 +95,7 @@ def get_latest_scan_job():
     conn.close()
     return _parse_job(job)
 
-def get_running_scan_job():
+def get_running_scan_job() -> Optional[Dict[str, Any]]:
     """Get the currently running scan job, if any"""
     conn = get_db_connection()
     job = conn.execute(

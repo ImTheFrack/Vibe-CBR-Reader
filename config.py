@@ -1,6 +1,7 @@
 import os
 import secrets
 import logging
+from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -40,7 +41,7 @@ SECRET_KEY = _secret_key
 # Supported Image Extensions
 IMG_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.jxl')
 
-def get_thumbnail_path(comic_id: str):
+def get_thumbnail_path(comic_id: str) -> Optional[str]:
     """
     Returns the full path for a thumbnail, including a subdirectory based on the
     first character of the comic_id to distribute files.

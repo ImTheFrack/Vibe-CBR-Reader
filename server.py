@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,7 +39,7 @@ async def read_root(request: Request):
         return HTMLResponse(content=f.read(), media_type="text/html")
 
 # --- Create Default Admin User on Startup ---
-def create_default_admin():
+def create_default_admin() -> None:
     """Create default admin user if no users exist"""
     conn = get_db_connection()
     user_count = conn.execute("SELECT COUNT(*) as count FROM users").fetchone()['count']
@@ -62,7 +63,7 @@ def create_default_admin():
 if not os.environ.get("TESTING"):
     create_default_admin()
 
-def is_port_in_use(port):
+def is_port_in_use(port: int) -> bool:
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
@@ -71,7 +72,7 @@ def is_port_in_use(port):
         except socket.error:
             return True
 
-def find_available_port(start_port, max_attempts=100):
+def find_available_port(start_port: int, max_attempts: int = 100) -> int:
     port = start_port
     while is_port_in_use(port) and port < start_port + max_attempts:
         port += 1

@@ -16,7 +16,7 @@ if not mimetypes.types_map.get('.jxl'):
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from PIL import Image, ImageDraw, ImageFont
 from config import COMICS_DIR, IMG_EXTENSIONS, get_thumbnail_path, BASE_CACHE_DIR
 from database import (
@@ -33,7 +33,7 @@ router = APIRouter(prefix="/api", tags=["library"])
 export_jobs = {}
 
 # Cleanup stuck scans on startup
-def cleanup_stuck_scans():
+def cleanup_stuck_scans() -> None:
     """Mark any scan_jobs with status='running' as 'failed' (since they were interrupted by restart)"""
     try:
         conn = get_db_connection()
@@ -47,7 +47,7 @@ def cleanup_stuck_scans():
     except Exception as e:
         logger.error(f"Note: Could not cleanup stuck scans: {e}")
 
-def cleanup_orphaned_exports():
+def cleanup_orphaned_exports() -> None:
     """Delete orphaned .cbz temp files older than 1 hour from previous server runs"""
     try:
         import glob
@@ -82,13 +82,13 @@ def cleanup_orphaned_exports():
 cleanup_stuck_scans()
 cleanup_orphaned_exports()
 
-def create_placeholder_image():
+def create_placeholder_image() -> str:
     """Create a 'Generating...' placeholder image if it doesn't exist"""
     placeholder_path = os.path.join(BASE_CACHE_DIR, "_placeholder.webp")
     if not os.path.exists(placeholder_path):
         try:
             # Create a simple gray placeholder image
-            img = Image.new('RGB', (300, 450), color=(128, 128, 128))
+            img = Image.new('RGB', (300, 450), (128, 128, 128))  # type: ignore[arg-type]
             draw = ImageDraw.Draw(img)
             
             # Try to use a font, fallback to default if unavailable
@@ -110,12 +110,12 @@ def create_placeholder_image():
             logger.error(f"Error creating placeholder image: {e}")
     return placeholder_path
 
-def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int = 10) -> dict:
+def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int = 10) -> Dict[str, Any]:
     """
     Generate thumbnail with timeout protection.
     Returns: {'success': bool, 'timeout': bool, 'cache_path': str}
     """
-    result = {'success': False, 'timeout': False, 'cache_path': None}
+    result: Dict[str, Any] = {'success': False, 'timeout': False, 'cache_path': None}
     
     # Generate to temp file with PID and thread ID for race condition protection
     pid = os.getpid()
@@ -124,7 +124,7 @@ def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int
     temp_cache_path = get_thumbnail_path(temp_id)
     final_cache_path = get_thumbnail_path(comic_id)
     
-    def target():
+    def target() -> None:
         try:
             # Extract and save to temp file using temp_id
             success = extract_cover_image(comic_path, temp_id)
@@ -146,12 +146,12 @@ def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int
         result['success'] = False
         
         # Continue generation in background (daemon thread)
-        def continue_in_background():
+        def continue_in_background() -> None:
             thread.join()  # Wait for original thread to finish
-            if result['success'] and os.path.exists(temp_cache_path):
+            if result['success'] and temp_cache_path and os.path.exists(temp_cache_path):
                 try:
                     # Atomic rename - if final file already exists, another request won the race
-                    if not os.path.exists(final_cache_path):
+                    if final_cache_path and not os.path.exists(final_cache_path):
                         os.rename(temp_cache_path, final_cache_path)
                         # Update database
                         conn = get_db_connection()
@@ -170,10 +170,10 @@ def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int
         bg_thread.start()
     else:
         # Thread completed within timeout
-        if result['success'] and os.path.exists(temp_cache_path):
+        if result['success'] and temp_cache_path and os.path.exists(temp_cache_path):
             try:
                 # Atomic rename - if final file already exists, another request won the race
-                if not os.path.exists(final_cache_path):
+                if final_cache_path and not os.path.exists(final_cache_path):
                     os.rename(temp_cache_path, final_cache_path)
                     result['cache_path'] = final_cache_path
                 else:
@@ -191,19 +191,19 @@ def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int
 create_placeholder_image()
 
 @router.get("/config")
-async def get_config():
+async def get_config() -> Dict[str, str]:
     # Normalize to ensure consistency with scanner and database paths
     norm_path = os.path.normpath(os.path.abspath(COMICS_DIR))
     return {"comics_dir": norm_path}
 
 @router.get("/search")
-async def search(q: str, current_user: dict = Depends(get_current_user)):
+async def search(q: str, current_user: Dict[str, Any] = Depends(get_current_user)) -> List[Dict[str, Any]]:
     """Search for series using FTS5"""
     from db.series import search_series
     return search_series(q)
 
 @router.post("/scan")
-async def scan_library(background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
+async def scan_library(background_tasks: BackgroundTasks, current_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
     if not os.path.exists(COMICS_DIR):
         raise HTTPException(status_code=404, detail="Comics directory not found")
     
@@ -217,7 +217,7 @@ async def scan_library(background_tasks: BackgroundTasks, current_user: dict = D
     return {"message": "Fast scan started"}
 
 @router.get("/scan/status")
-async def get_scan_status(current_user: dict = Depends(get_admin_user)):
+async def get_scan_status(current_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, Any]:
     """Get current scan progress"""
     latest_job = get_latest_scan_job()
     
@@ -252,7 +252,7 @@ async def get_scan_status(current_user: dict = Depends(get_admin_user)):
     }
 
 @router.post("/rescan")
-async def rescan_library(background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
+async def rescan_library(background_tasks: BackgroundTasks, current_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
     if not os.path.exists(COMICS_DIR):
         raise HTTPException(status_code=404, detail="Comics directory not found")
     
@@ -260,7 +260,7 @@ async def rescan_library(background_tasks: BackgroundTasks, current_user: dict =
     return {"message": "Full rescan started in background"}
 
 @router.get("/books")
-async def list_books(current_user: dict = Depends(get_current_user)):
+async def list_books(current_user: Dict[str, Any] = Depends(get_current_user)) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     # Join with series to get metadata like genres and status
     query = '''
@@ -289,11 +289,11 @@ async def list_books(current_user: dict = Depends(get_current_user)):
     return result
 
 @router.get("/cover/{comic_id}")
-async def get_cover(comic_id: str, current_user: dict = Depends(get_current_user)):
+async def get_cover(comic_id: str, current_user: Dict[str, Any] = Depends(get_current_user)) -> Response:
     cache_path = get_thumbnail_path(comic_id)
     
     # If thumbnail exists in cache, serve it immediately
-    if os.path.exists(cache_path):
+    if cache_path and os.path.exists(cache_path):
         return FileResponse(cache_path)
     
     # Thumbnail missing - generate on-demand
@@ -312,7 +312,7 @@ async def get_cover(comic_id: str, current_user: dict = Depends(get_current_user
         return Response(status_code=404)
     
     # Double-check cache again (race condition: another request may have just created it)
-    if os.path.exists(cache_path):
+    if cache_path and os.path.exists(cache_path):
         return FileResponse(cache_path)
     
     # Generate thumbnail with timeout
@@ -332,14 +332,14 @@ async def get_cover(comic_id: str, current_user: dict = Depends(get_current_user
         
         # Serve the newly generated thumbnail
         final_cache_path = get_thumbnail_path(comic_id)
-        if os.path.exists(final_cache_path):
+        if final_cache_path and os.path.exists(final_cache_path):
             return FileResponse(final_cache_path)
     
     # Generation failed - return 404
     return Response(status_code=404)
 
 @router.get("/read/{comic_id}")
-async def read_comic(comic_id: str, current_user: dict = Depends(get_current_user)):
+async def read_comic(comic_id: str, current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """Returns metadata for the reader, including user's progress if logged in"""
     conn = get_db_connection()
     book = conn.execute("SELECT * FROM comics WHERE id = ?", (comic_id,)).fetchone()
@@ -380,7 +380,7 @@ async def read_comic(comic_id: str, current_user: dict = Depends(get_current_use
     return result
 
 @router.get("/read/{comic_id}/page/{page_num}")
-async def get_comic_page(comic_id: str, page_num: int, current_user: dict = Depends(get_current_user)):
+async def get_comic_page(comic_id: str, page_num: int, current_user: Dict[str, Any] = Depends(get_current_user)) -> Response:
     conn = get_db_connection()
     book = conn.execute("SELECT path FROM comics WHERE id = ?", (comic_id,)).fetchone()
     conn.close()
@@ -390,7 +390,8 @@ async def get_comic_page(comic_id: str, page_num: int, current_user: dict = Depe
     
     filepath = book['path']
     try:
-        image_data = None
+        image_data: Optional[bytes] = None
+        images: List[str] = []
         file_ext = os.path.splitext(filepath)[1].lower()
         
         if file_ext == '.cbz':
@@ -406,7 +407,7 @@ async def get_comic_page(comic_id: str, page_num: int, current_user: dict = Depe
                     with r.open(images[page_num]) as f:
                         image_data = f.read()
         
-        if image_data:
+        if image_data and images:
             # Guess media type from the original filename in the archive
             img_filename = images[page_num]
             content_type, _ = mimetypes.guess_type(img_filename)
@@ -421,7 +422,7 @@ class ExportCBZRequest(BaseModel):
     comic_ids: List[str]
     filename: Optional[str] = "export.cbz"
 
-def create_export_task(job_id: str, comic_ids: List[str], export_filename: str):
+def create_export_task(job_id: str, comic_ids: List[str], export_filename: str) -> None:
     """Background task to build the CBZ file with timeout protection"""
     try:
         conn = get_db_connection()
@@ -534,8 +535,8 @@ def create_export_task(job_id: str, comic_ids: List[str], export_filename: str):
 async def start_export_cbz(
     request: ExportCBZRequest, 
     background_tasks: BackgroundTasks, 
-    current_user: dict = Depends(get_current_user)
-):
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, str]:
     """Start an export job in the background"""
     job_id = str(uuid.uuid4())
     export_jobs[job_id] = {
@@ -550,7 +551,7 @@ async def start_export_cbz(
     return {"job_id": job_id}
 
 @router.get("/export/status/{job_id}")
-async def get_export_status(job_id: str, current_user: dict = Depends(get_current_user)):
+async def get_export_status(job_id: str, current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """Check the status of an export job and provide disk info"""
     if job_id not in export_jobs:
         raise HTTPException(status_code=404, detail="Export job not found")
@@ -576,7 +577,7 @@ async def get_export_status(job_id: str, current_user: dict = Depends(get_curren
     return status
 
 @router.delete("/export/cancel/{job_id}")
-async def cancel_export(job_id: str, current_user: dict = Depends(get_current_user)):
+async def cancel_export(job_id: str, current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, str]:
     """Cancel a running export job"""
     if job_id not in export_jobs:
         raise HTTPException(status_code=404, detail="Export job not found")
@@ -585,7 +586,7 @@ async def cancel_export(job_id: str, current_user: dict = Depends(get_current_us
     return {"message": "Export cancellation requested"}
 
 @router.get("/export/download/{job_id}")
-async def download_export(job_id: str, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
+async def download_export(job_id: str, background_tasks: BackgroundTasks, current_user: Dict[str, Any] = Depends(get_current_user)) -> FileResponse:
     """Download a completed export file"""
     if job_id not in export_jobs or export_jobs[job_id]['status'] != 'completed':
         raise HTTPException(status_code=404, detail="Export not ready or not found")
@@ -597,7 +598,7 @@ async def download_export(job_id: str, background_tasks: BackgroundTasks, curren
         raise HTTPException(status_code=404, detail="Export file missing on server")
         
     # Schedule cleanup of the temp file and job info after response
-    def cleanup():
+    def cleanup() -> None:
         if os.path.exists(temp_path):
             os.remove(temp_path)
         if job_id in export_jobs:

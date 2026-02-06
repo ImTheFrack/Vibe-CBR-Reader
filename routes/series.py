@@ -1,19 +1,19 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from database import get_all_series, get_series_with_comics
 from dependencies import get_current_user
 
 router = APIRouter(prefix="/api/series", tags=["series"])
 
 @router.get("")
-async def list_series(category: Optional[str] = None, subcategory: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def list_series(category: Optional[str] = None, subcategory: Optional[str] = None, current_user: Dict[str, Any] = Depends(get_current_user)) -> List[Dict[str, Any]]:
     """List all series with optional filtering"""
     series_list = get_all_series(category=category, subcategory=subcategory)
     return series_list
 
 @router.get("/metadata")
-async def get_metadata(current_user: dict = Depends(get_current_user)):
+async def get_metadata(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """Get unique genres, tags, and statuses for filtering"""
     from db.series import get_series_metadata
     return get_series_metadata()
@@ -23,7 +23,7 @@ class RatingCreate(BaseModel):
     rating: int
 
 @router.post("/rating")
-async def rate_series(data: RatingCreate, current_user: dict = Depends(get_current_user)):
+async def rate_series(data: RatingCreate, current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, str]:
     """Rate a series"""
     from database import add_rating
     if not (1 <= data.rating <= 5):
@@ -32,7 +32,7 @@ async def rate_series(data: RatingCreate, current_user: dict = Depends(get_curre
     return {"message": "Rating saved"}
 
 @router.get("/rating/{series_id}")
-async def get_rating(series_id: int, current_user: dict = Depends(get_current_user)):
+async def get_rating(series_id: int, current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """Get rating info for a series"""
     from database import get_series_rating, get_user_rating
     return {
@@ -44,13 +44,13 @@ class TagFilterRequest(BaseModel):
     selected_tags: List[str] = []
 
 @router.post("/tags/filter")
-async def filter_series_by_tags(request: TagFilterRequest, current_user: dict = Depends(get_current_user)):
+async def filter_series_by_tags(request: TagFilterRequest, current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """Filter series by tags and return stats/results"""
     from database import get_series_by_tags
     return get_series_by_tags(request.selected_tags)
 
 @router.get("/{series_name}")
-async def get_series_detail(series_name: str, current_user: dict = Depends(get_current_user)):
+async def get_series_detail(series_name: str, current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """Get full series details including all comics and user progress"""
     user_id = current_user['id']
     series = get_series_with_comics(series_name, user_id=user_id)

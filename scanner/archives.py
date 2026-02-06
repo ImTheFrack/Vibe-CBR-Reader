@@ -1,12 +1,13 @@
 import os
 import zipfile
 import rarfile
+from typing import Union, Dict, List, Any, Optional
 from PIL import Image
 from config import IMG_EXTENSIONS, get_thumbnail_path
 from .utils import natural_sort_key
 from logger import logger
 
-def save_thumbnail(f_img, comic_id, item_name, target_size=300):
+def save_thumbnail(f_img: Any, comic_id: str, item_name: str, target_size: int = 300) -> Union[bool, str]:
     """Helper to process and save thumbnail from an open file handle"""
     try:
         img = Image.open(f_img)
@@ -24,10 +25,10 @@ def save_thumbnail(f_img, comic_id, item_name, target_size=300):
         logger.error(error_msg)
         return error_msg
 
-def extract_cover_image(filepath: str, comic_id: str, target_size: int = 300) -> bool:
+def extract_cover_image(filepath: str, comic_id: str, target_size: int = 300) -> Union[bool, str]:
     """
     Opens an archive, finds the first image, resizes it to target_size,
-    saves it to cache. Returns True if successful.
+    saves it to cache. Returns True if successful, False if no images found, or error string on failure.
     """
     try:
         file_ext = os.path.splitext(filepath)[1].lower()
@@ -57,11 +58,11 @@ def extract_cover_image(filepath: str, comic_id: str, target_size: int = 300) ->
         logger.error(f"Error processing {filepath}: {e}")
         return False
 
-def _process_single_comic(comic_id, filepath):
+def _process_single_comic(comic_id: str, filepath: str) -> Dict[str, Any]:
     """
     Process a single comic archive. Thread-safe — no database access.
     """
-    result = {
+    result: Dict[str, Any] = {
         'comic_id': comic_id,
         'filepath': filepath,
         'filename': os.path.basename(filepath),

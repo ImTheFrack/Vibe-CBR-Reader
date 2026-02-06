@@ -1,11 +1,13 @@
 import json
 import re
 import time
+import sqlite3
+from typing import Optional, List, Dict, Any
 from collections import defaultdict
 from .connection import get_db_connection
 from logger import logger
 
-def create_or_update_series(name, metadata=None, category=None, subcategory=None, cover_comic_id=None, conn=None):
+def create_or_update_series(name: str, metadata: Optional[Dict[str, Any]] = None, category: Optional[str] = None, subcategory: Optional[str] = None, cover_comic_id: Optional[str] = None, conn: Optional[sqlite3.Connection] = None) -> int:
     """Create or update a series with metadata from series.json"""
     own_conn = conn is None
     if own_conn:
@@ -25,6 +27,7 @@ def create_or_update_series(name, metadata=None, category=None, subcategory=None
     # Check if series exists
     existing = conn.execute('SELECT id FROM series WHERE name = ?', (name,)).fetchone()
     
+    series_id: int
     if existing:
         # Update existing series
         conn.execute('''
@@ -70,7 +73,7 @@ def create_or_update_series(name, metadata=None, category=None, subcategory=None
             subcategory,
             name
         ))
-        series_id = existing['id']
+        series_id = int(existing['id'])
     else:
         # Insert new series
         cursor = conn.execute('''
@@ -101,6 +104,7 @@ def create_or_update_series(name, metadata=None, category=None, subcategory=None
             category,
             subcategory
         ))
+        assert cursor.lastrowid is not None
         series_id = cursor.lastrowid
     
     if own_conn:
@@ -108,14 +112,14 @@ def create_or_update_series(name, metadata=None, category=None, subcategory=None
         conn.close()
     return series_id
 
-def get_series_by_name(name):
+def get_series_by_name(name: str) -> Optional[Dict[str, Any]]:
     """Get series by name"""
     conn = get_db_connection()
     series = conn.execute('SELECT * FROM series WHERE name = ?', (name,)).fetchone()
     conn.close()
     return dict(series) if series else None
 
-def get_series_with_comics(name, user_id=None):
+def get_series_with_comics(name: str, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """Get series with all its comics, optionally including user progress"""
     conn = get_db_connection()
     
@@ -183,14 +187,14 @@ def get_series_with_comics(name, user_id=None):
     conn.close()
     return series_dict
 
-def update_comic_series_id(comic_id, series_id):
+def update_comic_series_id(comic_id: str, series_id: int) -> None:
     """Update the series_id for a comic"""
     conn = get_db_connection()
     conn.execute('UPDATE comics SET series_id = ? WHERE id = ?', (series_id, comic_id))
     conn.commit()
     conn.close()
 
-def get_all_series(category=None, subcategory=None, limit=100, offset=0):
+def get_all_series(category: Optional[str] = None, subcategory: Optional[str] = None, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
     """Get all series with optional filtering"""
     conn = get_db_connection()
     
@@ -231,7 +235,7 @@ _TAG_CACHE = {
     'last_updated': 0
 }
 
-def _refresh_tag_cache(conn=None):
+def _refresh_tag_cache(conn: Optional[sqlite3.Connection] = None) -> None:
     """Rebuild the tag metadata cache"""
     global _TAG_CACHE
     
@@ -245,7 +249,7 @@ def _refresh_tag_cache(conn=None):
         
     rows = conn.execute("SELECT genres, tags, demographics FROM series").fetchall()
     
-    def normalize_tag(t):
+    def normalize_tag(t: Optional[str]) -> str:
         if not t: return ""
         return " ".join(t.split()).lower()
 
@@ -289,7 +293,7 @@ def _refresh_tag_cache(conn=None):
     if close_conn:
         conn.close()
 
-def invalidate_tag_cache():
+def invalidate_tag_cache() -> None:
     """Invalidate the tag metadata cache to force a refresh on next use"""
     global _TAG_CACHE
     _TAG_CACHE['system_tags'] = None
@@ -297,7 +301,7 @@ def invalidate_tag_cache():
     _TAG_CACHE['tag_lookup'] = None
     _TAG_CACHE['last_updated'] = 0
 
-def warm_up_metadata_cache():
+def warm_up_metadata_cache() -> None:
     """Warm up the tag and search caches on server boot"""
     import time
     start = time.time()
@@ -312,7 +316,7 @@ def warm_up_metadata_cache():
     elapsed = time.time() - start
     logger.info(f"Metadata caches warmed up in {elapsed:.2f}s")
 
-def force_rebuild_fts():
+def force_rebuild_fts() -> bool:
     """Manually rebuild the FTS5 search index"""
     conn = get_db_connection()
     try:
@@ -324,7 +328,7 @@ def force_rebuild_fts():
     finally:
         conn.close()
 
-def search_series(query, limit=50):
+def search_series(query: str, limit: int = 50) -> List[Dict[str, Any]]:
     """Search for series using FTS5 with fallback to LIKE"""
     if not query or not query.strip():
         return []
@@ -441,7 +445,7 @@ def get_gaps_report():
                 
     return report
 
-def add_rating(user_id, series_id, rating):
+def add_rating(user_id: int, series_id: int, rating: int) -> None:
     """Add or update a user's rating for a series"""
     conn = get_db_connection()
     conn.execute('''
@@ -452,7 +456,7 @@ def add_rating(user_id, series_id, rating):
     conn.commit()
     conn.close()
 
-def get_series_rating(series_id):
+def get_series_rating(series_id: int) -> Dict[str, Any]:
     """Get average rating and count for a series"""
     conn = get_db_connection()
     row = conn.execute('''
@@ -465,7 +469,7 @@ def get_series_rating(series_id):
         'rating_count': row['rating_count']
     }
 
-def get_user_rating(user_id, series_id):
+def get_user_rating(user_id: int, series_id: int) -> Optional[int]:
     """Get a specific user's rating for a series"""
     conn = get_db_connection()
     row = conn.execute('''
@@ -474,7 +478,7 @@ def get_user_rating(user_id, series_id):
     conn.close()
     return row['rating'] if row else None
 
-def get_series_metadata():
+def get_series_metadata() -> Dict[str, List[str]]:
     """Get unique genres, tags, and statuses for filtering"""
     conn = get_db_connection()
     
@@ -491,12 +495,12 @@ def get_series_metadata():
         "genres": genres
     }
 
-def get_series_by_tags(selected_tags=None):
+def get_series_by_tags(selected_tags: Optional[List[str]] = None) -> Dict[str, Any]:
     """Get series stats filtered by tags/genres"""
     if selected_tags is None:
         selected_tags = []
     
-    def normalize_tag(t):
+    def normalize_tag(t: Optional[str]) -> str:
         if not t: return ""
         return " ".join(t.split()).lower()
     
