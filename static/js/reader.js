@@ -1147,8 +1147,9 @@ export function setSetting(type, value, syncPreference = true) {
         if (prefMap[type]) setPreference(prefMap[type], value, false);
     }
     
-    // Always save per-comic progress when setting changes in reader (Layout only)
-    if (state.currentComic) {
+    // Save per-comic progress only for layout-related settings (not visual filters)
+    const layoutSettings = ['direction', 'display', 'zoom'];
+    if (state.currentComic && layoutSettings.includes(type)) {
         saveProgress();
     }
 }
