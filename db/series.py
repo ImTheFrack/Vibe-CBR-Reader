@@ -510,8 +510,9 @@ def get_series_by_tags(selected_tags=None):
     tag_lookup = _TAG_CACHE['tag_lookup']
     
     rows = conn.execute('''
-        SELECT id, name, title, genres, tags, demographics, synopsis, cover_comic_id, total_chapters 
-        FROM series
+        SELECT s.id, s.name, s.title, s.genres, s.tags, s.demographics, s.synopsis, s.cover_comic_id, s.total_chapters, s.status, s.category,
+               (SELECT COUNT(*) FROM comics WHERE series_id = s.id) as actual_count
+        FROM series s
     ''').fetchall()
     
     processed_series = []
@@ -524,7 +525,12 @@ def get_series_by_tags(selected_tags=None):
         processed_series.append({
             'id': row['id'], 'name': row['name'], 'title': row['title'],
             'synopsis': row['synopsis'], 'explicit_norms': explicit_norms,
-            'cover_comic_id': row['cover_comic_id'], 'total_chapters': row['total_chapters'] or 0
+            'cover_comic_id': row['cover_comic_id'], 
+            'total_chapters': row['total_chapters'] or 0,
+            'actual_count': row['actual_count'],
+            'status': row['status'],
+            'category': row['category'],
+            'genres': s_genres
         })
 
     matching_series = []
@@ -564,8 +570,11 @@ def get_series_by_tags(selected_tags=None):
         if all(sel in series_all_norms for sel in selected_norms):
             matching_series.append({
                 'id': series['id'], 'name': series['name'], 'title': series['title'],
-                'cover_comic_id': series['cover_comic_id'], 'count': series['total_chapters'],
-                'comics': comics_by_series.get(series['id'], [])
+                'cover_comic_id': series['cover_comic_id'], 'count': series['actual_count'],
+                'comics': comics_by_series.get(series['id'], []),
+                'status': series['status'],
+                'category': series['category'],
+                'genres': series['genres']
             })
             for tag_norm in series_all_norms:
                 if tag_norm not in selected_norms:

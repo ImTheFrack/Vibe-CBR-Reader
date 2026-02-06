@@ -106,12 +106,28 @@ export async function updateTagsView() {
 
         if (shouldShowResults) {
             // Show Series Results
+            if (showBtn) showBtn.style.display = 'none';
+            const tagSearch = document.getElementById('tag-search-container');
+            if (tagSearch) tagSearch.style.display = 'none';
+            
+            const filters = document.getElementById('tags-filters');
+            if (filters) {
+                filters.style.display = 'flex';
+                updateTagDynamicFilters();
+            }
+
             renderResults();
             container.style.display = 'none';
             resultsContainer.style.display = 'grid';
             tagsState.isShowingResults = true; // Ensure state reflects this
         } else {
             // Show Tags Grid
+            const tagSearch = document.getElementById('tag-search-container');
+            if (tagSearch) tagSearch.style.display = 'block';
+            
+            const filters = document.getElementById('tags-filters');
+            if (filters) filters.style.display = 'none';
+
             renderTagsGrid();
             container.style.display = 'grid';
             resultsContainer.style.display = 'none';
@@ -122,6 +138,79 @@ export async function updateTagsView() {
         console.error('Failed to load tags:', error);
         container.innerHTML = '<div class="error-message">Failed to load tags.</div>';
     }
+}
+
+export function handleTagFilterChange() {
+    state.filters.genre = document.getElementById('tag-filter-genre').value;
+    state.filters.status = document.getElementById('tag-filter-status').value;
+    state.filters.read = document.getElementById('tag-filter-read').value;
+    
+    renderResults();
+    updateTagDynamicFilters();
+}
+
+window.handleTagFilterChange = handleTagFilterChange;
+
+function updateTagDynamicFilters() {
+    const rawTitles = tagsState.matchingSeries;
+    if (!rawTitles || rawTitles.length === 0) return;
+
+    const currentGenre = document.getElementById('tag-filter-genre').value;
+    const currentStatus = document.getElementById('tag-filter-status').value;
+    const currentRead = document.getElementById('tag-filter-read').value;
+
+    const availableGenres = new Set();
+    const availableStatuses = new Set();
+
+    // We can use the same titleMatchesFilter if we ensure series objects have the same structure
+    // tagsState.matchingSeries items are from /api/series/tags/filter which returns series objects
+    // We need to check their structure. They usually have 'genres', 'status', etc.
+    
+    rawTitles.forEach(t => {
+        // Populate available genres based on other filters
+        if (matchesFilter(t, 'status', currentStatus) && matchesFilter(t, 'read', currentRead)) {
+            if (t.genres && Array.isArray(t.genres)) t.genres.forEach(g => availableGenres.add(g));
+            if (t.category) availableGenres.add(t.category);
+        }
+        
+        // Populate available statuses based on other filters
+        if (matchesFilter(t, 'genre', currentGenre) && matchesFilter(t, 'read', currentRead)) {
+            if (t.status) availableStatuses.add(t.status);
+        }
+    });
+
+    updateSelectOptions('tag-filter-genre', Array.from(availableGenres).sort(), currentGenre, 'All Genres');
+    updateSelectOptions('tag-filter-status', Array.from(availableStatuses).sort(), currentStatus, 'All Statuses');
+}
+
+function matchesFilter(series, type, value) {
+    if (!value) return true;
+    if (type === 'genre') {
+        return (series.genres && series.genres.includes(value)) || series.category === value;
+    }
+    if (type === 'status') {
+        return series.status === value;
+    }
+    if (type === 'read') {
+        // For series results in tags, we might not have the full comic list with progress here
+        // The API returns 'user_progress' or similar?
+        // Actually, matchingSeries items are series objects.
+        // Let's assume they have some progress info or we check state.readingProgress if we have comic IDs.
+        // For now, if we don't have enough info, return true or implement basic check.
+        return true; 
+    }
+    return true;
+}
+
+function updateSelectOptions(elementId, options, currentValue, defaultText) {
+    const select = document.getElementById(elementId);
+    if (!select) return;
+    let html = `<option value="">${defaultText}</option>`;
+    options.forEach(opt => {
+        const isSelected = opt === currentValue ? 'selected' : '';
+        html += `<option value="${opt}" ${isSelected}>${opt}</option>`;
+    });
+    select.innerHTML = html;
 }
 
 // Render the bar of selected filter tags
@@ -229,17 +318,29 @@ function renderResults() {
     const container = document.getElementById('tags-results');
     if (!container) return;
     
-    if (tagsState.matchingSeries.length === 0) {
+    let filteredSeries = tagsState.matchingSeries;
+    
+    // Apply filters
+    const { genre, status, read } = state.filters;
+    if (genre || status || read) {
+        filteredSeries = filteredSeries.filter(s => 
+            matchesFilter(s, 'genre', genre) &&
+            matchesFilter(s, 'status', status) &&
+            matchesFilter(s, 'read', read)
+        );
+    }
+    
+    if (filteredSeries.length === 0) {
         container.innerHTML = `
              <div class=\"empty-state\">
                 <div class=\"empty-icon\">🔍</div>
-                <div class=\"empty-title\">No series found</div>
+                <div class=\"empty-title\">No series found matching these filters</div>
             </div>
         `;
         return;
     }
 
-     const items = tagsState.matchingSeries.map(series => {
+     const items = filteredSeries.map(series => {
          const seriesName = series.name || 'Unknown Series';
          const seriesTitle = series.title || seriesName;
          
@@ -275,6 +376,10 @@ function renderResults() {
     });
 
     renderItems(container, items, state.viewMode || 'grid');
+
+    // Sync selection state if we are already in selection mode
+    if (window.updateSelectionUI) window.updateSelectionUI();
+    if (window.updateSelectionButtonState) window.updateSelectionButtonState();
 }
 
 // Global functions attached to window for HTML event access

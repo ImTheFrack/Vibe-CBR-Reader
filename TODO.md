@@ -48,14 +48,15 @@ This file tracks the project's outstanding tasks, known bugs, and future roadmap
 - [ ] **Collections & Discovery**:
     - **Shared Lists**: Custom lists with `is_public` flags; community view to browse public collections.
     - [x] **Advanced Search**: [Implemented] Deep metadata search (synopsis, authors) using SQLite FTS5. Supports multi-word prefix matching.
+    - [x] **Contextual Sidebar**: [Implemented] One-level-up hierarchical navigation with location highlighting; remains visible in title view.
     - [x] **Optimized Tagging System**: 
         - **Features**: Multi-word consolidation, metadata-based matching, and deep-linking support.
         - **Performance**: 128x speedup via module-level caching and word-set tokenization.
         - **Task**: [Implemented] Trigger cache invalidation in `database.py` at the end of library scan jobs.
-    - [x] **Filters**: [Implemented] UI filters for genre, status, and read/unread state.
+    - [x] **Filters**: [Implemented] Dynamic, context-aware UI filters with propagation for genre, status, and progress.
 - [x] **Anonymous Star Ratings**: [Implemented] 5-star system for series with average scores and individual user vote memory.
 - [x] **Modular Batch Operations Framework**:
-    - [x] **Selection Mode**: [Implemented] Context-aware selection (Titles in library, Chapters in series view) with visual checkmarks and auto-clearing on navigation.
+    - [x] **Selection Mode**: [Implemented] Context-aware selection (Titles in library, Chapters in series view, and results in Tags view) with visual checkmarks and intelligent persistence across filtering.
     - [x] **Export as CBZ**: [Implemented] Robust background system using UUID-based jobs.
         - **Features**: Streaming ZIP creation (low RAM), path-preservation (relative to Title), sorted export (Volumes first).
         - **Reliability**: Heartbeat-based zombie cleanup (30s timeout) and `beforeunload` cancellation.

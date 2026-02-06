@@ -48,31 +48,6 @@
         <div class="hamburger-menu" id="hamburger-menu">
             <!-- Auth Section (Injected here) -->
             <div id="auth-section" class="menu-section"></div>
-            
-            <div class="menu-divider"></div>
-
-            <div class="menu-item" onclick="toggleTheme()">
-                <span class="menu-icon" id="theme-icon-menu">☀️</span>
-                <span>Toggle Theme</span>
-            </div>
-
-            <div class="menu-item" onclick="toggleEReader()">
-                <span class="menu-icon" id="ereader-icon-menu">🕶️</span>
-                <span>E-Reader Mode</span>
-            </div>
-
-            <div class="menu-item sidebar-toggle-menu" onclick="toggleMobileSidebar()">
-                <span class="menu-icon">📁</span>
-                <span>Toggle Folders</span>
-            </div>
-
-            <div class="menu-divider"></div>
-
-            <label class="menu-item flatten-toggle-menu">
-                <input type="checkbox" id="flatten-checkbox" onchange="toggleFlattenMode()">
-                <span class="menu-icon">📄</span>
-                <span>Flatten Library</span>
-            </label>
         </div>
     </header>
 
@@ -93,42 +68,58 @@
                 </div>
                 
                 <div class="header-controls">
-                    <div class="filters-row" id="library-filters" style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; justify-content: flex-end;">
-                        <select class="sort-select" id="filter-genre" onchange="handleFilterChange()" style="min-width: 120px;">
-                            <option value="">All Genres</option>
+                    <div class="control-group-main">
+                        <div class="view-toggle">
+                            <button class="view-btn active" data-view="grid" onclick="setViewMode('grid')" title="Grid View">
+                                <span>⊞</span>
+                            </button>
+                            <button class="view-btn" data-view="list" onclick="setViewMode('list')" title="List View">
+                                <span>☰</span>
+                            </button>
+                            <button class="view-btn" data-view="detailed" onclick="setViewMode('detailed')" title="Detailed View">
+                                <span>▤</span>
+                            </button>
+                        </div>
+                        <select class="sort-select" id="sort-select" onchange="handleSort(this.value)">
+                            <option value="alpha-asc">A-Z</option>
+                            <option value="alpha-desc">Z-A</option>
+                            <option value="date-added">Date</option>
+                            <option value="page-count">Pages</option>
+                            <option value="file-size">Size</option>
+                            <option value="recent-read">Recent</option>
                         </select>
-                        <select class="sort-select" id="filter-status" onchange="handleFilterChange()" style="min-width: 110px;">
-                            <option value="">All Statuses</option>
-                        </select>
-                        <select class="sort-select" id="filter-read" onchange="handleFilterChange()" style="min-width: 120px;">
-                            <option value="">Any Progress</option>
-                            <option value="unread">Unread</option>
-                            <option value="reading">In Progress</option>
-                            <option value="completed">Completed</option>
-                        </select>
-                        <button class="header-btn" id="btn-selection-mode" onclick="toggleSelectionMode()" title="Selection Mode">
+                    </div>
+
+                    <div class="filters-stack" id="library-filters" style="display: none;">
+                        <div class="filter-row-top">
+                            <select class="filter-select" id="filter-genre" onchange="handleFilterChange()" style="width: 100%;">
+                                <option value="">All Genres</option>
+                            </select>
+                        </div>
+                        <div class="filter-row-bottom">
+                            <select class="filter-select" id="filter-status" onchange="handleFilterChange()">
+                                <option value="">All Statuses</option>
+                            </select>
+                            <select class="filter-select" id="filter-read" onchange="handleFilterChange()">
+                                <option value="">Any Progress</option>
+                                <option value="unread">Unread</option>
+                                <option value="reading">In Progress</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="control-group-main">
+                        <button class="header-btn btn-selection-mode" id="btn-selection-mode" onclick="toggleSelectionMode()" title="Selection Mode">
                             <span>☑</span>
                         </button>
-                    </div>
-                    <div class="view-toggle" style="margin-bottom: 8px;">
-                        <button class="view-btn active" data-view="grid" onclick="setViewMode('grid')" title="Grid View">
-                            <span>⊞</span>
+                        <button class="header-btn" id="btn-flatten" onclick="toggleFlattenMode()" title="Flatten Library">
+                            <span>📄</span>
                         </button>
-                        <button class="view-btn" data-view="list" onclick="setViewMode('list')" title="List View">
-                            <span>☰</span>
-                        </button>
-                        <button class="view-btn" data-view="detailed" onclick="setViewMode('detailed')" title="Detailed View">
-                            <span>▤</span>
+                        <button class="header-btn" id="btn-toggle-folders" onclick="toggleMobileSidebar()" title="Toggle Folders">
+                            <span>📁</span>
                         </button>
                     </div>
-                    <select class="sort-select" id="sort-select" onchange="handleSort(this.value)">
-                        <option value="alpha-asc">A-Z</option>
-                        <option value="alpha-desc">Z-A</option>
-                        <option value="date-added">Date</option>
-                        <option value="page-count">Pages</option>
-                        <option value="file-size">Size</option>
-                        <option value="recent-read">Recent</option>
-                    </select>
                 </div>
             </div>
 
@@ -136,7 +127,6 @@
             <div class="library-layout" id="library-layout">
                 <!-- Folder Sidebar -->
                 <aside class="folder-sidebar" id="folder-sidebar">
-                    <div class="sidebar-title">📁 Navigation</div>
                     <div class="folder-tree" id="folder-tree">
                         <!-- Populated dynamically -->
                     </div>
@@ -220,13 +210,51 @@
                     <p class="section-subtitle" id="tags-subtitle">Select tags to narrow down your collection</p>
                 </div>
                 <div class="header-controls">
-                    <div class="search-box" style="margin-right: 1rem;">
-                        <span class="search-icon">🔍</span>
-                        <input type="text" class="search-input" id="tagSearchInput" placeholder="Filter tags...">
+                    <div class="control-group-main">
+                        <div class="view-toggle">
+                            <button class="view-btn active" data-view="grid" onclick="setViewMode('grid')" title="Grid View">
+                                <span>⊞</span>
+                            </button>
+                            <button class="view-btn" data-view="list" onclick="setViewMode('list')" title="List View">
+                                <span>☰</span>
+                            </button>
+                            <button class="view-btn" data-view="detailed" onclick="setViewMode('detailed')" title="Detailed View">
+                                <span>▤</span>
+                            </button>
+                        </div>
                     </div>
-                     <button id="btn-show-results" class="btn-primary" onclick="showTagResults()" style="display:none;">
-                        Display Results
-                     </button>
+
+                    <div class="filters-stack" id="tags-filters" style="display: none;">
+                        <div class="filter-row-top">
+                            <select class="filter-select" id="tag-filter-genre" onchange="handleTagFilterChange()" style="width: 100%;">
+                                <option value="">All Genres</option>
+                            </select>
+                        </div>
+                        <div class="filter-row-bottom">
+                            <select class="filter-select" id="tag-filter-status" onchange="handleTagFilterChange()">
+                                <option value="">All Statuses</option>
+                            </select>
+                            <select class="filter-select" id="tag-filter-read" onchange="handleTagFilterChange()">
+                                <option value="">Any Progress</option>
+                                <option value="unread">Unread</option>
+                                <option value="reading">In Progress</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="control-group-main">
+                        <button class="header-btn btn-selection-mode" id="btn-selection-mode-tags" onclick="toggleSelectionMode()" title="Selection Mode">
+                            <span>☑</span>
+                        </button>
+                        <div class="search-box" id="tag-search-container">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" class="search-input" id="tagSearchInput" placeholder="Filter tags..." style="padding-right: 16px !important;">
+                        </div>
+                         <button id="btn-show-results" class="btn-primary" onclick="showTagResults()" style="display:none;">
+                            Display Results
+                         </button>
+                    </div>
                 </div>
             </div>
 

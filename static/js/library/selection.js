@@ -15,15 +15,15 @@ window.addEventListener('beforeunload', () => {
 
 export function toggleSelectionMode() {
     state.selectionMode = !state.selectionMode;
-    const btn = document.getElementById('btn-selection-mode');
+    const buttons = document.querySelectorAll('.btn-selection-mode');
     const main = document.querySelector('.main-container');
     
     if (state.selectionMode) {
-        btn.classList.add('active');
+        buttons.forEach(btn => btn.classList.add('active'));
         main.classList.add('selection-mode-active');
         state.selectedIds = new Set();
     } else {
-        btn.classList.remove('active');
+        buttons.forEach(btn => btn.classList.remove('active'));
         main.classList.remove('selection-mode-active');
         clearSelection();
     }
@@ -264,10 +264,10 @@ function updateProgressModal(percent, detail) {
 export function clearSelection() {
     state.selectedIds = new Set();
     state.selectionMode = false;
-    const btn = document.getElementById('btn-selection-mode');
+    const buttons = document.querySelectorAll('.btn-selection-mode');
     const main = document.querySelector('.main-container');
     const bar = document.getElementById('selection-action-bar');
-    if (btn) btn.classList.remove('active');
+    buttons.forEach(btn => btn.classList.remove('active'));
     if (main) main.classList.remove('selection-mode-active');
     if (bar) bar.classList.remove('active');
     document.querySelectorAll('.comic-card.selected, .selection-checkbox.selected').forEach(el => el.classList.remove('selected'));

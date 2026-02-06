@@ -116,8 +116,10 @@ function onHashChange() {
     const oldRoute = router.parseHash(oldHash);
     const route = router.handleRouteChange(newHash, oldHash);
     
-    // Clear selection on any navigation/route change
-    if (window.clearSelection) window.clearSelection();
+    // Clear selection ONLY if the view changed
+    if (oldRoute.view !== route.view) {
+        if (window.clearSelection) window.clearSelection();
+    }
     
     if (oldRoute.view === 'read' && route.view !== 'read') {
         console.log("[DEBUG] Closing reader, oldRoute:", oldRoute, "new route:", route);

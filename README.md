@@ -68,6 +68,12 @@ For a detailed list of planned features, known bugs, and project roadmap, please
 ## Recent Changes
 
 ### 2026-02-06
+- **Unified Selection & Export**: Integrated the batch selection system into the Tags view, allowing users to select and export series found via tag filtering. Improved navigation logic to persist selections during tag drill-down.
+- **Accurate Chapter Counting**: Replaced metadata-based chapter counts in the Tags view with real-time disk-based counting for 100% accuracy.
+- **Metadata-Prioritized Sidebar**: Updated the navigation sidebar to use series metadata titles and enforced alphabetical sorting at all levels for a more predictable browsing experience.
+- **Dynamic Filter Propagation**: Redesigned library filters to be context-aware, showing only when viewing titles and dynamically narrowing options based on active filters to ensure zero-result states are avoided.
+- **Contextual Navigation Sidebar**: Overhauled the sidebar to show the "one level up" hierarchy relative to the current view, providing a stable navigational guide that remains visible even in detailed title views.
+- **UI Logic Optimization**: Automatically hide non-applicable controls (like the Flatten toggle) when viewing specific titles or chapters to reduce UI clutter.
 - **Global Preference Sync**: Expanded the user profile system to persist all visual filters (Brightness, Contrast, Saturation, Invert, Tone) and auto-advance settings across devices.
 - **Intelligent Precedence**: Refined the reader to balance per-comic memory (for layout) with global defaults (for environment), ensuring a consistent experience without manual re-adjustment.
 - **E-Reader Mode**: Launched a dedicated high-contrast mode that eliminates all shadows, rounded corners, and transitions for a "cleanly lined" aesthetic.

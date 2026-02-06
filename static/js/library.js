@@ -48,7 +48,7 @@ export async function loadLibrary() {
         }
         state.comics = await response.json();
         buildFolderTree();
-        await initFilters();
+        // Filters will be initialized dynamically
     } catch (error) {
         showToast('Failed to load library', 'error');
         console.error(error);
@@ -56,27 +56,118 @@ export async function loadLibrary() {
     }
 }
 
-export async function initFilters() {
-    try {
-        const metadata = await apiGet('/api/series/metadata');
-        if (metadata.error) return;
+// Helper to check if a title matches filters
+function titleMatchesFilter(title, filterType, filterValue) {
+    if (!filterValue) return true;
+    
+    if (filterType === 'genre') {
+        // Genres is array in comic metadata, or use category
+        return title.comics.some(c => 
+            (c.genres && c.genres.includes(filterValue)) || 
+            c.category === filterValue
+        );
+    }
+    if (filterType === 'status') {
+        return title.comics.some(c => c.series_status === filterValue);
+    }
+    if (filterType === 'read') {
+        const progress = title.comics.map(c => state.readingProgress[c.id]).filter(Boolean);
+        const allCompleted = progress.length === title.comics.length && progress.every(p => p.completed);
+        const someStarted = progress.some(p => p.page > 0 || p.completed);
+        
+        if (filterValue === 'completed') return allCompleted;
+        if (filterValue === 'unread') return !someStarted;
+        if (filterValue === 'reading') return someStarted && !allCompleted;
+    }
+    return true;
+}
 
-        const genreSelect = document.getElementById('filter-genre');
-        const statusSelect = document.getElementById('filter-status');
+export function updateDynamicFilters() {
+    const rawTitles = getRawTitlesInLocation();
+    if (!rawTitles || rawTitles.length === 0) return;
 
-        if (genreSelect) {
-            genreSelect.innerHTML = '<option value="">All Genres</option>' + 
-                metadata.genres.map(g => `<option value="${g}">${g}</option>`).join('');
+    // Get current filter values
+    const currentGenre = document.getElementById('filter-genre').value;
+    const currentStatus = document.getElementById('filter-status').value;
+    const currentRead = document.getElementById('filter-read').value;
+
+    // 1. Available Genres: Filter by Status & Read (ignore Genre)
+    const titlesForGenre = rawTitles.filter(t => 
+        titleMatchesFilter(t, 'status', currentStatus) && 
+        titleMatchesFilter(t, 'read', currentRead)
+    );
+    const availableGenres = new Set();
+    titlesForGenre.forEach(t => {
+        t.comics.forEach(c => {
+            if (c.category) availableGenres.add(c.category);
+            if (c.genres && Array.isArray(c.genres)) c.genres.forEach(g => availableGenres.add(g));
+        });
+    });
+
+    // 2. Available Statuses: Filter by Genre & Read (ignore Status)
+    const titlesForStatus = rawTitles.filter(t => 
+        titleMatchesFilter(t, 'genre', currentGenre) && 
+        titleMatchesFilter(t, 'read', currentRead)
+    );
+    const availableStatuses = new Set();
+    titlesForStatus.forEach(t => {
+        t.comics.forEach(c => {
+            if (c.series_status) availableStatuses.add(c.series_status);
+        });
+    });
+
+    // Update Selects (Preserve selection if valid, or if it was set)
+    updateSelectOptions('filter-genre', Array.from(availableGenres).sort(), currentGenre, 'All Genres');
+    updateSelectOptions('filter-status', Array.from(availableStatuses).sort(), currentStatus, 'All Statuses');
+}
+
+function updateSelectOptions(elementId, options, currentValue, defaultText) {
+    const select = document.getElementById(elementId);
+    if (!select) return;
+
+    // Keep "All" option
+    let html = `<option value="">${defaultText}</option>`;
+    
+    // Add options
+    options.forEach(opt => {
+        const isSelected = opt === currentValue ? 'selected' : '';
+        html += `<option value="${opt}" ${isSelected}>${opt}</option>`;
+    });
+
+    // If current value is not in options (e.g. because of other filters), should we keep it?
+    // The user said: "never want a filter to yield zero results".
+    // If I selected "Action" and then "Completed", and there are no "Completed Action" manga,
+    // "Action" should technically be removed from the valid options if we were strictly narrowing.
+    // BUT, we calculated available genres based on Status=Completed. 
+    // So if there are no Completed Action manga, Action will NOT be in availableGenres.
+    // If we remove it, the filter value drops to "" (All Genres).
+    // This effectively "resets" the invalid filter. This is usually desired behavior to avoid "zero results" traps.
+    
+    // However, simply overwriting innerHTML might reset the value property if the option is missing.
+    select.innerHTML = html;
+    
+    // If the previously selected value is gone, we might want to let it reset or show it as disabled?
+    // For now, standard behavior is it resets to first option if selected option is gone.
+    // But we need to ensure the state reflects that.
+    if (currentValue && !options.includes(currentValue)) {
+        // The value was reset. We should probably update the state to match.
+        // But this causes a loop if we are not careful. 
+        // handleFilterChange calls updateLibraryView calls updateDynamicFilters.
+        // If updateDynamicFilters changes the value, we don't trigger change event automatically.
+        // So state.filters.genre might still be 'Action'.
+        
+        // We should check select.value after update.
+        if (select.value !== state.filters[elementId.replace('filter-', '')]) {
+             state.filters[elementId.replace('filter-', '')] = select.value;
+             // We might need to re-render view immediately if the filter effectively changed?
+             // But we are likely IN a render loop or about to render.
+             // If we are called from updateLibraryView, render happens after?
+             // No, updateLibraryView calls this, then renders.
         }
-
-        if (statusSelect) {
-            statusSelect.innerHTML = '<option value="">All Statuses</option>' + 
-                metadata.statuses.map(s => `<option value="${s}">${s}</option>`).join('');
-        }
-    } catch (err) {
-        console.error('Failed to init filters:', err);
     }
 }
+
+window.updateDynamicFilters = updateDynamicFilters;
 
 export function handleFilterChange() {
     state.filters.genre = document.getElementById('filter-genre').value;
@@ -174,8 +265,12 @@ export function buildFolderTree() {
 }
 
 function buildTreeFromParts(root, parts, comic) {
+    const preferredTitle = comic.series || comic.title || 'Unknown';
+    
     if (parts.length >= 3) {
-        const [catName, subName, titleName] = parts;
+        const [catName, subName, folderTitleName] = parts;
+        const titleName = preferredTitle;
+        
         if (!root.categories[catName]) root.categories[catName] = { name: catName, subcategories: {}, count: 0 };
         const category = root.categories[catName];
         category.count++;
@@ -187,27 +282,30 @@ function buildTreeFromParts(root, parts, comic) {
         sub.titles[titleName].count++;
         root.count++;
     } else if (parts.length === 2) {
-        const [catName, subName] = parts;
+        const [catName, folderSubName] = parts;
+        const subName = preferredTitle;
+        const titleName = preferredTitle;
+        
         if (!root.categories[catName]) root.categories[catName] = { name: catName, subcategories: {}, count: 0 };
         const category = root.categories[catName];
         category.count++;
         if (!category.subcategories[subName]) category.subcategories[subName] = { name: subName, titles: {}, count: 0 };
         const sub = category.subcategories[subName];
         sub.count++;
-        const titleName = comic.title || comic.series || 'Unknown';
         if (!sub.titles[titleName]) sub.titles[titleName] = { name: titleName, comics: [], count: 0 };
         sub.titles[titleName].comics.push(comic);
         sub.titles[titleName].count++;
         root.count++;
     } else if (parts.length === 1) {
         const catName = parts[0];
+        const titleName = preferredTitle;
+        
         if (!root.categories[catName]) root.categories[catName] = { name: catName, subcategories: {}, count: 0 };
         root.categories[catName].count++;
         root.count++;
         if (!root.categories[catName].subcategories['_direct']) root.categories[catName].subcategories['_direct'] = { name: 'Uncategorized', titles: {}, count: 0 };
         const sub = root.categories[catName].subcategories['_direct'];
         sub.count++;
-        const titleName = comic.title || 'Unknown';
         if (!sub.titles[titleName]) sub.titles[titleName] = { name: titleName, comics: [], count: 0 };
         sub.titles[titleName].comics.push(comic);
         sub.titles[titleName].count++;
@@ -235,7 +333,7 @@ export function getFoldersAtLevel() {
     }
 }
 
-export function getTitlesInLocation() {
+export function getRawTitlesInLocation() {
     const tree = state.folderTree;
     if (!tree) return [];
     let titles = [];
@@ -262,49 +360,19 @@ export function getTitlesInLocation() {
             }
         }
     }
+    return titles;
+}
+
+export function getTitlesInLocation() {
+    let titles = getRawTitlesInLocation();
 
     // Apply Filters
     const { genre, status, read } = state.filters;
     if (genre || status || read) {
         titles = titles.filter(title => {
-            const firstComic = title.comics[0];
-            
-            // Genre/Status filters require metadata (from state.comics or cached series data)
-            // But state.folderTree titles have comics, and comics have category which is often the source of genre if not in series.json
-            // Actually, we should ideally have series metadata loaded for all titles.
-            // For now, let's use the metadata we have in state.comics (though it's limited).
-            
-            // Note: genres/status are usually in the series table, but we don't have them all in state.comics for every title yet.
-            // Let's assume for now that if we are filtering by genre/status, it's a global filter and we might need to fetch series data.
-            // But wait, state.comics has 'category' which we use as a rough genre.
-            
-            if (genre) {
-                // Check if any comic in title has the genre
-                // Genres is now an array in comic metadata
-                const hasGenre = title.comics.some(c => 
-                    (c.genres && c.genres.includes(genre)) || 
-                    c.category === genre
-                );
-                if (!hasGenre) return false;
-            }
-            
-            if (status) {
-                // Check series status
-                const hasStatus = title.comics.some(c => c.series_status === status);
-                if (!hasStatus) return false;
-            }
-            
-            if (read) {
-                const progress = title.comics.map(c => state.readingProgress[c.id]).filter(Boolean);
-                const allCompleted = progress.length === title.comics.length && progress.every(p => p.completed);
-                const someStarted = progress.some(p => p.page > 0 || p.completed);
-                
-                if (read === 'completed' && !allCompleted) return false;
-                if (read === 'unread' && someStarted) return false;
-                if (read === 'reading' && (!someStarted || allCompleted)) return false;
-            }
-            
-            return true;
+            return titleMatchesFilter(title, 'genre', genre) &&
+                   titleMatchesFilter(title, 'status', status) &&
+                   titleMatchesFilter(title, 'read', read);
         });
     }
 
@@ -347,8 +415,6 @@ export function getComicsInTitle() {
 
 export function toggleFlattenMode() {
     state.flattenMode = !state.flattenMode;
-    const flattenCheckbox = document.getElementById('flatten-checkbox');
-    if (flattenCheckbox) flattenCheckbox.checked = state.flattenMode;
     updateLibraryView();
     if (window.updateSelectionButtonState) window.updateSelectionButtonState();
     showToast(state.flattenMode ? 'Flatten mode enabled' : 'Flatten mode disabled', 'info');
@@ -388,37 +454,67 @@ export function renderFolderSidebar() {
     const container = document.getElementById('folder-tree');
     const tree = state.folderTree;
     if (!tree || !container) return;
+    
+    // Sidebar title as "Library" link
+    container.innerHTML = `<div class="folder-item root-item"><div class="folder-header ${state.currentLevel === 'root' ? 'active' : ''}" onclick="routerNavigate('library', {})"><span class="folder-icon">📚</span><span class="folder-name">Library</span></div></div><div class="menu-divider"></div>`;
+    
     let html = '';
     
-    if (state.currentLevel === 'root') {
+    if (state.currentLevel === 'root' || state.currentLevel === 'category') {
         html += `<div class="sidebar-section-title">Categories</div>`;
-        Object.values(tree.categories || {}).forEach(category => {
-            html += `<div class="folder-item"><div class="folder-header" onclick="routerNavigate('library', { category: \`${category.name}\` })"><span class="folder-icon">📁</span><span class="folder-name">${category.name}</span><span class="folder-count">${category.count}</span></div></div>`;
+        const categories = sortItems(Object.values(tree.categories || {}), 'alpha-asc', FOLDER_SORT_ACCESSORS);
+        categories.forEach(category => {
+            const isActive = state.currentLevel === 'category' && state.currentLocation.category === category.name;
+            html += `
+                <div class="folder-item">
+                    <div class="folder-header ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: \`${category.name}\` })">
+                        <span class="folder-icon">📁</span>
+                        <span class="folder-name">${category.name}</span>
+                        <span class="folder-count">${category.count}</span>
+                    </div>
+                </div>`;
         });
-    } else if (state.currentLevel === 'category') {
+    } else if (state.currentLevel === 'subcategory') {
         const cat = tree.categories[state.currentLocation.category];
         if (cat) {
-            html += `<div class="folder-item back-item"><div class="folder-header back-button" onclick="routerNavigate('library', {})"><span class="folder-icon">←</span><span class="folder-name">Back</span></div></div><div class="sidebar-section-title">${cat.name}</div>`;
-            Object.values(cat.subcategories).forEach(sub => {
+            html += `<div class="sidebar-section-title">${cat.name} Subcategories</div>`;
+            const subs = sortItems(Object.values(cat.subcategories), 'alpha-asc', FOLDER_SORT_ACCESSORS);
+            subs.forEach(sub => {
                 const subName = sub.name === '_direct' ? 'Uncategorized' : sub.name;
-                html += `<div class="folder-item"><div class="folder-header" onclick="routerNavigate('library', { category: \`${state.currentLocation.category}\`, subcategory: \`${sub.name}\` })"><span class="folder-icon">📁</span><span class="folder-name">${subName}</span><span class="folder-count">${sub.count}</span></div></div>`;
+                const isActive = state.currentLocation.subcategory === sub.name;
+                html += `
+                    <div class="folder-item">
+                        <div class="folder-header ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: \`${state.currentLocation.category}\`, subcategory: \`${sub.name}\` })">
+                            <span class="folder-icon">📁</span>
+                            <span class="folder-name">${subName}</span>
+                            <span class="folder-count">${sub.count}</span>
+                        </div>
+                    </div>`;
             });
         }
-    } else if (state.currentLevel === 'subcategory' || state.currentLevel === 'title') {
+    } else if (state.currentLevel === 'title') {
         const cat = tree.categories[state.currentLocation.category];
         if (cat) {
             const sub = cat.subcategories[state.currentLocation.subcategory];
             if (sub) {
                 const subName = sub.name === '_direct' ? 'Uncategorized' : sub.name;
-                html += `<div class="folder-item back-item"><div class="folder-header back-button" onclick="routerNavigate('library', { category: \`${state.currentLocation.category}\` })"><span class="folder-icon">←</span><span class="folder-name">Back</span></div></div><div class="sidebar-section-title">${subName}</div>`;
-                Object.values(sub.titles).forEach(title => {
+                html += `<div class="sidebar-section-title">${subName} Titles</div>`;
+                const titles = sortItems(Object.values(sub.titles), 'alpha-asc', FOLDER_SORT_ACCESSORS);
+                titles.forEach(title => {
                     const isActive = state.currentLocation.title === title.name;
-                    html += `<div class="folder-item"><div class="folder-header ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: \`${state.currentLocation.category}\`, subcategory: \`${state.currentLocation.subcategory}\`, title: \`${title.name.replace(/'/g, "\\'")}\` })"><span class="folder-icon">📚</span><span class="folder-name">${title.name}</span><span class="folder-count">${title.count}</span></div></div>`;
+                    html += `
+                        <div class="folder-item">
+                            <div class="folder-header ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: \`${state.currentLocation.category}\`, subcategory: \`${state.currentLocation.subcategory}\`, title: \`${title.name.replace(/'/g, "\\'")}\` })">
+                                <span class="folder-icon">📚</span>
+                                <span class="folder-name">${title.name}</span>
+                                <span class="folder-count">${title.count}</span>
+                            </div>
+                        </div>`;
                 });
             }
         }
     }
-    container.innerHTML = html;
+    container.innerHTML += html;
 }
 
 export function updateStatsForCurrentView() {
@@ -636,6 +732,7 @@ async function removeSingleHistory(comicId) {
 }
 
 // Global Exports for HTML
+window.getRawTitlesInLocation = getRawTitlesInLocation;
 window.getFoldersAtLevel = getFoldersAtLevel;
 window.getTitlesInLocation = getTitlesInLocation;
 window.getComicsInTitle = getComicsInTitle;

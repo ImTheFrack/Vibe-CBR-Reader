@@ -21,15 +21,37 @@ export function updateLibraryView() {
     const statsSummary = document.getElementById('stats-summary');
     const sidebar = document.getElementById('folder-sidebar');
     const libraryLayout = document.getElementById('library-layout');
+    const filtersContainer = document.getElementById('library-filters');
     
+    // Sync button states
+    const btnFolders = document.getElementById('btn-toggle-folders');
+    if (btnFolders) btnFolders.classList.toggle('active', state.sidebarVisible);
+
+    const btnFlatten = document.getElementById('btn-flatten');
+    if (btnFlatten) {
+        btnFlatten.classList.toggle('active', state.flattenMode);
+        const isViewingTitlesOrChapters = state.currentLevel === 'subcategory' || state.currentLevel === 'title';
+        btnFlatten.style.display = isViewingTitlesOrChapters ? 'none' : 'flex';
+    }
+
     if (state.searchQuery) {
+        if (filtersContainer) filtersContainer.style.display = 'flex';
+        if (window.updateDynamicFilters) window.updateDynamicFilters();
         if (window.renderSearchResults) window.renderSearchResults();
         return;
     }
     
-    const shouldHideSidebar = state.currentLevel === 'title' || !state.sidebarVisible;
+    const shouldHideSidebar = !state.sidebarVisible;
     if (sidebar) sidebar.style.display = shouldHideSidebar ? 'none' : 'block';
     if (libraryLayout) libraryLayout.classList.toggle('sidebar-hidden', shouldHideSidebar);
+
+    const isViewingTitles = state.currentLevel === 'title' || state.flattenMode || state.currentLevel === 'subcategory';
+    if (filtersContainer) {
+        filtersContainer.style.display = isViewingTitles ? 'flex' : 'none';
+        if (isViewingTitles && window.updateDynamicFilters) {
+            window.updateDynamicFilters();
+        }
+    }
 
     if (state.currentLevel === 'title') {
         if (statsSummary) {
@@ -514,8 +536,8 @@ export function showView(viewName) {
 }
 
 export function updateSelectionButtonState() {
-    const btn = document.getElementById('btn-selection-mode');
-    if (!btn) return;
+    const buttons = document.querySelectorAll('.btn-selection-mode');
+    if (buttons.length === 0) return;
 
     let allowed = false;
     
@@ -535,9 +557,11 @@ export function updateSelectionButtonState() {
         allowed = true;
     }
 
-    btn.disabled = !allowed;
-    btn.style.opacity = allowed ? '1' : '0.3';
-    btn.style.cursor = allowed ? 'pointer' : 'not-allowed';
+    buttons.forEach(btn => {
+        btn.disabled = !allowed;
+        btn.style.opacity = allowed ? '1' : '0.3';
+        btn.style.cursor = allowed ? 'pointer' : 'not-allowed';
+    });
     
     // If we were in selection mode but it's no longer allowed, clear it
     if (!allowed && state.selectionMode) {
