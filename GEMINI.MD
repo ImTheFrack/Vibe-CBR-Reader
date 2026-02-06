@@ -367,6 +367,80 @@ For a detailed list of planned features, known bugs, and code quality goals, ple
 - ✅ API abstraction layer (api.js)
 - ✅ Dependency injection for auth (dependencies.py)
 
+## Domain Model & Nomenclature
+
+This section defines the consistent terminology used throughout the codebase. Using these terms correctly prevents confusion when working with the hierarchical manga library structure.
+
+### Core Concepts
+
+| Term | Definition | Example | Code Reference |
+|------|------------|---------|----------------|
+| **Comic** | A single archive file (.cbz, .cbr) containing pages of a manga. The atomic unit. | `One Piece v01.cbz`, `Naruto c001.cbz` | `comics` table, `comic` object in JS |
+| **Chapter** | Generic term for a comic entry within a Title. Used for display/count purposes regardless of whether the file is a volume, chapter, or unit. | "5 chapters" (might be 3 volumes + 2 chapters) | UI display, `comics.length` |
+| **Title** | A manga series or story. Contains multiple chapters. The leaf node in the hierarchy. | "One Piece", "Attack on Titan" | `title` in folder tree, `series` in DB |
+| **Series** | Metadata record for a Title. Contains synopsis, genres, tags, etc. | Series table with name="One Piece" | `series` table |
+| **Subcategory** | Intermediate grouping folder between Category and Title. Usually a genre/theme. | "Battle Shonen", "Romance", "Sci-Fi" | `subcategories` in folder tree |
+| **Category** | Top-level folder in the library hierarchy. Usually a broad classification. | "Action, Adventure & Adrenaline", "Romance & Drama" | `categories` in folder tree |
+| **Tag** | Generic metadata label including: genres, demographics, themes, or custom tags. Used for filtering. | "Shonen", "Action", "School Life", "Mecha" | `tags` in series table, consolidated in tags view |
+
+### Folder Hierarchy (Physical → Logical)
+
+```
+Physical Path:                              Logical Structure:
+────────────────────────────────────────    ───────────────────────
+/manga/                                     Root
+    /Action, Adventure & Adrenaline/        → Category
+        /Battle Shonen & Supernatural/      → Subcategory  
+            /One Piece/                     → Title
+                One Piece v01.cbz           → Chapter (Comic)
+                One Piece v02.cbz           → Chapter (Comic)
+                One Piece c501.cbz          → Chapter (Comic)
+```
+
+### Navigation Levels
+
+| Level | In Code | User Sees | Example |
+|-------|---------|-----------|---------|
+| **Root** | `state.currentLevel === 'root'` | Categories grid | "Action, Adventure...", "Romance & Drama..." cards |
+| **Category** | `state.currentLevel === 'category'` | Subcategories grid | "Battle Shonen", "Supernatural Powers" cards |
+| **Subcategory** | `state.currentLevel === 'subcategory'` | Titles grid | "One Piece", "Naruto", "Bleach" cards |
+| **Title** | `state.currentLevel === 'title'` | Title detail + chapters | Synopsis, metadata, chapter list |
+
+### Database Terminology
+
+| DB Term | Maps To | Notes |
+|---------|---------|-------|
+| `comics.path` | File path | Full filesystem path to .cbz/.cbr |
+| `comics.series` | Title name | Often null, populated from filename parsing |
+| `comics.series_id` | → Series record | Foreign key to series metadata |
+| `series.name` | Title identifier | Unique, used for matching |
+| `series.genres` | JSON array | Shonen, Action, etc. |
+| `series.tags` | JSON array | Custom tags beyond genres |
+| `series.demographics` | JSON array | Shonen, Seinen, Josei, etc. |
+
+### User-Facing vs Internal Terms
+
+| User Sees | Internal/Code | Why Different |
+|-----------|---------------|---------------|
+| "Chapter" | `comic` | Users don't care about volumes vs chapters vs units |
+| "Title" | `series` or `title` | "Series" is metadata, "Title" is the thing they click |
+| "Tags" | `genres` + `tags` + `demographics` | Consolidated for filtering UX |
+| "Reading" | `in_progress` | Status filter value |
+
+### Common Confusions to Avoid
+
+❌ **DON'T**: Say "the Series folder" - Series is metadata, not a folder  
+✅ **DO**: Say "the Title folder" or "the folder containing chapters"
+
+❌ **DON'T**: Check `comic.chapter` for chapter count - that's the parsed chapter number  
+✅ **DO**: Use `title.comics.length` for "X chapters" display
+
+❌ **DON'T**: Call everything "manga" - too generic  
+✅ **DO**: Use "Comic" for files, "Title" for series, "Chapter" for count display
+
+❌ **DON'T**: Mix "tag" (filter concept) with "genre" (metadata field)  
+✅ **DO**: Use "Tag" as the generic UI term that includes genres, demographics, and custom tags
+
 ## Common Patterns & Gotchas
 
 ### Window Exports for Cross-Module Access
