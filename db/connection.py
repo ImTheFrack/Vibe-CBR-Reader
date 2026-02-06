@@ -3,6 +3,9 @@ import os
 from datetime import datetime
 from config import DB_PATH
 
+# Schema version for migration tracking
+SCHEMA_VERSION = 3
+
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
@@ -35,13 +38,15 @@ def init_db() -> None:
         )
     ''')
     
-    # Add new columns to comics table if they don't exist
-    # Column names are hardcoded (not user input) - safe from SQL injection
-    for col, col_type in [('size_bytes', 'INTEGER'), ('mtime', 'INTEGER')]:
-        try:
-            conn.execute(f'ALTER TABLE comics ADD COLUMN {col} {col_type}')
-        except sqlite3.OperationalError:
-            pass  # Column already exists
+    current_version = conn.execute('PRAGMA user_version').fetchone()[0]
+    
+    if current_version < 1:
+        # Migration 1: Add size_bytes and mtime columns to comics table
+        for col, col_type in [('size_bytes', 'INTEGER'), ('mtime', 'INTEGER')]:
+            try:
+                conn.execute(f'ALTER TABLE comics ADD COLUMN {col} {col_type}')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
     
     # Users table
     conn.execute('''
@@ -57,11 +62,12 @@ def init_db() -> None:
         )
     ''')
     
-    # Add must_change_password column to users table if it doesn't exist
-    try:
-        conn.execute('ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0')
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    if current_version < 1:
+        # Migration 1: Add must_change_password column to users table
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
     
     # Reading progress table (per-user, per-comic)
     conn.execute('''
@@ -83,19 +89,19 @@ def init_db() -> None:
         )
     ''')
     
-    # Add new columns to reading_progress table if they don't exist
-    # Column names are hardcoded (not user input) - safe from SQL injection
-    for col, col_type, default in [
-        ('reader_display', 'TEXT', None),
-        ('reader_direction', 'TEXT', None),
-        ('reader_zoom', 'TEXT', None),
-        ('seconds_read', 'INTEGER', '0')
-    ]:
-        try:
-            default_clause = f" DEFAULT {default}" if default is not None else ""
-            conn.execute(f'ALTER TABLE reading_progress ADD COLUMN {col} {col_type}{default_clause}')
-        except sqlite3.OperationalError:
-            pass  # Column already exists
+    if current_version < 1:
+        # Migration 1: Add reader settings and time tracking to reading_progress
+        for col, col_type, default in [
+            ('reader_display', 'TEXT', None),
+            ('reader_direction', 'TEXT', None),
+            ('reader_zoom', 'TEXT', None),
+            ('seconds_read', 'INTEGER', '0')
+        ]:
+            try:
+                default_clause = f" DEFAULT {default}" if default is not None else ""
+                conn.execute(f'ALTER TABLE reading_progress ADD COLUMN {col} {col_type}{default_clause}')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
     
     # User preferences table
     conn.execute('''
@@ -123,34 +129,36 @@ def init_db() -> None:
         )
     ''')
     
-    # Add title_card_style column if not exists
-    try:
-        conn.execute("ALTER TABLE user_preferences ADD COLUMN title_card_style TEXT DEFAULT 'fan' CHECK(title_card_style IN ('fan', 'single'))")
-    except sqlite3.OperationalError:
-        pass
-
-    # Add ereader column if not exists
-    try:
-        conn.execute("ALTER TABLE user_preferences ADD COLUMN ereader BOOLEAN DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
-
-    # Add visual filter columns to user_preferences
-    # Column names are hardcoded (not user input) - safe from SQL injection
-    filter_cols = [
-        ('brightness', 'REAL DEFAULT 1.0'),
-        ('contrast', 'REAL DEFAULT 1.0'),
-        ('saturation', 'REAL DEFAULT 1.0'),
-        ('invert', 'REAL DEFAULT 0.0'),
-        ('tone_value', 'REAL DEFAULT 0.0'),
-        ('tone_mode', "TEXT DEFAULT 'sepia'"),
-        ('auto_advance_interval', 'INTEGER DEFAULT 10')
-    ]
-    for col, col_def in filter_cols:
+    if current_version < 2:
+        # Migration 2: Add title_card_style column to user_preferences
         try:
-            conn.execute(f'ALTER TABLE user_preferences ADD COLUMN {col} {col_def}')
+            conn.execute("ALTER TABLE user_preferences ADD COLUMN title_card_style TEXT DEFAULT 'fan' CHECK(title_card_style IN ('fan', 'single'))")
         except sqlite3.OperationalError:
             pass
+
+    if current_version < 2:
+        # Migration 2: Add ereader column to user_preferences
+        try:
+            conn.execute("ALTER TABLE user_preferences ADD COLUMN ereader BOOLEAN DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+
+    if current_version < 2:
+        # Migration 2: Add visual filter columns to user_preferences
+        filter_cols = [
+            ('brightness', 'REAL DEFAULT 1.0'),
+            ('contrast', 'REAL DEFAULT 1.0'),
+            ('saturation', 'REAL DEFAULT 1.0'),
+            ('invert', 'REAL DEFAULT 0.0'),
+            ('tone_value', 'REAL DEFAULT 0.0'),
+            ('tone_mode', "TEXT DEFAULT 'sepia'"),
+            ('auto_advance_interval', 'INTEGER DEFAULT 10')
+        ]
+        for col, col_def in filter_cols:
+            try:
+                conn.execute(f'ALTER TABLE user_preferences ADD COLUMN {col} {col_def}')
+            except sqlite3.OperationalError:
+                pass
     
     # Sessions table for token-based auth
     conn.execute('''
@@ -207,17 +215,19 @@ def init_db() -> None:
         )
     ''')
     
-    # Add series_id to comics table if not exists
-    try:
-        conn.execute('ALTER TABLE comics ADD COLUMN series_id INTEGER REFERENCES series(id) ON DELETE SET NULL')
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    if current_version < 3:
+        # Migration 3: Add series_id to comics table
+        try:
+            conn.execute('ALTER TABLE comics ADD COLUMN series_id INTEGER REFERENCES series(id) ON DELETE SET NULL')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
     
-    # Add has_thumbnail column to comics table if not exists
-    try:
-        conn.execute('ALTER TABLE comics ADD COLUMN has_thumbnail BOOLEAN DEFAULT 0')
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    if current_version < 3:
+        # Migration 3: Add has_thumbnail column to comics table
+        try:
+            conn.execute('ALTER TABLE comics ADD COLUMN has_thumbnail BOOLEAN DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
     
     # Scan jobs table for tracking library scans
     conn.execute('''
@@ -242,18 +252,19 @@ def init_db() -> None:
         )
     ''')
     
-    # Add columns if not exists
-    metric_cols = [
-        ('current_file', 'TEXT'), ('phase', 'TEXT'),
-        ('new_comics', 'INTEGER'), ('deleted_comics', 'INTEGER'), ('changed_comics', 'INTEGER'),
-        ('processed_pages', 'INTEGER'), ('page_errors', 'INTEGER'),
-        ('processed_thumbnails', 'INTEGER'), ('thumbnail_errors', 'INTEGER')
-    ]
-    for col, col_type in metric_cols:
-        try:
-            conn.execute(f'ALTER TABLE scan_jobs ADD COLUMN {col} {col_type} DEFAULT 0')
-        except sqlite3.OperationalError:
-            pass
+    if current_version < 3:
+        # Migration 3: Add metric columns to scan_jobs table
+        metric_cols = [
+            ('current_file', 'TEXT'), ('phase', 'TEXT'),
+            ('new_comics', 'INTEGER'), ('deleted_comics', 'INTEGER'), ('changed_comics', 'INTEGER'),
+            ('processed_pages', 'INTEGER'), ('page_errors', 'INTEGER'),
+            ('processed_thumbnails', 'INTEGER'), ('thumbnail_errors', 'INTEGER')
+        ]
+        for col, col_type in metric_cols:
+            try:
+                conn.execute(f'ALTER TABLE scan_jobs ADD COLUMN {col} {col_type} DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass
     
     # Index on scan_jobs.status for fast polling queries
     conn.execute('CREATE INDEX IF NOT EXISTS idx_scan_jobs_status ON scan_jobs(status)')
@@ -307,11 +318,12 @@ def init_db() -> None:
         # FTS5 might not be enabled in all SQLite builds
         pass
 
-    # Migrate data: set has_thumbnail = TRUE for already processed comics
-    try:
-        conn.execute('UPDATE comics SET has_thumbnail = 1 WHERE processed = 1')
-    except sqlite3.OperationalError:
-        pass  # Migration already done or column doesn't exist yet
+    if current_version < 3:
+        # Migration 3: Migrate data - set has_thumbnail = TRUE for already processed comics
+        try:
+            conn.execute('UPDATE comics SET has_thumbnail = 1 WHERE processed = 1')
+        except sqlite3.OperationalError:
+            pass  # Migration already done or column doesn't exist yet
     
     # Ratings table
     conn.execute('''
@@ -326,6 +338,9 @@ def init_db() -> None:
             UNIQUE(user_id, series_id)
         )
     ''')
+    
+    if current_version < SCHEMA_VERSION:
+        conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     
     conn.commit()
     conn.close()
