@@ -366,3 +366,26 @@ For a detailed list of planned features, known bugs, and code quality goals, ple
 - ✅ Centralized state management (state.js)
 - ✅ API abstraction layer (api.js)
 - ✅ Dependency injection for auth (dependencies.py)
+
+## Common Patterns & Gotchas
+
+### Window Exports for Cross-Module Access
+When a function needs to be called from HTML event handlers or other modules:
+```javascript
+// At end of module, export to window:
+window.functionName = functionName;
+
+// Example: renderTagsGrid in tags.js must be exported for setViewMode in library.js
+```
+
+### Event Delegation
+Global event delegation is set up in `main.js` on the document level to catch clicks from any view:
+```javascript
+document.addEventListener('click', (event) => {
+    const actionElement = event.target.closest('[data-action]');
+    // ... handle card-click, toggle-selection, etc.
+});
+```
+
+### Filter Application
+Filters are applied in `getTitlesInLocation()` for library view and manually in `renderSearchResults()` for search view. The `titleMatchesFilter()` helper checks genre, status, and read progress.

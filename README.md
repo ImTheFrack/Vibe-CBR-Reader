@@ -67,6 +67,16 @@ For a detailed list of planned features, known bugs, and project roadmap, please
 
 ## Recent Changes
 
+### 2026-02-06 (Bug Fixes)
+- **View Mode Fix**: Fixed view mode switching (grid/list/detailed) not working in Tags view.
+- **Search Filters**: Fixed filters (genre, status, read progress) not being applied in search mode.
+- **Visual Filter API**: Fixed visual filter sliders spamming API calls on every movement - now only saves on release.
+- **E-Reader Badge Color**: Fixed chapter badge text color in e-reader dark mode (was white-on-white).
+- **Synopsis Toggle**: Fixed double arrow bug in synopsis toggle on title detail view.
+- **Tags Clicking**: Fixed clicking on tag cards not adding them to filter list.
+- **Preferences UI**: Fixed preferences modal not showing current values when opened.
+- **Library Loading**: Fixed library only showing first 100 comics instead of entire collection.
+
 ### 2026-02-06
 - **Unified Selection & Export**: Integrated the batch selection system into the Tags view, allowing users to select and export series found via tag filtering. Improved navigation logic to persist selections during tag drill-down.
 - **Accurate Chapter Counting**: Replaced metadata-based chapter counts in the Tags view with real-time disk-based counting for 100% accuracy.
