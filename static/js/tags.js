@@ -383,6 +383,8 @@ window.selectTag = function(tagName) {
         if (input) input.value = '';
         
         syncTagsToUrl();
+        renderSelectedTags();
+        renderTagsGrid();
     }
 };
 
