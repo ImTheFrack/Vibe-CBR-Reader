@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 # Explicitly register JXL if not present
 if not mimetypes.types_map.get('.jxl'):
     mimetypes.add_type('image/jxl', '.jxl')
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Response
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Response, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -261,11 +261,10 @@ async def rescan_library(background_tasks: BackgroundTasks, current_user: Dict[s
 
 @router.get("/books")
 async def list_books(
-    limit: int = 100,
+    limit: int = Query(100, description="Number of items to return (0 = all)"),
     offset: int = 0,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> Dict[str, Any]:
-    limit = max(1, min(limit, 500))
     offset = max(0, offset)
     
     conn = get_db_connection()
@@ -273,15 +272,25 @@ async def list_books(
     count_query = 'SELECT COUNT(*) as total FROM comics'
     total = conn.execute(count_query).fetchone()['total']
     
-    # Join with series to get metadata like genres and status
-    query = '''
-        SELECT c.*, s.genres, s.status as series_status, s.tags, s.authors
-        FROM comics c
-        LEFT JOIN series s ON c.series_id = s.id
-        ORDER BY c.category, c.series, c.volume, c.chapter, c.filename
-        LIMIT ? OFFSET ?
-    '''
-    books = conn.execute(query, (limit, offset)).fetchall()
+    if limit == 0:
+        query = '''
+            SELECT c.*, s.genres, s.status as series_status, s.tags, s.authors
+            FROM comics c
+            LEFT JOIN series s ON c.series_id = s.id
+            ORDER BY c.category, c.series, c.volume, c.chapter, c.filename
+        '''
+        books = conn.execute(query).fetchall()
+        limit = total
+    else:
+        limit = max(1, min(limit, 500))
+        query = '''
+            SELECT c.*, s.genres, s.status as series_status, s.tags, s.authors
+            FROM comics c
+            LEFT JOIN series s ON c.series_id = s.id
+            ORDER BY c.category, c.series, c.volume, c.chapter, c.filename
+            LIMIT ? OFFSET ?
+        '''
+        books = conn.execute(query, (limit, offset)).fetchall()
     conn.close()
     
     result = []
