@@ -139,9 +139,9 @@ function renderSelectedTags() {
     
     const tagsHtml = tagsState.selectedTags.map(tag => {
         // Escape single quotes for the onclick handler
-        const escapedTag = tag.replace(/'/g, "\'");
+        const escapedTag = tag.replace(/'/g, "\\'");
         return `
-        <div class="tag-chip" onclick="window.removeTag('${escapedTag}')">
+        <div class="tag-chip" onclick="window.removeTag(\`${escapedTag}\`)">
             <span>${tag}</span>
             <span class="tag-remove">×</span>
         </div>`;
@@ -177,7 +177,7 @@ function renderTagsGrid() {
     }
 
     const items = tagsToRender.map(tag => {
-        const escapedName = tag.name.replace(/'/g, "\'");
+        const escapedName = tag.name.replace(/'/g, "\\'");
         
         let metaText = `${tag.count} series`;
         const names = tag.series_names || [];
@@ -194,7 +194,7 @@ function renderTagsGrid() {
             ? renderFan(tag.covers)
             : `<span class="folder-icon" style="font-size: 2.5rem;">🏷️</span>`;
             
-        const onClick = `window.selectTag('${escapedName}')`;
+        const onClick = `window.selectTag(\`${escapedName}\`)`;
 
         return {
             title: tag.name,
@@ -244,11 +244,11 @@ function renderResults() {
          const seriesTitle = series.title || seriesName;
          
          // Escape for HTML attributes
-         const escapedName = seriesName.replace(/'/g, "\'").replace(/'/g, '&quot;');
+         const escapedName = seriesName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
          const displayTitle = seriesTitle.replace(/'/g, '&quot;');
          
          const coverIds = getTitleCoverIds(series);
-         const onClick = `window.routerNavigate('library', { title: '${escapedName}' })`;
+         const onClick = `window.routerNavigate('library', { title: \`${escapedName}\` })`;
 
         return {
             title: seriesTitle,

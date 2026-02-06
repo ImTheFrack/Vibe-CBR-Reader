@@ -9,21 +9,33 @@ This file provides the technical context for AI agents and developers working on
 
 ## Project Structure
 
-### Backend Modules
+### Backend Architecture (Modular)
 - **server.py**: Entry point, app initialization, and router inclusion.
+- **db/**: Database package.
+    - `connection.py`: SQLite connection management (WAL mode, timeouts).
+    - `users.py`: User accounts, session management, and `bcrypt` authentication.
+    - `comics.py`: Core comic metadata storage and retrieval.
+    - `series.py`: Series metadata and optimized tag-based filtering.
+    - `progress.py`: Reading progress and user preferences.
+    - `jobs.py`: Scan job tracking and metrics.
+- **scanner/**: Library scanning package.
+    - `tasks.py`: Phase 1 (Sync) and Phase 2 (Process) background workers.
+    - `archives.py`: CBR/CBZ extraction and thumbnail generation.
+    - `utils.py`: Natural sorting and filename parsing.
 - **routes/**: API route logic (auth, library, users, series, admin).
-- **scanner.py**: Two-phase library scanning and metadata extraction logic.
-- **database.py**: Raw SQLite schema definitions and connection management (no ORM).
-- **config.py**: Global configuration and paths.
+- **logger.py**: Centralized `vibe` logger with rotating file handler (`vibe.log`).
+- **config.py**: Portable configuration using `python-dotenv`.
 
-### Frontend Architecture
+### Frontend Architecture (Modular Vanilla ES6)
 - **static/js/main.js**: Application entry point and window function exposure.
+- **static/js/library/**: Modular library browsing logic.
+    - `navigation.js`: Hierarchical path management and breadcrumbs.
+    - `view-renderers.js`: UI rendering for folders, titles, and comics.
+    - `search.js`: Global and scoped search implementation.
 - **static/js/components/**: Unified UI components (card-renderers, fan-renderer).
-- **static/js/utils/**: Specialized logic (progress, sorting, api helpers).
-- **static/js/state.js**: Global state management (centralized `state` object).
-- **static/js/library.js**: Core library browsing, folder tree generation, and navigation logic.
-- **static/js/reader.js**: Reader engine supporting Single, Double Page, and Long Strip modes.
-- **static/css/**: Modularized CSS files.
+- **static/js/reader.js**: Advanced reader engine (Single, Double, Long Strip).
+- **static/js/state.js**: Centralized global state object.
+- **static/css/**: Modularized CSS files (base, layout, views, components).
 
 ## Database Schema (9 tables)
 
@@ -194,7 +206,16 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 
 ### Admin (`routes/admin.py`)
 - `GET /api/admin/users`: List all users (admin only)
-- `DELETE /api/admin/users/{user_id}`: Delete user, prevents self-deletion (admin only)
+- `PUT /api/admin/users/{user_id}/role`: Update role (admin only)
+- `PUT /api/admin/users/{user_id}/password`: Force password reset (admin only)
+- `DELETE /api/admin/users/{user_id}`: Delete user (admin only)
+
+## Security Implementation
+- **Hashing**: `bcrypt` with automated lazy migration from SHA256.
+- **Sessions**: 32-byte URL-safe tokens, 30-day expiry, HttpOnly cookies.
+- **Admin**: Environment-configurable credentials (`VIBE_ADMIN_USER`); default account forces password change.
+- **Validation**: Strict role-based access control (RBAC) on `/api/admin/*` and `/api/scan/*`.
+- **SQL Safety**: 100% parameterized queries using `?` placeholders.
 
 ## Scanning Architecture (Two-Phase)
 - **Phase 1: Syncing**: Fast directory walk. Detects new, deleted, and changed files (via `mtime` and `size_bytes`). Updates folder structure and series records without opening archives.

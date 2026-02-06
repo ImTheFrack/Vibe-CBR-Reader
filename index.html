@@ -275,6 +275,37 @@
                 <!-- Populated dynamically -->
             </div>
         </div>
+
+        <!-- Admin User Management View -->
+        <div id="view-admin" class="view">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>👥</span>
+                    User Management
+                </h2>
+                <p class="section-subtitle">Manage users, roles, and security</p>
+            </div>
+            
+            <div class="admin-container" style="padding: 1rem 2rem;">
+                <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
+                    <table class="admin-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr style="background: var(--bg-tertiary); border-bottom: 1px solid var(--border);">
+                                <th style="padding: 1rem;">Username</th>
+                                <th style="padding: 1rem;">Email</th>
+                                <th style="padding: 1rem;">Role</th>
+                                <th style="padding: 1rem;">Created</th>
+                                <th style="padding: 1rem;">Last Login</th>
+                                <th style="padding: 1rem; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </main>
 
     <!-- Reader Container -->
@@ -420,6 +451,32 @@
     </div>
 
     <div class="toast-container" id="toast-container"></div>
+
+    <!-- Forced Password Change Modal -->
+    <div id="forced-password-modal" class="modal-overlay" style="display: none; z-index: 10000; background: rgba(0,0,0,0.9); backdrop-filter: blur(5px);">
+        <div class="modal-content" style="max-width: 400px; padding: 2.5rem; border-radius: 16px; border: 1px solid var(--accent);">
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">🔐</div>
+                <h2 style="margin-bottom: 0.5rem; color: var(--accent);">Security Update Required</h2>
+                <p style="color: var(--text-secondary); font-size: 0.95rem;">You are using a default or temporary password. For your security, you must change it before continuing.</p>
+            </div>
+            
+            <form onsubmit="handleForcedPasswordChange(event)" id="forced-password-form">
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-tertiary);">NEW PASSWORD</label>
+                    <input type="password" id="forced-new-password" class="search-input" style="width: 100%; padding: 0.8rem; border-radius: 8px;" required minlength="6" placeholder="At least 6 characters">
+                </div>
+                <div class="form-group" style="margin-bottom: 2rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-tertiary);">CONFIRM NEW PASSWORD</label>
+                    <input type="password" id="forced-confirm-password" class="search-input" style="width: 100%; padding: 0.8rem; border-radius: 8px;" required minlength="6" placeholder="Repeat new password">
+                </div>
+                
+                <button type="submit" class="btn-primary" style="width: 100%; padding: 1rem; border-radius: 8px; font-weight: 600; font-size: 1rem;">
+                    Update Password & Continue
+                </button>
+            </form>
+        </div>
+    </div>
 
     <script src="/static/js/ui-utils.js"></script>
     <script type="module" src="/static/js/main.js"></script>

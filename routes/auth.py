@@ -25,7 +25,8 @@ async def register(user_data: UserCreate):
     if len(user_data.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
     
-    user_id = create_user(user_data.username, user_data.password, user_data.email, user_data.role)
+    # Force role to 'reader' regardless of input
+    user_id = create_user(user_data.username, user_data.password, user_data.email, role="reader")
     
     if not user_id:
         raise HTTPException(status_code=400, detail="Username already exists")
@@ -49,7 +50,8 @@ async def login(user_data: UserLogin):
             "id": user['id'],
             "username": user['username'],
             "email": user['email'],
-            "role": user['role']
+            "role": user['role'],
+            "must_change_password": bool(user.get('must_change_password', 0))
         }
     })
     
@@ -81,7 +83,8 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "id": current_user['id'],
         "username": current_user['username'],
         "email": current_user['email'],
-        "role": current_user['role']
+        "role": current_user['role'],
+        "must_change_password": bool(current_user.get('must_change_password', 0))
     }
 
 @router.get("/check")
@@ -94,7 +97,8 @@ async def check_auth(current_user: Optional[dict] = Depends(get_optional_user)):
                 "id": current_user['id'],
                 "username": current_user['username'],
                 "email": current_user['email'],
-                "role": current_user['role']
+                "role": current_user['role'],
+                "must_change_password": bool(current_user.get('must_change_password', 0))
             }
         }
     return {"authenticated": False, "user": None}

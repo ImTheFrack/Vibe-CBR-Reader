@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from config import COMICS_DIR
 from database import init_db, get_db_connection, create_user
 from routes import auth, library, users, series, admin
+from logger import logger
 
 app = FastAPI(title="Vibe CBR Reader")
 
@@ -40,10 +41,19 @@ def create_default_admin():
     conn.close()
     
     if user_count == 0:
-        print("Creating default admin user...")
-        create_user("admin", "admin123", "admin@localhost", "admin")
-        print("Default admin created: username='admin', password='admin123'")
-        print("⚠️  Please change the default password after first login!")
+        admin_user = os.environ.get("VIBE_ADMIN_USER", "admin")
+        admin_pass = os.environ.get("VIBE_ADMIN_PASS", "admin123")
+        is_default = admin_user == "admin" and admin_pass == "admin123"
+        
+        logger.info(f"Creating {'default ' if is_default else ''}admin user...")
+        # If it's the default admin/admin123, force password change
+        create_user(admin_user, admin_pass, "admin@localhost", "admin", must_change_password=is_default)
+        
+        if is_default:
+            logger.info(f"Default admin created: username='{admin_user}', password='{admin_pass}'")
+            logger.warning("⚠️  CRITICAL: Default password used. User MUST change it on first login.")
+        else:
+            logger.info(f"Admin user '{admin_user}' created from environment variables.")
 
 # Create default admin on startup
 create_default_admin()
@@ -74,9 +84,9 @@ if __name__ == "__main__":
     port = args.port
     if port is None:
         port = find_available_port(8501)
-        print(f"No port specified, using first available port: {port}")
+        logger.info(f"No port specified, using first available port: {port}")
     else:
         if is_port_in_use(port):
-            print(f"Warning: Port {port} is already in use. Uvicorn may fail to start.")
+            logger.warning(f"Warning: Port {port} is already in use. Uvicorn may fail to start.")
             
     uvicorn.run(app, host="0.0.0.0", port=port)

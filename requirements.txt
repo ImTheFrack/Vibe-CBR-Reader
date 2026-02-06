@@ -5,3 +5,5 @@ jinja2
 pillow
 rarfile
 aiofiles
+bcrypt
+python-dotenv

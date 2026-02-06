@@ -97,6 +97,9 @@ export function parseHash(hash) {
         case 'scan':
             return { view: 'scan', params };
 
+        case 'admin':
+            return { view: 'admin', params };
+
         default:
             // Unknown route - fall back to library
             console.warn(`Unknown route: ${view}, falling back to library`);
@@ -170,6 +173,10 @@ export function buildHash(view, params = {}) {
             if (hasParams) {
                 hash += `?${tagParams.toString()}`;
             }
+            break;
+
+        case 'admin':
+            // admin - no additional params for now
             break;
 
         // recent, scan - no additional params

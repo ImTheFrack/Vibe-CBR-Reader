@@ -13,7 +13,7 @@ async def get_current_user(token: Optional[str] = Cookie(None, alias="session_to
     
     conn = get_db_connection()
     user = conn.execute(
-        'SELECT id, username, email, role FROM users WHERE id = ?',
+        'SELECT id, username, email, role, must_change_password FROM users WHERE id = ?',
         (user_id,)
     ).fetchone()
     conn.close()
@@ -40,7 +40,7 @@ async def get_optional_user(token: Optional[str] = Cookie(None, alias="session_t
     
     conn = get_db_connection()
     user = conn.execute(
-        'SELECT id, username, email, role FROM users WHERE id = ?',
+        'SELECT id, username, email, role, must_change_password FROM users WHERE id = ?',
         (user_id,)
     ).fetchone()
     conn.close()

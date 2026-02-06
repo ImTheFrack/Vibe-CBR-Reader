@@ -4,6 +4,7 @@ import { showToast } from './utils.js';
 import { initTheme } from './theme.js';
 import { showPreferences } from './preferences.js';
 import { navigateToRoot, loadRecentReads, updateLibraryView, renderFolderGrid, getFoldersAtLevel, renderTitleCards, renderComicsView, loadLibrary } from './library.js';
+import { navigate as routerNavigate } from './router.js';
 
 export async function checkAuthStatus() {
     const result = await apiGet('/api/auth/check');
@@ -15,7 +16,12 @@ export async function checkAuthStatus() {
         state.currentUser = result.user || null;
         if (state.isAuthenticated) {
             await loadUserData();
-        await loadLibrary();
+            await loadLibrary();
+            
+            // Check if password change is forced
+            if (state.currentUser && state.currentUser.must_change_password) {
+                showForcedPasswordModal();
+            }
         } else {
             showLoginModal();
         }
@@ -117,6 +123,10 @@ export function updateAuthUI() {
             <div class="menu-item" onclick="showScanStatus(); toggleHamburger()">
                 <span class="menu-icon">📊</span>
                 <span>Scan Status</span>
+            </div>
+            <div class="menu-item" onclick="routerNavigate('admin', {}); toggleHamburger()">
+                <span class="menu-icon">👥</span>
+                <span>User Management</span>
             </div>
             ` : ''}
         `;
@@ -227,7 +237,14 @@ export async function handleLogin(event) {
         updateAuthUI();
         await loadUserData();
         await loadLibrary();
-        showToast('Logged in successfully!', 'success');
+        
+        // Check if password change is forced
+        if (state.currentUser && state.currentUser.must_change_password) {
+            showForcedPasswordModal();
+        } else {
+            showToast('Logged in successfully!', 'success');
+        }
+
         // Refresh the view to show progress
         if (state.currentView === 'library') {
             navigateToRoot();
@@ -286,3 +303,38 @@ export function setupAuthEventListeners() {
         }
     });
 }
+
+export function showForcedPasswordModal() {
+    const modal = document.getElementById('forced-password-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+export async function handleForcedPasswordChange(event) {
+    event.preventDefault();
+    const newPassword = document.getElementById('forced-new-password').value;
+    const confirmPassword = document.getElementById('forced-confirm-password').value;
+
+    if (newPassword !== confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return;
+    }
+
+    if (newPassword.length < 6) {
+        showToast('Password must be at least 6 characters', 'error');
+        return;
+    }
+
+    const result = await apiPut(`/api/admin/users/${state.currentUser.id}/password`, { new_password: newPassword });
+    
+    if (result.error) {
+        showToast(`Error: ${result.error}`, 'error');
+    } else {
+        showToast('Password updated successfully!', 'success');
+        document.getElementById('forced-password-modal').style.display = 'none';
+        state.currentUser.must_change_password = false;
+    }
+}
+
+window.handleForcedPasswordChange = handleForcedPasswordChange;

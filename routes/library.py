@@ -5,7 +5,12 @@ import rarfile
 import threading
 import tempfile
 import shutil
+import mimetypes
 from datetime import datetime, timedelta
+
+# Explicitly register JXL if not present
+if not mimetypes.types_map.get('.jxl'):
+    mimetypes.add_type('image/jxl', '.jxl')
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -18,6 +23,7 @@ from database import (
 )
 from scanner import scan_library_task, fast_scan_library_task, rescan_library_task, natural_sort_key, extract_cover_image
 from dependencies import get_current_user, get_admin_user
+from logger import logger
 
 router = APIRouter(prefix="/api", tags=["library"])
 
@@ -34,7 +40,7 @@ def cleanup_stuck_scans():
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"Note: Could not cleanup stuck scans: {e}")
+        logger.error(f"Note: Could not cleanup stuck scans: {e}")
 
 # Call cleanup on module load
 cleanup_stuck_scans()
@@ -64,7 +70,7 @@ def create_placeholder_image():
             
             img.save(placeholder_path, format="JPEG", quality=85)
         except Exception as e:
-            print(f"Error creating placeholder image: {e}")
+            logger.error(f"Error creating placeholder image: {e}")
     return placeholder_path
 
 def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int = 10) -> dict:
@@ -89,7 +95,7 @@ def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int
                 result['success'] = True
                 result['cache_path'] = temp_cache_path
         except Exception as e:
-            print(f"Error generating thumbnail for {comic_id}: {e}")
+            logger.error(f"Error generating thumbnail for {comic_id}: {e}")
             result['success'] = False
     
     thread = threading.Thread(target=target)
@@ -120,7 +126,7 @@ def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int
                         if os.path.exists(temp_cache_path):
                             os.remove(temp_cache_path)
                 except Exception as e:
-                    print(f"Error in background thumbnail generation for {comic_id}: {e}")
+                    logger.error(f"Error in background thumbnail generation for {comic_id}: {e}")
         
         bg_thread = threading.Thread(target=continue_in_background)
         bg_thread.daemon = True
@@ -139,7 +145,7 @@ def generate_thumbnail_with_timeout(comic_path: str, comic_id: str, timeout: int
                         os.remove(temp_cache_path)
                     result['cache_path'] = final_cache_path
             except Exception as e:
-                print(f"Error finalizing thumbnail for {comic_id}: {e}")
+                logger.error(f"Error finalizing thumbnail for {comic_id}: {e}")
                 result['success'] = False
     
     return result
@@ -168,7 +174,7 @@ async def scan_library(background_tasks: BackgroundTasks, current_user: dict = D
     return {"message": "Fast scan started"}
 
 @router.get("/scan/status")
-async def get_scan_status():
+async def get_scan_status(current_user: dict = Depends(get_admin_user)):
     """Get current scan progress"""
     latest_job = get_latest_scan_job()
     
@@ -295,9 +301,9 @@ async def read_comic(comic_id: str, current_user: dict = Depends(get_current_use
                 conn.execute("UPDATE comics SET pages = ? WHERE id = ?", (pages, comic_id))
                 conn.commit()
                 result['pages'] = pages
-                print(f"Lazy-counted {pages} pages for {comic_id}")
+                logger.info(f"Lazy-counted {pages} pages for {comic_id}")
         except Exception as e:
-            print(f"Error lazy-counting pages for {comic_id}: {e}")
+            logger.error(f"Error lazy-counting pages for {comic_id}: {e}")
     
     # Add user's reading progress if logged in
     if current_user:
@@ -336,11 +342,14 @@ async def get_comic_page(comic_id: str, page_num: int, current_user: dict = Depe
                         image_data = f.read()
         
         if image_data:
-            return Response(content=image_data, media_type="image/jpeg")
+            # Guess media type from the original filename in the archive
+            img_filename = images[page_num]
+            content_type, _ = mimetypes.guess_type(img_filename)
+            return Response(content=image_data, media_type=content_type or "image/jpeg")
         else:
             raise HTTPException(status_code=404, detail="Page not found")
     except Exception as e:
-        print(f"Error reading page {page_num} of {filepath}: {e}")
+        logger.error(f"Error reading page {page_num} of {filepath}: {e}")
         raise HTTPException(status_code=500, detail="Error reading comic archive")
 
 class ExportCBZRequest(BaseModel):
@@ -418,7 +427,7 @@ async def export_cbz(
                                     with out_zip.open(target_name, 'w') as f_out:
                                         shutil.copyfileobj(f_in, f_out)
                 except Exception as e:
-                    print(f"Error adding {filepath} to export: {e}")
+                    logger.error(f"Error adding {filepath} to export: {e}")
                     # Continue with other comics even if one fails
     except Exception as e:
         if os.path.exists(temp_path):

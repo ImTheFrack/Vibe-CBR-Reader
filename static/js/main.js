@@ -175,6 +175,11 @@ function onHashChange() {
             showScanStatus();
             startScanPolling();
             break;
+        
+        case 'admin':
+            showView('admin');
+            import('./admin.js').then(m => m.initAdminView());
+            break;
     }
 }
 
