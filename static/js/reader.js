@@ -13,6 +13,9 @@ let sessionStartTime = null;
 let autoAdvanceTimer = null;
 let autoAdvanceFrame = null;
 let autoAdvanceStartTime = null;
+let gestureController = null;
+let pointerMoveHandler = null;
+let pointerDownHandler = null;
 
 function showReaderUI() {
     const reader = document.getElementById('reader');
@@ -49,8 +52,8 @@ function setupReaderInteraction() {
     const reader = document.getElementById('reader');
     if (!reader) return;
 
-    // Use pointermove to handle mouse and touch
-    reader.addEventListener('pointermove', (e) => {
+    // Named pointer move handler for proper cleanup
+    pointerMoveHandler = (e) => {
         lastMouseY = e.clientY;
         const threshold = window.innerHeight * 0.1;
         const isControlZone = e.clientY < threshold || e.clientY > window.innerHeight - threshold;
@@ -73,10 +76,10 @@ function setupReaderInteraction() {
                 lastShowY = e.clientY;
             }
         }
-    });
+    };
 
-    // Pointerdown handles both click and tap
-    reader.addEventListener('pointerdown', (e) => {
+    // Named pointer down handler for proper cleanup
+    pointerDownHandler = (e) => {
         const threshold = window.innerHeight * 0.1;
         if (e.clientY < threshold || e.clientY > window.innerHeight - threshold) {
             showReaderUI();
@@ -84,10 +87,16 @@ function setupReaderInteraction() {
         // Save position to prevent immediate pointermove trigger
         lastShowX = e.clientX;
         lastShowY = e.clientY;
-    });
+    };
 
-    // Initialize Swipes
-    new GestureController(reader, 
+    // Use pointermove to handle mouse and touch
+    reader.addEventListener('pointermove', pointerMoveHandler);
+
+    // Pointerdown handles both click and tap
+    reader.addEventListener('pointerdown', pointerDownHandler);
+
+    // Initialize Swipes and store instance for cleanup
+    gestureController = new GestureController(reader, 
         () => { // Swipe Left
             if (state.settings.direction === 'rtl') prevPage(); else nextPage();
         },
@@ -95,6 +104,38 @@ function setupReaderInteraction() {
             if (state.settings.direction === 'rtl') nextPage(); else prevPage();
         }
     );
+}
+
+function cleanupReaderInteraction() {
+    const reader = document.getElementById('reader');
+    if (!reader) return;
+    
+    if (pointerMoveHandler) {
+        reader.removeEventListener('pointermove', pointerMoveHandler);
+        pointerMoveHandler = null;
+    }
+    
+    if (pointerDownHandler) {
+        reader.removeEventListener('pointerdown', pointerDownHandler);
+        pointerDownHandler = null;
+    }
+    
+    if (gestureController) {
+        gestureController.destroy();
+        gestureController = null;
+    }
+    
+    if (autoAdvanceTimer) {
+        clearTimeout(autoAdvanceTimer);
+        autoAdvanceTimer = null;
+    }
+    
+    if (autoAdvanceFrame) {
+        cancelAnimationFrame(autoAdvanceFrame);
+        autoAdvanceFrame = null;
+    }
+    
+    prefetchManager.clear();
 }
 
 class PrefetchManager {
@@ -154,16 +195,12 @@ class GestureController {
         this.startY = 0;
         this.threshold = 50; // min distance for swipe
         
-        this.init();
-    }
-
-    init() {
-        this.element.addEventListener('touchstart', (e) => {
+        this.touchStartHandler = (e) => {
             this.startX = e.touches[0].clientX;
             this.startY = e.touches[0].clientY;
-        }, { passive: true });
-
-        this.element.addEventListener('touchend', (e) => {
+        };
+        
+        this.touchEndHandler = (e) => {
             const endX = e.changedTouches[0].clientX;
             const endY = e.changedTouches[0].clientY;
             
@@ -178,13 +215,28 @@ class GestureController {
                     this.onSwipeLeft();
                 }
             }
-        }, { passive: true });
+        };
+        
+        this.init();
+    }
+
+    init() {
+        this.element.addEventListener('touchstart', this.touchStartHandler, { passive: true });
+        this.element.addEventListener('touchend', this.touchEndHandler, { passive: true });
+    }
+    
+    destroy() {
+        this.element.removeEventListener('touchstart', this.touchStartHandler);
+        this.element.removeEventListener('touchend', this.touchEndHandler);
     }
 }
 
 export async function startReading(comicId, page = 0) {
     // Navigate to read route
     router.navigate('read', { comicId });
+    
+    router.registerCleanup('reader', cleanupReaderInteraction);
+    
     // Fetch latest metadata from server to handle lazy-counted pages
     const comicData = await apiGet(`/api/read/${comicId}`);
     if (comicData.error) {
