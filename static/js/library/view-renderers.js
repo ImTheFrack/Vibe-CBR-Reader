@@ -388,7 +388,7 @@ export async function renderTitleDetailView() {
             <div class="stars-row" style="display: flex; gap: 4px; font-size: 1.25rem;">
                 ${[1, 2, 3, 4, 5].map(i => `
                     <span class="star ${i <= userRating ? 'active' : ''}" 
-                          onclick="handleRateSeries(${seriesData.id}, ${i})" 
+                          data-action="rate-series" data-series-id="${seriesData.id}" data-rating="${i}"
                           style="cursor: pointer; color: ${i <= userRating ? 'var(--accent-primary)' : 'var(--text-tertiary)'}; transition: color 0.2s;">
                         ★
                     </span>
@@ -429,25 +429,25 @@ export async function renderTitleDetailView() {
         const actionText = cr.page > 0 ? 'Continue Reading' : 'Start Reading';
         const chapterText = cr.chapter ? `Ch. ${cr.chapter}` : (cr.volume ? `Vol. ${cr.volume}` : '');
         quickActions = `
-            <button class="btn-primary btn-large" onclick="startReading('${cr.comic_id}', ${cr.page})">
+            <button class="btn-primary btn-large" data-action="start-reading" data-comic-id="${cr.comic_id}" data-page="${cr.page}">
                 <span>▶</span> ${actionText} ${chapterText ? `- ${chapterText}` : ''}
             </button>
         `;
     } else if (seriesData.comics && seriesData.comics.length > 0) {
         quickActions = `
-            <button class="btn-primary btn-large" onclick="startReading('${seriesData.comics[0].id}')">
+            <button class="btn-primary btn-large" data-action="start-reading" data-comic-id="${seriesData.comics[0].id}">
                 <span>▶</span> Start Reading
             </button>
         `;
     }
     
     const readFirstBtn = seriesData.comics && seriesData.comics.length > 0 ? `
-        <button class="btn-secondary" onclick="startReading('${seriesData.comics[0].id}')">Read First</button>
+        <button class="btn-secondary" data-action="start-reading" data-comic-id="${seriesData.comics[0].id}">Read First</button>
     ` : '';
     
     const lastComic = seriesData.comics && seriesData.comics[seriesData.comics.length - 1];
     const readLatestBtn = lastComic ? `
-        <button class="btn-secondary" onclick="startReading('${lastComic.id}')">Read Latest</button>
+        <button class="btn-secondary" data-action="start-reading" data-comic-id="${lastComic.id}">Read Latest</button>
     ` : '';
     
     const comicsHtml = seriesData.comics ? seriesData.comics.map((comic) => {
@@ -459,12 +459,12 @@ export async function renderTitleDetailView() {
         const readStatus = isCompleted ? 'completed' : isInProgress ? 'in-progress' : '';
         const statusIcon = isCompleted ? '✓' : isInProgress ? '⏸' : '';
         
-        const prevBtn = comic.prev_comic ? `<button class="chapter-nav prev" onclick="event.stopPropagation(); startReading('${comic.prev_comic.id}')" title="Previous: ${comic.prev_comic.title}">←</button>` : '';
-        const nextBtn = comic.next_comic ? `<button class="chapter-nav next" onclick="event.stopPropagation(); startReading('${comic.next_comic.id}')" title="Next: ${comic.next_comic.title}">→</button>` : '';
+        const prevBtn = comic.prev_comic ? `<button class="chapter-nav prev" data-action="start-reading" data-comic-id="${comic.prev_comic.id}" title="Previous: ${comic.prev_comic.title}">←</button>` : '';
+        const nextBtn = comic.next_comic ? `<button class="chapter-nav next" data-action="start-reading" data-comic-id="${comic.next_comic.id}" title="Next: ${comic.next_comic.title}">→</button>` : '';
         
         return `
-            <div class="chapter-card ${readStatus}" onclick="handleCardClick(this, event)" data-id="${comic.id}" data-action="card-click">
-                <div class="selection-checkbox" onclick="event.stopPropagation(); toggleItemSelection(this.parentElement.dataset.id, event)"></div>
+            <div class="chapter-card ${readStatus}" data-id="${comic.id}" data-action="card-click">
+                <div class="selection-checkbox" data-action="toggle-selection" data-id="${comic.id}"></div>
                 <div class="chapter-nav-buttons">${prevBtn}${nextBtn}</div>
                 <div class="chapter-cover">
                     <img src="/api/cover/${comic.id}" alt="${chapterText}" loading="lazy">

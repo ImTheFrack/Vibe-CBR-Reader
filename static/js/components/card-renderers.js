@@ -32,12 +32,11 @@ const CARD_SCHEMAS = {
 
             return `
                 <div class="${cardClass}" 
-                     onclick="handleCardClick(this, event)" 
                      data-action="card-click"
                      data-id="${data.id || data.title}" 
                      ${data.dataAttrs || ''}>
                     <div class="${iconClass}">
-                        ${!isFolder ? `<div class="selection-checkbox" onclick="event.stopPropagation(); toggleItemSelection(this.parentElement.parentElement.dataset.id, event)"></div>` : ''}
+                        ${!isFolder ? `<div class="selection-checkbox" data-action="toggle-selection" data-id="${data.id || data.title}"></div>` : ''}
                         ${coverHtml}
                         ${!isFolder ? progressHtml : ''}
                         ${!isFolder ? badgeHtml : ''}
@@ -56,11 +55,11 @@ const CARD_SCHEMAS = {
             const coverHtml = data.coverHtml || (data.coverIds ? renderFan(data.coverIds) : 
                               `<img src="${data.coverUrl}" alt="${data.title}" loading="lazy">`);
             
-            // List meta is often an array of spans separated by bullets
             const metaHtml = data.metaItems.map(item => `<span>${item}</span>`).join('<span>•</span>');
+            const itemId = data.id || data.title;
 
             return `
-                <div class="list-item" onclick="${data.onClick}">
+                <div class="list-item" data-action="card-click" data-id="${itemId}">
                     <div class="list-cover" style="display:flex;align-items:center;justify-content:center;">${coverHtml}</div>
                     <div class="list-info">
                         <div class="list-title">${data.title}</div>
@@ -94,8 +93,10 @@ const CARD_SCHEMAS = {
                 `<button class="detailed-btn ${btn.class || ''}" onclick="event.stopPropagation(); ${btn.onClick}">${btn.text}</button>`
             ).join('') : '';
 
+            const itemId = data.id || data.title;
+
             return `
-                <div class="detailed-card" onclick="${data.onClick}">
+                <div class="detailed-card" data-action="card-click" data-id="${itemId}">
                     <div class="detailed-cover" style="display:flex;align-items:center;justify-content:center;">${coverHtml}</div>
                     <div class="detailed-content">
                         <div class="detailed-header">

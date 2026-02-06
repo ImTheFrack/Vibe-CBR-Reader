@@ -4,12 +4,39 @@ import { apiGet, apiPost, apiDelete } from '../api.js';
 
 let currentExportJobId = null;
 
-// Action dispatcher - maps action names to handler functions
 const actionDispatcher = {
     'card-click': (id, event) => {
-        // Default card click action: navigate to comic/series
-        if (window.startReading) {
-            window.startReading(id);
+        const allComics = state.comics || [];
+        const comic = allComics.find(c => String(c.id) === String(id));
+        
+        if (comic) {
+            if (window.startReading) {
+                window.startReading(id);
+            }
+            return;
+        }
+        
+        const titleObj = findTitleInTree(id);
+        if (titleObj) {
+            if (state.currentLocation.category && state.currentLocation.subcategory) {
+                window.routerNavigate('library', { 
+                    category: state.currentLocation.category, 
+                    subcategory: state.currentLocation.subcategory, 
+                    title: id 
+                });
+            } else {
+                window.routerNavigate('library', { title: id });
+            }
+            return;
+        }
+        
+        if (state.currentLevel === 'root') {
+            window.routerNavigate('library', { category: id });
+        } else if (state.currentLevel === 'category') {
+            window.routerNavigate('library', { 
+                category: state.currentLocation.category, 
+                subcategory: id 
+            });
         }
     }
 };
