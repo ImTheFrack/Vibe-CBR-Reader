@@ -4,7 +4,7 @@ from datetime import datetime
 from config import DB_PATH
 
 # Schema version for migration tracking
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -338,6 +338,47 @@ def init_db() -> None:
             UNIQUE(user_id, series_id)
         )
     ''')
+    
+    # Page annotations table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS page_annotations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            comic_id TEXT NOT NULL,
+            page_number INTEGER NOT NULL,
+            note TEXT,
+            highlight_text TEXT,
+            x REAL,
+            y REAL,
+            width REAL,
+            height REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (comic_id) REFERENCES comics(id) ON DELETE CASCADE,
+            UNIQUE(user_id, comic_id, page_number, x, y)
+        )
+    ''')
+    
+    if current_version < 4:
+        # Migration 4: Create page_annotations table
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS page_annotations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                comic_id TEXT NOT NULL,
+                page_number INTEGER NOT NULL,
+                note TEXT,
+                highlight_text TEXT,
+                x REAL,
+                y REAL,
+                width REAL,
+                height REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (comic_id) REFERENCES comics(id) ON DELETE CASCADE,
+                UNIQUE(user_id, comic_id, page_number, x, y)
+            )
+        ''')
     
     if current_version < SCHEMA_VERSION:
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
