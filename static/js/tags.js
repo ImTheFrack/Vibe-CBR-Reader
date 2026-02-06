@@ -412,3 +412,6 @@ window.showTagResults = function() {
     syncTagsToUrl();
 
 };
+
+// Export renderTagsGrid for use by other modules
+window.renderTagsGrid = renderTagsGrid;
