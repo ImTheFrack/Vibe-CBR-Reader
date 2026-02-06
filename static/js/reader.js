@@ -675,7 +675,7 @@ function applyImageZoom(img, zoom) {
     }
 }
 
-function applyFilters() {
+export function applyFilters() {
     const container = document.getElementById('reader-pages');
     if (!container) return;
     

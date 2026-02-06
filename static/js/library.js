@@ -506,7 +506,14 @@ export function setViewMode(mode) {
     state.viewMode = mode;
     document.querySelectorAll('.view-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.view === mode));
     if (state.isAuthenticated) apiPut('/api/preferences', { default_view_mode: mode });
-    updateLibraryView();
+    
+    // Re-render current view
+    if (state.currentView === 'tags' && window.renderTagsGrid) {
+        window.renderTagsGrid();
+        if (window.renderTagResults) window.renderTagResults();
+    } else {
+        updateLibraryView();
+    }
 }
 
 export function handleSort(sortValue) {

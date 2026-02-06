@@ -6,6 +6,14 @@ let currentExportJobId = null;
 
 const actionDispatcher = {
     'card-click': (id, event) => {
+        // Check if we're in tags view
+        if (state.currentView === 'tags') {
+            if (window.selectTag) {
+                window.selectTag(id);
+            }
+            return;
+        }
+        
         const allComics = state.comics || [];
         const comic = allComics.find(c => String(c.id) === String(id));
         

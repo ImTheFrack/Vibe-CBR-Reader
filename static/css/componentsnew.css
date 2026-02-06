@@ -53,7 +53,7 @@
     top: 8px;
     right: 8px;
     background: var(--accent-primary);
-    color: white;
+    color: var(--bg-primary);
     padding: 4px 8px;
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
