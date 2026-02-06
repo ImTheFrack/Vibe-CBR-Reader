@@ -10,7 +10,7 @@
 
 import { state } from './state.js';
 import { apiGet, apiDelete, apiPut } from './api.js';
-import { showToast } from './utils.js';
+import { showToast, updateSelectOptions } from './utils.js';
 import { startReading } from './reader.js';
 import { renderFan, getTitleCoverIds } from './components/index.js';
 import { sortItems, parseFileSize, TITLE_SORT_ACCESSORS, COMIC_SORT_ACCESSORS, FOLDER_SORT_ACCESSORS } from './utils/sorting.js';
@@ -118,53 +118,7 @@ export function updateDynamicFilters() {
 
     // Update Selects (Preserve selection if valid, or if it was set)
     updateSelectOptions('filter-genre', Array.from(availableGenres).sort(), currentGenre, 'All Genres');
-    updateSelectOptions('filter-status', Array.from(availableStatuses).sort(), currentStatus, 'All Statuses');
-}
-
-function updateSelectOptions(elementId, options, currentValue, defaultText) {
-    const select = document.getElementById(elementId);
-    if (!select) return;
-
-    // Keep "All" option
-    let html = `<option value="">${defaultText}</option>`;
-    
-    // Add options
-    options.forEach(opt => {
-        const isSelected = opt === currentValue ? 'selected' : '';
-        html += `<option value="${opt}" ${isSelected}>${opt}</option>`;
-    });
-
-    // If current value is not in options (e.g. because of other filters), should we keep it?
-    // The user said: "never want a filter to yield zero results".
-    // If I selected "Action" and then "Completed", and there are no "Completed Action" manga,
-    // "Action" should technically be removed from the valid options if we were strictly narrowing.
-    // BUT, we calculated available genres based on Status=Completed. 
-    // So if there are no Completed Action manga, Action will NOT be in availableGenres.
-    // If we remove it, the filter value drops to "" (All Genres).
-    // This effectively "resets" the invalid filter. This is usually desired behavior to avoid "zero results" traps.
-    
-    // However, simply overwriting innerHTML might reset the value property if the option is missing.
-    select.innerHTML = html;
-    
-    // If the previously selected value is gone, we might want to let it reset or show it as disabled?
-    // For now, standard behavior is it resets to first option if selected option is gone.
-    // But we need to ensure the state reflects that.
-    if (currentValue && !options.includes(currentValue)) {
-        // The value was reset. We should probably update the state to match.
-        // But this causes a loop if we are not careful. 
-        // handleFilterChange calls updateLibraryView calls updateDynamicFilters.
-        // If updateDynamicFilters changes the value, we don't trigger change event automatically.
-        // So state.filters.genre might still be 'Action'.
-        
-        // We should check select.value after update.
-        if (select.value !== state.filters[elementId.replace('filter-', '')]) {
-             state.filters[elementId.replace('filter-', '')] = select.value;
-             // We might need to re-render view immediately if the filter effectively changed?
-             // But we are likely IN a render loop or about to render.
-             // If we are called from updateLibraryView, render happens after?
-             // No, updateLibraryView calls this, then renders.
-        }
-    }
+     updateSelectOptions('filter-status', Array.from(availableStatuses).sort(), currentStatus, 'All Statuses');
 }
 
 window.updateDynamicFilters = updateDynamicFilters;
@@ -683,13 +637,8 @@ export function openComic(comicId) {
 }
 
 export function continueReading(comicId) {
-    const progress = state.readingProgress[comicId];
-    startReading(comicId, progress ? progress.page : 0);
-}
-
-export function toggleSynopsis(id) {
-    const el = document.getElementById(`synopsis-${id}`);
-    if (el) el.classList.toggle('expanded');
+     const progress = state.readingProgress[comicId];
+     startReading(comicId, progress ? progress.page : 0);
 }
 
 export function toggleMeta(id) {
@@ -741,7 +690,6 @@ window.renderFolderSidebar = renderFolderSidebar;
 window.updateStatsForCurrentView = updateStatsForCurrentView;
 window.confirmPurgeHistory = async () => { if (confirm("Purge history?")) await purgeHistory(); };
 window.removeSingleHistory = removeSingleHistory;
-window.toggleSynopsis = toggleSynopsis;
 window.toggleMeta = toggleMeta;
 window.navigateToRoot = navigateToRoot;
 window.navigateToFolder = navigateToFolder;

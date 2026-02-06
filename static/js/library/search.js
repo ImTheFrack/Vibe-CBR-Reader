@@ -2,6 +2,7 @@ import { state } from '../state.js';
 import { renderItems, getTitleCoverIds } from '../components/index.js';
 import { aggregateProgress } from '../utils/progress.js';
 import { apiGet } from '../api.js';
+import { debounce, findTitleInTree } from '../utils.js';
 
 export async function handleSearch(query) {
     state.searchQuery = query.trim();
@@ -120,22 +121,7 @@ export function getSearchResults() {
             });
         });
     });
-    return titles;
-}
-
-/**
- * Helper to find a title object by name anywhere in the folder tree
- */
-function findTitleInTree(titleName) {
-    if (!state.folderTree) return null;
-    for (const cat of Object.values(state.folderTree.categories)) {
-        for (const sub of Object.values(cat.subcategories)) {
-            if (sub.titles[titleName]) {
-                return sub.titles[titleName];
-            }
-        }
-    }
-    return null;
+     return titles;
 }
 
 export function renderSearchResults() {
@@ -207,7 +193,10 @@ export function renderSearchResults() {
     }
 }
 
+// Create debounced version of handleSearch (300ms delay)
+const debouncedHandleSearch = debounce(handleSearch, 300);
+
 // Make globally available
 window.renderSearchResults = renderSearchResults;
-window.handleSearch = handleSearch;
+window.handleSearch = debouncedHandleSearch;
 window.toggleSearchScope = toggleSearchScope;

@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { showToast } from '../utils.js';
+import { showToast, findTitleInTree } from '../utils.js';
 import { apiGet, apiPost, apiDelete } from '../api.js';
 
 let currentExportJobId = null;
@@ -98,22 +98,6 @@ export function handleCardClick(el, event) {
             }
         }
     }
-}
-
-function findTitleInTree(titleName) {
-    if (!state.folderTree) return null;
-    const lowerName = titleName.toLowerCase();
-    for (const cat of Object.values(state.folderTree.categories || {})) {
-        for (const sub of Object.values(cat.subcategories || {})) {
-            if (sub.titles && sub.titles[titleName]) return sub.titles[titleName];
-            if (sub.titles) {
-                for (const title of Object.values(sub.titles)) {
-                    if (title.name.toLowerCase() === lowerName) return title;
-                }
-            }
-        }
-    }
-    return null;
 }
 
 export async function handleBatchExport() {
