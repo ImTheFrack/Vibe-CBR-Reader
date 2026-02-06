@@ -46,7 +46,8 @@ export async function loadLibrary() {
             }
             throw new Error(`HTTP ${response.status}`);
         }
-        state.comics = await response.json();
+        const data = await response.json();
+        state.comics = Array.isArray(data) ? data : data.items;
         buildFolderTree();
         // Filters will be initialized dynamically
     } catch (error) {

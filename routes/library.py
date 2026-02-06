@@ -260,16 +260,28 @@ async def rescan_library(background_tasks: BackgroundTasks, current_user: Dict[s
     return {"message": "Full rescan started in background"}
 
 @router.get("/books")
-async def list_books(current_user: Dict[str, Any] = Depends(get_current_user)) -> List[Dict[str, Any]]:
+async def list_books(
+    limit: int = 100,
+    offset: int = 0,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    
     conn = get_db_connection()
+    
+    count_query = 'SELECT COUNT(*) as total FROM comics'
+    total = conn.execute(count_query).fetchone()['total']
+    
     # Join with series to get metadata like genres and status
     query = '''
         SELECT c.*, s.genres, s.status as series_status, s.tags, s.authors
         FROM comics c
         LEFT JOIN series s ON c.series_id = s.id
         ORDER BY c.category, c.series, c.volume, c.chapter, c.filename
+        LIMIT ? OFFSET ?
     '''
-    books = conn.execute(query).fetchall()
+    books = conn.execute(query, (limit, offset)).fetchall()
     conn.close()
     
     result = []
@@ -286,7 +298,14 @@ async def list_books(current_user: Dict[str, Any] = Depends(get_current_user)) -
             else:
                 d[field] = []
         result.append(d)
-    return result
+    
+    return {
+        "items": result,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": (offset + limit) < total
+    }
 
 @router.get("/cover/{comic_id}")
 async def get_cover(comic_id: str, current_user: Dict[str, Any] = Depends(get_current_user)) -> Response:

@@ -27,7 +27,41 @@ def test_books_returns_list(test_client, test_user):
     response = test_client.get("/api/books")
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "total" in data
+    assert "limit" in data
+    assert "offset" in data
+    assert "has_more" in data
+    assert isinstance(data["items"], list)
+
+
+def test_books_pagination(test_client, test_user):
+    """Test /api/books pagination with limit and offset"""
+    login_response = test_client.post("/api/auth/login", json={
+        "username": test_user["username"],
+        "password": test_user["password"]
+    })
+    assert login_response.status_code == 200
+    
+    response1 = test_client.get("/api/books?limit=5&offset=0")
+    assert response1.status_code == 200
+    data1 = response1.json()
+    assert data1["limit"] == 5
+    assert data1["offset"] == 0
+    assert len(data1["items"]) <= 5
+    
+    response2 = test_client.get("/api/books?limit=3&offset=2")
+    assert response2.status_code == 200
+    data2 = response2.json()
+    assert data2["limit"] == 3
+    assert data2["offset"] == 2
+    assert len(data2["items"]) <= 3
+    
+    response3 = test_client.get("/api/books?limit=1000")
+    assert response3.status_code == 200
+    data3 = response3.json()
+    assert data3["limit"] == 500
 
 
 def test_scan_requires_admin(test_client, test_user, admin_user):
