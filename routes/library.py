@@ -47,8 +47,40 @@ def cleanup_stuck_scans():
     except Exception as e:
         logger.error(f"Note: Could not cleanup stuck scans: {e}")
 
+def cleanup_orphaned_exports():
+    """Delete orphaned .cbz temp files older than 1 hour from previous server runs"""
+    try:
+        import glob
+        import time
+        
+        temp_dir = tempfile.gettempdir()
+        current_time = time.time()
+        one_hour_ago = current_time - 3600  # 1 hour in seconds
+        
+        # Find all .cbz files in temp directory
+        cbz_files = glob.glob(os.path.join(temp_dir, "*.cbz"))
+        
+        cleaned_count = 0
+        for file_path in cbz_files:
+            try:
+                # Get file modification time
+                file_mtime = os.path.getmtime(file_path)
+                
+                # Delete if older than 1 hour
+                if file_mtime < one_hour_ago:
+                    os.remove(file_path)
+                    cleaned_count += 1
+            except Exception as e:
+                logger.warning(f"Could not cleanup orphaned export {file_path}: {e}")
+        
+        if cleaned_count > 0:
+            logger.info(f"Cleaned up {cleaned_count} orphaned export files")
+    except Exception as e:
+        logger.error(f"Note: Could not cleanup orphaned exports: {e}")
+
 # Call cleanup on module load
 cleanup_stuck_scans()
+cleanup_orphaned_exports()
 
 def create_placeholder_image():
     """Create a 'Generating...' placeholder image if it doesn't exist"""
