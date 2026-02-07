@@ -134,48 +134,7 @@ export function handleFilterChange() {
 
 window.handleFilterChange = handleFilterChange;
 
-export async function scanLibrary(e) {
-    if (e && e.shiftKey) {
-        const btn = e.target.closest('button') || e.target.closest('.menu-item');
-        if (!state.awaitingRescan) {
-            state.awaitingRescan = true;
-            if (btn) {
-                btn.originalText = btn.innerHTML;
-                btn.innerHTML = '<span>⚠️</span> Confirm Rescan';
-                btn.classList.add('btn-danger');
-            }
-            showToast('⚠️ Click again to ERASE database and rescan!', 'warning');
-            return;
-        }
-        state.awaitingRescan = false;
-        if (btn && btn.originalText) {
-            btn.innerHTML = btn.originalText;
-            btn.classList.remove('btn-danger');
-        }
-        try {
-            showToast('Starting full wipe and rescan...', 'info');
-            const response = await fetch('/api/rescan', { method: 'POST', credentials: 'include' });
-            if (!response.ok) throw new Error(`Rescan failed: ${response.status}`);
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            showToast('Rescan started.', 'success');
-            await loadLibrary();
-        } catch (error) {
-            showToast('Failed to rescan: ' + error.message, 'error');
-        }
-        return;
-    }
 
-    state.awaitingRescan = false;
-    try {
-        showToast('Scanning...', 'info');
-        const response = await fetch('/api/scan', { method: 'POST', credentials: 'include' });
-        if (!response.ok) throw new Error('Scan failed');
-        showToast('Scan started!', 'success');
-        setTimeout(async () => { await loadLibrary(); }, 5000);
-    } catch (error) {
-        showToast('Failed to scan: ' + error.message, 'error');
-    }
-}
 
 /**
  * Data Processing

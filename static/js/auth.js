@@ -137,18 +137,9 @@ export function updateAuthUI() {
             </div>
             ${state.currentUser.role === 'admin' ? `
             <div class="menu-divider"></div>
-            <div class="menu-item" onclick="scanLibrary(event); toggleHamburger()">
-                <span class="menu-icon">🔄</span>
-                <span>Scan Library</span>
-                <span style="margin-left: auto; font-size: 0.8em; opacity: 0.6;">🔒</span>
-            </div>
-            <div class="menu-item" onclick="showScanStatus(); toggleHamburger()">
-                <span class="menu-icon">📊</span>
-                <span>Scan Status</span>
-            </div>
             <div class="menu-item" onclick="routerNavigate('admin', {}); toggleHamburger()">
-                <span class="menu-icon">👥</span>
-                <span>User Management</span>
+                <span class="menu-icon">⚙️</span>
+                <span>Administration</span>
             </div>
             ` : ''}
         `;

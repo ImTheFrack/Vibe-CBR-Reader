@@ -6,7 +6,7 @@ import {
     logout, showRegisterForm, showLoginForm
 } from './auth.js';
 import { 
-     loadLibrary, scanLibrary, navigateToRoot, navigateToFolder, 
+     loadLibrary, navigateToRoot, navigateToFolder, 
      navigateUp, toggleFlattenMode, setViewMode, handleSort, 
      handleSearch, toggleSearchScope, showView, openComic, 
      toggleMobileSidebar, navigateTitleComic, renderTitleFan, toggleMeta, continueReading,
@@ -27,7 +27,6 @@ import {
 } from './library/selection.js';
 import { showToast } from './utils.js';
 import { initTagsView } from './tags.js';
-import { showScanStatus, startScanPolling } from './scan-status.js';
 import * as router from './router.js';
 import { loadDiscoveryData, scrollCarousel, refreshSuggestions } from './discovery.js';
 
@@ -55,7 +54,6 @@ window.handleRegister = handleRegister;
 window.logout = logout;
 window.showRegisterForm = showRegisterForm;
 window.showLoginForm = showLoginForm;
-window.scanLibrary = scanLibrary;
 window.navigateToRoot = navigateToRoot;
 window.handleLibraryClick = handleLibraryClick;
 window.navigateToFolder = navigateToFolder;
@@ -99,7 +97,6 @@ window.closePreferencesModal = closePreferencesModal;
 window.setPreference = setPreference;
 window.resetDefaultFilters = resetDefaultFilters;
 window.showToast = showToast;
-window.showScanStatus = showScanStatus;
 window.scrollCarousel = scrollCarousel;
 window.refreshSuggestions = refreshSuggestions;
 
@@ -184,10 +181,10 @@ function onHashChange() {
             }
             break;
         
-        case 'scan':
-            showScanStatus();
-            startScanPolling();
-            break;
+         case 'scan':
+             // Redirect to admin view
+             router.navigate('admin', {});
+             break;
         
         case 'admin':
             showView('admin');

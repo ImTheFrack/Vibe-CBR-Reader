@@ -95,7 +95,8 @@ export function parseHash(hash) {
             return { view: 'search', params };
 
         case 'scan':
-            return { view: 'scan', params };
+            // Redirect scan route to admin view
+            return { view: 'admin', params };
 
         case 'admin':
             return { view: 'admin', params };
