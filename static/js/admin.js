@@ -1,6 +1,8 @@
 import { apiGet, apiPut, apiPost, apiDelete } from './api.js';
 import { showToast } from './utils.js';
 
+console.log('[DEBUG] admin.js module loading...');
+
 function formatReadingTime(totalSeconds) {
     if (totalSeconds === 0) return '—';
     
