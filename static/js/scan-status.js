@@ -21,13 +21,16 @@ export function startScanPolling() {
 }
 
 export function showScanStatus() {
-    // Hide all views
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById('view-scan-status').classList.add('active');
-    state.currentView = 'scan-status';
-    
-    // Start polling
-    startScanPolling();
+    // Use router to navigate to scan view (updates URL hash for back/forward)
+    if (window.routerNavigate) {
+        window.routerNavigate('scan', {});
+    } else {
+        // Fallback: manually show view if router not available
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById('view-scan-status').classList.add('active');
+        state.currentView = 'scan-status';
+        startScanPolling();
+    }
 }
 
 async function pollScanStatus() {
