@@ -219,7 +219,7 @@ export function scrollCarousel(type, direction) {
  * Refreshes the suggestions carousel
  * Re-fetches suggestions from the API and re-renders
  */
-export async function refreshSuggestions() {
+async function refreshSuggestions() {
     const grid = document.getElementById('discovery-suggestions-grid');
     if (grid) {
         grid.innerHTML = '<div class="loading-state">Loading...</div>';
