@@ -28,6 +28,9 @@ export async function apiPost(endpoint, data) {
             if (response.status === 401) {
                 return { error: 'Unauthorized', status: 401 };
             }
+            if (response.status === 403) {
+                return { error: 'Forbidden', status: 403 };
+            }
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         return await response.json();

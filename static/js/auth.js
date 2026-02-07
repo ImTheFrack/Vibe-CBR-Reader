@@ -251,7 +251,13 @@ export async function handleLogin(event) {
     const result = await apiPost('/api/auth/login', { username, password });
     
     if (result.error) {
-        showToast(result.error === 'Unauthorized' ? 'Invalid credentials' : 'Login failed', 'error');
+        if (result.status === 403) {
+            showToast('Account pending administrator approval', 'error');
+        } else if (result.error === 'Unauthorized') {
+            showToast('Invalid credentials', 'error');
+        } else {
+            showToast('Login failed', 'error');
+        }
     } else {
         state.isAuthenticated = true;
         state.currentUser = result.user;
@@ -292,7 +298,11 @@ export async function handleRegister(event) {
     if (result.error) {
         showToast(result.error === 'Unauthorized' ? 'Registration failed' : result.error, 'error');
     } else {
-        showToast('Registration successful! Please log in.', 'success');
+        if (result.message && result.message.includes('pending approval')) {
+            showToast('Registration successful! Your account will be reviewed by an administrator.', 'success');
+        } else {
+            showToast('Registration successful! Please log in.', 'success');
+        }
         showLoginForm();
     }
 }
