@@ -508,36 +508,41 @@ export async function renderTitleDetailView() {
 }
 
 export function showView(viewName) {
-    document.querySelectorAll('.header-btn').forEach(btn => btn.classList.remove('active'));
-    if (viewName === 'library') {
-        const el = document.getElementById('nav-library');
-        if (el) el.classList.add('active');
-    }
-    if (viewName === 'recent') {
-        const el = document.getElementById('nav-recent');
-        if (el) el.classList.add('active');
-    }
-    if (viewName === 'tags') {
-        const el = document.getElementById('nav-tags');
-        if (el) el.classList.add('active');
-    }
-    if (viewName === 'discovery') {
-        const el = document.getElementById('nav-discovery');
-        if (el) el.classList.add('active');
-    }
+     document.querySelectorAll('.header-btn').forEach(btn => btn.classList.remove('active'));
+     if (viewName === 'library') {
+         const el = document.getElementById('nav-library');
+         if (el) el.classList.add('active');
+     }
+     if (viewName === 'recent') {
+         const el = document.getElementById('nav-recent');
+         if (el) el.classList.add('active');
+     }
+     if (viewName === 'tags') {
+         const el = document.getElementById('nav-tags');
+         if (el) el.classList.add('active');
+     }
+     if (viewName === 'discovery') {
+         const el = document.getElementById('nav-discovery');
+         if (el) el.classList.add('active');
+     }
 
-    document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-    const viewEl = document.getElementById(`view-${viewName}`);
-    if (viewEl) viewEl.classList.add('active');
-    state.currentView = viewName;
+     document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+     const viewEl = document.getElementById(`view-${viewName}`);
+     if (viewEl) {
+         viewEl.classList.add('active');
+         console.log(`showView: Made view-${viewName} active`);
+     } else {
+         console.warn(`showView: Could not find view-${viewName}`);
+     }
+     state.currentView = viewName;
 
-    // Trigger specific view loading
-    if (viewName === 'recent') {
-        if (window.loadRecentReads) window.loadRecentReads();
-    }
-    
-    updateSelectionButtonState();
-}
+     // Trigger specific view loading
+     if (viewName === 'recent') {
+         if (window.loadRecentReads) window.loadRecentReads();
+     }
+     
+     updateSelectionButtonState();
+ }
 
 export function updateSelectionButtonState() {
     const buttons = document.querySelectorAll('.btn-selection-mode');

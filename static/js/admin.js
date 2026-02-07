@@ -246,85 +246,111 @@ export async function loadSettings() {
 }
 
 function setupScanButtons() {
-    const incrementalBtn = document.getElementById('btn-scan-incremental');
-    const fullBtn = document.getElementById('btn-scan-full');
-    const thumbnailsBtn = document.getElementById('btn-scan-thumbnails');
-    const metadataBtn = document.getElementById('btn-scan-metadata');
-    
-    if (incrementalBtn) {
-        incrementalBtn.addEventListener('click', async () => {
-            await apiPost('/api/admin/scan');
-            startScanPolling();
-        });
-    }
-    
-    if (fullBtn) {
-        fullBtn.addEventListener('click', () => {
-            showRescanConfirmationModal();
-        });
-    }
-    
-    if (thumbnailsBtn) {
-        thumbnailsBtn.addEventListener('click', async () => {
-            await apiPost('/api/admin/scan/thumbnails');
-            startScanPolling();
-        });
-    }
-    
-    if (metadataBtn) {
-        metadataBtn.addEventListener('click', async () => {
-            await apiPost('/api/admin/scan/metadata');
-            startScanPolling();
-        });
-    }
-}
+     const incrementalBtn = document.getElementById('btn-scan-incremental');
+     const fullBtn = document.getElementById('btn-scan-full');
+     const thumbnailsBtn = document.getElementById('btn-scan-thumbnails');
+     const metadataBtn = document.getElementById('btn-scan-metadata');
+     
+     console.log('setupScanButtons: Found buttons:', {
+         incrementalBtn: !!incrementalBtn,
+         fullBtn: !!fullBtn,
+         thumbnailsBtn: !!thumbnailsBtn,
+         metadataBtn: !!metadataBtn
+     });
+     
+     if (incrementalBtn) {
+         incrementalBtn.addEventListener('click', async () => {
+             console.log('Incremental scan clicked');
+             await apiPost('/api/admin/scan');
+             startScanPolling();
+         });
+     }
+     
+     if (fullBtn) {
+         fullBtn.addEventListener('click', () => {
+             console.log('Full scan clicked');
+             showRescanConfirmationModal();
+         });
+     }
+     
+     if (thumbnailsBtn) {
+         thumbnailsBtn.addEventListener('click', async () => {
+             console.log('Thumbnails scan clicked');
+             await apiPost('/api/admin/scan/thumbnails');
+             startScanPolling();
+         });
+     }
+     
+     if (metadataBtn) {
+         metadataBtn.addEventListener('click', async () => {
+             console.log('Metadata scan clicked');
+             await apiPost('/api/admin/scan/metadata');
+             startScanPolling();
+         });
+     }
+ }
 
 function setupThumbnailSettings() {
-    const formatSelect = document.getElementById('thumb-format-select');
-    const qualitySlider = document.getElementById('thumb-quality-slider');
-    const qualityValue = document.getElementById('thumb-quality-value');
-    const ratioSelect = document.getElementById('thumb-ratio-select');
-    const widthSlider = document.getElementById('thumb-width-slider');
-    const widthValue = document.getElementById('thumb-width-value');
-    const saveBtn = document.getElementById('thumb-save-btn');
-    
-    if (formatSelect && qualitySlider) {
-        formatSelect.addEventListener('change', () => {
-            qualitySlider.disabled = formatSelect.value === 'png';
-        });
-    }
-    
-    if (qualitySlider && qualityValue) {
-        qualitySlider.addEventListener('input', () => {
-            qualityValue.textContent = qualitySlider.value;
-        });
-    }
-    
-    if (widthSlider && widthValue) {
-        widthSlider.addEventListener('input', () => {
-            widthValue.textContent = widthSlider.value;
-        });
-    }
-    
-    if (saveBtn) {
-        saveBtn.addEventListener('click', async () => {
-            const settings = {
-                thumb_format: formatSelect?.value || 'webp',
-                thumb_quality: parseInt(qualitySlider?.value || 70),
-                thumb_ratio: ratioSelect?.value || '9:14',
-                thumb_width: parseInt(widthSlider?.value || 225),
-                thumb_height: Math.round(parseInt(widthSlider?.value || 225) * 14 / 9)
-            };
-            
-            const result = await apiPut('/api/admin/settings', settings);
-            if (!result.error) {
-                showToast('Settings saved successfully');
-            } else {
-                showToast('Error saving settings', 'error');
-            }
-        });
-    }
-}
+     const formatSelect = document.getElementById('thumb-format-select');
+     const qualitySlider = document.getElementById('thumb-quality-slider');
+     const qualityValue = document.getElementById('thumb-quality-value');
+     const ratioSelect = document.getElementById('thumb-ratio-select');
+     const widthSlider = document.getElementById('thumb-width-slider');
+     const widthValue = document.getElementById('thumb-width-value');
+     const saveBtn = document.getElementById('thumb-save-btn');
+     
+     console.log('setupThumbnailSettings: Found elements:', {
+         formatSelect: !!formatSelect,
+         qualitySlider: !!qualitySlider,
+         qualityValue: !!qualityValue,
+         ratioSelect: !!ratioSelect,
+         widthSlider: !!widthSlider,
+         widthValue: !!widthValue,
+         saveBtn: !!saveBtn
+     });
+     
+     if (formatSelect && qualitySlider) {
+         formatSelect.addEventListener('change', () => {
+             console.log('Format changed to:', formatSelect.value);
+             qualitySlider.disabled = formatSelect.value === 'png';
+         });
+     }
+     
+     if (qualitySlider && qualityValue) {
+         qualitySlider.addEventListener('input', () => {
+             console.log('Quality slider moved to:', qualitySlider.value);
+             qualityValue.textContent = qualitySlider.value;
+         });
+     }
+     
+     if (widthSlider && widthValue) {
+         widthSlider.addEventListener('input', () => {
+             console.log('Width slider moved to:', widthSlider.value);
+             widthValue.textContent = widthSlider.value;
+         });
+     }
+     
+     if (saveBtn) {
+         saveBtn.addEventListener('click', async () => {
+             console.log('Save button clicked');
+             const settings = {
+                 thumb_format: formatSelect?.value || 'webp',
+                 thumb_quality: parseInt(qualitySlider?.value || 70),
+                 thumb_ratio: ratioSelect?.value || '9:14',
+                 thumb_width: parseInt(widthSlider?.value || 225),
+                 thumb_height: Math.round(parseInt(widthSlider?.value || 225) * 14 / 9)
+             };
+             
+             console.log('Saving settings:', settings);
+             const result = await apiPut('/api/admin/settings', settings);
+             if (!result.error) {
+                 showToast('Settings saved successfully');
+             } else {
+                 showToast('Error saving settings', 'error');
+             }
+         });
+     }
+ }
 
 function initScanStatus() {
     // Initial check
