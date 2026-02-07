@@ -321,51 +321,6 @@
             </div>
         </div>
 
-        <!-- Scan Status View -->
-        <div id="view-scan-status" class="view">
-            <div class="section-header">
-                <h2 class="section-title">
-                    <span>🔄</span>
-                    Scan Status
-                </h2>
-                <p class="section-subtitle" id="scan-status-subtitle">No active scan</p>
-            </div>
-            
-            <div class="scan-progress-container" style="padding: 2rem; max-width: 600px;">
-                <div class="progress-bar" style="width: 100%; height: 30px; background: var(--bg-tertiary); border-radius: 15px; overflow: hidden; margin-bottom: 1rem;">
-                    <div class="progress-fill" id="scan-progress-fill" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.3s;"></div>
-                </div>
-                <div class="scan-stats" style="text-align: center; margin-bottom: 1rem;">
-                    <span id="scan-processed">0</span> of <span id="scan-total">0</span> comics processed
-                </div>
-                <div id="scan-current-file-container" style="text-align: center; margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    Current: <span id="scan-current-file">-</span>
-                </div>
-                
-                <div id="scan-metrics" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; font-size: 0.85rem;">
-                    <div style="background: var(--bg-secondary); padding: 0.75rem; border-radius: 8px;">
-                        <p style="margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Phase 1: Syncing</p>
-                        <div style="display: flex; justify-content: space-between;"><span>New:</span> <span id="metric-new" style="color: var(--success);">0</span></div>
-                        <div style="display: flex; justify-content: space-between;"><span>Changed:</span> <span id="metric-changed" style="color: var(--accent);">0</span></div>
-                        <div style="display: flex; justify-content: space-between;"><span>Deleted:</span> <span id="metric-deleted" style="color: var(--danger);">0</span></div>
-                    </div>
-                    <div style="background: var(--bg-secondary); padding: 0.75rem; border-radius: 8px;">
-                        <p style="margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Phase 2: Processing</p>
-                        <div style="display: flex; justify-content: space-between;"><span>Pages:</span> <span id="metric-pages">0</span> <small id="metric-page-err" style="color: var(--danger);">(0 err)</small></div>
-                        <div style="display: flex; justify-content: space-between;"><span>Thumbs:</span> <span id="metric-thumbs">0</span> <small id="metric-thumb-err" style="color: var(--danger);">(0 err)</small></div>
-                    </div>
-                </div>
-
-                <div class="scan-details" style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px;">
-                    <p>Status: <span id="scan-status-text">Idle</span></p>
-                    <p>Started: <span id="scan-started">-</span></p>
-                    <p id="scan-completed-container" style="display: none;">
-                        Completed: <span id="scan-completed">-</span>
-                    </p>
-                </div>
-            </div>
-        </div>
-
         <!-- Series Detail View -->
         <div id="view-series" class="view">
             <div class="series-detail" id="series-detail">
@@ -373,47 +328,148 @@
             </div>
         </div>
 
-        <!-- Admin User Management View -->
+        <!-- Admin Page View -->
         <div id="view-admin" class="view">
             <div class="section-header">
                 <h2 class="section-title">
-                    <span>👥</span>
-                    User Management
+                    <span>⚙️</span>
+                    Administration
                 </h2>
-                <p class="section-subtitle">Manage users, roles, and security</p>
+                <p class="section-subtitle">Library settings, scanning, and user management</p>
             </div>
             
             <div class="admin-container" style="padding: 1rem 2rem;">
-                <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
-                    <table class="admin-table" style="width: 100%; border-collapse: collapse; text-align: left;">
-                        <thead>
-                            <tr style="background: var(--bg-tertiary); border-bottom: 1px solid var(--border);">
-                                <th style="padding: 1rem;">Username</th>
-                                <th style="padding: 1rem;">Email</th>
-                                <th style="padding: 1rem;">Role</th>
-                                <th style="padding: 1rem;">Created</th>
-                                <th style="padding: 1rem;">Last Login</th>
-                                <th style="padding: 1rem; text-align: right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admin-users-table-body">
-                            <!-- Populated dynamically -->
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="admin-section-header" style="margin-top: 3rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
-                    <h2 class="section-title">
-                        <span>🕳️</span>
-                        Sequence Gaps
-                    </h2>
-                    <button class="btn-secondary" onclick="loadGapsReport()">🔄 Refresh Report</button>
-                </div>
-                <p class="section-subtitle" style="margin-bottom: 1.5rem;">Identify missing chapters or volumes in your collection</p>
                 
-                <div id="admin-gaps-container" class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
-                    <div class="empty-state" style="padding: 2rem;">
-                        <p>Click "Refresh Report" to scan for gaps.</p>
+                <!-- Section 1: Library Metadata -->
+                <div style="margin-bottom: 3rem;">
+                    <h3 class="section-title" style="margin-bottom: 1.5rem;">📚 Library Metadata</h3>
+                    
+                    <!-- Scan Controls -->
+                    <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border); margin-bottom: 2rem;">
+                        <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600;">Scan Controls</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                            <button id="btn-scan-incremental" class="btn-primary" style="padding: 0.75rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; cursor: pointer; font-weight: 600;">🔄 Incremental Scan</button>
+                            <button id="btn-scan-full" class="btn-danger" style="padding: 0.75rem 1rem; border-radius: 8px; border: none; background: var(--danger); color: white; cursor: pointer; font-weight: 600;">⚠️ Full Re-Scan</button>
+                            <button id="btn-scan-thumbnails" class="btn-primary" style="padding: 0.75rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; cursor: pointer; font-weight: 600;">🖼️ Thumbnail Rescan</button>
+                            <button id="btn-scan-metadata" class="btn-primary" style="padding: 0.75rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; cursor: pointer; font-weight: 600;">📋 Metadata Rescan</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Scan Status Panel -->
+                    <div id="admin-scan-status" class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border); margin-bottom: 2rem; display: none;">
+                        <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600;">Scan Status</h4>
+                        <div class="progress-bar" style="width: 100%; height: 30px; background: var(--bg-tertiary); border-radius: 15px; overflow: hidden; margin-bottom: 1rem;">
+                            <div id="admin-scan-progress-fill" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.3s;"></div>
+                        </div>
+                        <div style="text-align: center; margin-bottom: 1rem;">
+                            <span id="admin-scan-processed">0</span> of <span id="admin-scan-total">0</span> comics processed
+                        </div>
+                        <div style="text-align: center; margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            Current: <span id="admin-scan-current-file">-</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                            <div style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 8px;">
+                                <p style="margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Phase 1: Syncing</p>
+                                <div style="display: flex; justify-content: space-between;"><span>New:</span> <span id="admin-metric-new" style="color: var(--success);">0</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Changed:</span> <span id="admin-metric-changed" style="color: var(--accent);">0</span></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Deleted:</span> <span id="admin-metric-deleted" style="color: var(--danger);">0</span></div>
+                            </div>
+                            <div style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 8px;">
+                                <p style="margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Phase 2: Processing</p>
+                                <div style="display: flex; justify-content: space-between;"><span>Pages:</span> <span id="admin-metric-pages">0</span> <small id="admin-metric-page-err" style="color: var(--danger);">(0 err)</small></div>
+                                <div style="display: flex; justify-content: space-between;"><span>Thumbs:</span> <span id="admin-metric-thumbs">0</span> <small id="admin-metric-thumb-err" style="color: var(--danger);">(0 err)</small></div>
+                            </div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px;">
+                            <p>Status: <span id="admin-scan-status-text">Idle</span></p>
+                            <p>Started: <span id="admin-scan-started">-</span></p>
+                            <p id="admin-scan-completed-container" style="display: none;">
+                                Completed: <span id="admin-scan-completed">-</span>
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Thumbnail Settings -->
+                    <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
+                        <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600;">Thumbnail Settings</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Format</label>
+                                <select id="thumb-format-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary);">
+                                    <option value="webp">WebP</option>
+                                    <option value="png">PNG</option>
+                                    <option value="jpg">JPG</option>
+                                    <option value="best">Pick Best</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Quality: <span id="thumb-quality-value">70</span>%</label>
+                                <input id="thumb-quality-slider" type="range" min="0" max="100" value="70" style="width: 100%; cursor: pointer;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Aspect Ratio</label>
+                                <select id="thumb-ratio-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary);">
+                                    <option value="663:1024">American (663:1024)</option>
+                                    <option value="128:182">Bunko (128:182)</option>
+                                    <option value="114:172">Tankobon (114:172)</option>
+                                    <option value="257:364">ISO B4 (257:364)</option>
+                                    <option value="9:14">MAL (9:14)</option>
+                                    <option value="512:713">Mangadex (512:713)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Width: <span id="thumb-width-value">225</span>px</label>
+                                <input id="thumb-width-slider" type="range" min="60" max="300" value="225" style="width: 100%; cursor: pointer;">
+                            </div>
+                        </div>
+                        <button id="thumb-save-btn" class="btn-primary" style="padding: 0.75rem 1.5rem; border-radius: 8px; border: none; background: var(--accent); color: white; cursor: pointer; font-weight: 600;">💾 Save Settings</button>
+                    </div>
+                </div>
+                
+                <!-- Section 2: User Management -->
+                <div style="margin-bottom: 3rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 class="section-title">👥 User Management</h3>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input id="toggle-require-approval" type="checkbox" style="cursor: pointer;">
+                            <span style="color: var(--text-secondary); font-weight: 600;">Require Approval</span>
+                        </label>
+                    </div>
+                    
+                    <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
+                        <table class="admin-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead>
+                                <tr style="background: var(--bg-tertiary); border-bottom: 1px solid var(--border);">
+                                    <th style="padding: 1rem;">Username</th>
+                                    <th style="padding: 1rem;">Email</th>
+                                    <th style="padding: 1rem;">Role</th>
+                                    <th style="padding: 1rem;">Comics Read</th>
+                                    <th style="padding: 1rem;">Time Read</th>
+                                    <th style="padding: 1rem;">Approved</th>
+                                    <th style="padding: 1rem;">Created</th>
+                                    <th style="padding: 1rem;">Last Login</th>
+                                    <th style="padding: 1rem; text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Section 3: Sequence Gaps -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 class="section-title">🕳️ Sequence Gaps</h3>
+                        <button class="btn-secondary" onclick="loadGapsReport()" style="padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer; font-weight: 600;">🔄 Refresh Report</button>
+                    </div>
+                    <p class="section-subtitle" style="margin-bottom: 1.5rem;">Identify missing chapters or volumes in your collection</p>
+                    
+                    <div id="admin-gaps-container" class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
+                        <div class="empty-state" style="padding: 2rem;">
+                            <p>Click "Refresh Report" to scan for gaps.</p>
+                        </div>
                     </div>
                 </div>
             </div>
