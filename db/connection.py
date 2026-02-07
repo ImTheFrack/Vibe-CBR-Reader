@@ -4,7 +4,7 @@ from datetime import datetime
 from config import DB_PATH
 
 # Schema version for migration tracking
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -412,13 +412,49 @@ def init_db() -> None:
             conn.execute(
                 'INSERT OR IGNORE INTO libraries (name, path, is_default) VALUES (?, ?, ?)',
                 ('Default', COMICS_DIR, 1)
-            )
+             )
             default_lib = conn.execute('SELECT id FROM libraries WHERE is_default = 1').fetchone()
             if default_lib:
                 conn.execute('UPDATE comics SET library_id = ? WHERE library_id IS NULL', (default_lib['id'],))
         except:
             pass
-     
+    
+    if current_version < 7:
+        try:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS admin_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key TEXT UNIQUE NOT NULL,
+                    value TEXT NOT NULL
+                )
+            ''')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            conn.execute("ALTER TABLE comics ADD COLUMN thumbnail_ext TEXT DEFAULT 'webp'")
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN approved BOOLEAN DEFAULT 1")
+        except sqlite3.OperationalError:
+            pass
+        
+        default_settings = [
+            ('thumb_quality', '70'),
+            ('thumb_ratio', '9:14'),
+            ('thumb_width', '225'),
+            ('thumb_height', '350'),
+            ('thumb_format', 'webp'),
+            ('require_approval', '0')
+        ]
+        for key, value in default_settings:
+            conn.execute(
+                'INSERT OR IGNORE INTO admin_settings (key, value) VALUES (?, ?)',
+                (key, value)
+            )
+    
     if current_version < SCHEMA_VERSION:
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     
