@@ -188,7 +188,15 @@ function onHashChange() {
         
         case 'admin':
             showView('admin');
-            import('./admin.js').then(m => m.initAdminView());
+            console.log('[DEBUG] About to import admin.js');
+            import('./admin.js')
+                .then(m => {
+                    console.log('[DEBUG] admin.js imported successfully, initAdminView exists:', typeof m.initAdminView);
+                    m.initAdminView();
+                })
+                .catch(err => {
+                    console.error('[DEBUG] Failed to import admin.js:', err);
+                });
             break;
 
         case 'profile':
