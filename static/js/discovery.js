@@ -216,6 +216,34 @@ export function scrollCarousel(type, direction) {
 }
 
 /**
+ * Refreshes the suggestions carousel
+ * Re-fetches suggestions from the API and re-renders
+ */
+export async function refreshSuggestions() {
+    const grid = document.getElementById('discovery-suggestions-grid');
+    if (grid) {
+        grid.innerHTML = '<div class="loading-state">Loading...</div>';
+    }
+    
+    try {
+        const suggestionsData = await apiGet('/api/discovery/suggestions');
+        
+        if (suggestionsData.error) {
+            console.error('Failed to refresh suggestions:', suggestionsData.error);
+            if (grid) {
+                grid.innerHTML = '<div class="empty-state"><div class="empty-icon">💡</div><div class="empty-title">Failed to refresh</div></div>';
+            }
+        } else {
+            const suggestions = Array.isArray(suggestionsData) ? suggestionsData : suggestionsData.items || [];
+            renderSuggestions(suggestions);
+        }
+    } catch (error) {
+        console.error('Error refreshing suggestions:', error);
+        showToast('Failed to refresh suggestions', 'error');
+    }
+}
+
+/**
  * Opens a series detail view
  * @param {string} seriesName - The series name to navigate to
  */
@@ -242,4 +270,4 @@ function openComic(comicId) {
 }
 
 // Export functions for external use
-export { openComic, openSeries };
+export { openComic, openSeries, refreshSuggestions };

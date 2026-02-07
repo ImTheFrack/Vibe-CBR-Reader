@@ -29,7 +29,7 @@ import { showToast } from './utils.js';
 import { initTagsView } from './tags.js';
 import { showScanStatus, startScanPolling } from './scan-status.js';
 import * as router from './router.js';
-import { loadDiscoveryData, scrollCarousel } from './discovery.js';
+import { loadDiscoveryData, scrollCarousel, refreshSuggestions } from './discovery.js';
 
 // Hamburger Menu
 export function toggleHamburger() {
@@ -101,6 +101,7 @@ window.resetDefaultFilters = resetDefaultFilters;
 window.showToast = showToast;
 window.showScanStatus = showScanStatus;
 window.scrollCarousel = scrollCarousel;
+window.refreshSuggestions = refreshSuggestions;
 
 // Hash Change Handler
 function onHashChange() {

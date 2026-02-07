@@ -1858,12 +1858,22 @@
 	overflow-y: hidden;
 	scroll-behavior: smooth;
 	padding: 8px 16px;
-	scrollbar-width: none; /* Firefox */
-	-ms-overflow-style: none; /* IE and Edge */
+	scrollbar-width: thin; /* Firefox */
+	scrollbar-color: var(--accent-primary) var(--bg-tertiary);
 }
 
 .carousel-container::-webkit-scrollbar {
-	display: none; /* Chrome, Safari, Opera */
+	height: 8px;
+}
+
+.carousel-container::-webkit-scrollbar-track {
+	background: var(--bg-tertiary);
+	border-radius: var(--radius-sm);
+}
+
+.carousel-container::-webkit-scrollbar-thumb {
+	background: var(--accent-primary);
+	border-radius: var(--radius-sm);
 }
 
 /* Carousel Card Styles */

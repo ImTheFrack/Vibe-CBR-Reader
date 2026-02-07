@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from typing import Dict, Any, List
 from collections import defaultdict
+from datetime import datetime, timedelta
 from dependencies import get_current_user
 from database import get_db_connection
 
@@ -51,7 +52,7 @@ async def get_new_additions(
     Returns recently added comics grouped by series.
     Each group shows: series name, cover (first chapter), count badge, latest mtime.
     Consolidated to show "X new chapters" per series.
-    Limited to 20 series groups.
+    Limited to 30 series groups.
     Only returns comics that have thumbnails.
     """
     conn = get_db_connection()
@@ -87,9 +88,9 @@ async def get_new_additions(
                 'chapter_titles': [c['title'] for c in chapters[:5]]  # First 5 titles
             })
     
-    # Sort by latest_mtime DESC and limit to 20
+    # Sort by latest_mtime DESC and limit to 30
     result.sort(key=lambda x: x['latest_mtime'], reverse=True)
-    return result[:20]
+    return result[:30]
 
 
 @router.get("/discovery/suggestions")
@@ -98,21 +99,35 @@ async def get_suggestions(
 ) -> List[Dict[str, Any]]:
     """
     Get series suggestions based on user's recent reading history.
-    Analyzes tags from 3 most recent reads and finds similar series.
-    Returns up to 12 suggested series with matching tags.
+    Analyzes tags from 3 most recent reads OR all reads in last 7 days (whichever is more).
+    Returns up to 30 suggested series with matching tags.
     """
     conn = get_db_connection()
     
-    # Get 3 most recent reads
+    # Get reads from last 7 days OR at least 3 most recent (whichever is more)
+    seven_days_ago = datetime.now() - timedelta(days=7)
+    
     recent = conn.execute(
         '''SELECT DISTINCT c.series, c.series_id
            FROM reading_progress rp
            JOIN comics c ON rp.comic_id = c.id
            WHERE rp.user_id = ? AND c.series_id IS NOT NULL
-           ORDER BY rp.last_read DESC
-           LIMIT 3''',
-        (current_user['id'],)
+             AND rp.last_read >= ?
+           ORDER BY rp.last_read DESC''',
+        (current_user['id'], seven_days_ago.isoformat())
     ).fetchall()
+    
+    # If less than 3 reads in last 7 days, get 3 most recent instead
+    if len(recent) < 3:
+        recent = conn.execute(
+            '''SELECT DISTINCT c.series, c.series_id
+               FROM reading_progress rp
+               JOIN comics c ON rp.comic_id = c.id
+               WHERE rp.user_id = ? AND c.series_id IS NOT NULL
+               ORDER BY rp.last_read DESC
+               LIMIT 3''',
+            (current_user['id'],)
+        ).fetchall()
     
     if not recent:
         conn.close()
@@ -186,10 +201,10 @@ async def get_suggestions(
                 'matching_tags': list(matches)
             })
     
-    # Sort by score and return top 12
+    # Sort by score and return top 30
     scored.sort(key=lambda x: x['score'], reverse=True)
     result = []
-    for item in scored[:12]:
+    for item in scored[:30]:
         data = item['data']
         result.append({
             'id': data['id'],

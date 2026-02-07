@@ -76,7 +76,6 @@ For a detailed list of planned features, known bugs, and project roadmap, please
 - **Tags Clicking**: Fixed clicking on tag cards not adding them to filter list.
 - **Preferences UI**: Fixed preferences modal not showing current values when opened.
 - **Library Loading**: Fixed library only showing first 100 comics instead of entire collection.
-
 ### 2026-02-06
 - **Unified Selection & Export**: Integrated the batch selection system into the Tags view, allowing users to select and export series found via tag filtering. Improved navigation logic to persist selections during tag drill-down.
 - **Accurate Chapter Counting**: Replaced metadata-based chapter counts in the Tags view with real-time disk-based counting for 100% accuracy.
@@ -91,7 +90,25 @@ For a detailed list of planned features, known bugs, and project roadmap, please
 - **Auto-Advance Progress**: Added a dynamic decreasing countdown bar that reposition based on UI visibility and resets on manual navigation.
 - **Performance & UX**: Optimized slider persistence to be "network-quiet" during movement and implemented in-place UI updates for the preferences modal to eliminate jarring reloads.
 - **UI Compression**: Refactored the preferences and reader settings into a compact horizontal layout, significantly reducing vertical footprint.
-- **Database Migrations**: Integrated 7 new preference columns into the user profile system for full filter persistence.
+- **ESLint/Prettier**: Code quality tooling
+- **✨ Discovery Views**: Where: Click the "✨ Discover" button in the top navigation bar (between Library and Recent)
+  - New Additions carousel - Shows recently added comics to your library
+  - Tag-based suggestions
+- **PWA Support (Browser Feature)**: Install the app from your browser
+  - Chrome/Edge: Click the install icon in the address bar (➕ or 📱 icon)
+  - Safari: Use "Add to Home Screen" from the share menu
+  - Result: App becomes installable with offline support
+- **Page Annotations (Backend Only)**:  Backend infrastructure complete, but no UI yet
+  - API endpoints exist at /api/annotations/*
+  - Database schema supports notes and highlights
+  - Not visible yet - would need reader UI integration
+- **Duplicate Detection (Admin Only)** : dashboard → Coming soon section
+  - API at /api/admin/duplicates
+  - Shows duplicate comics by file hash or size+filename
+- **Multi-Library (Backend Only)**: Backend infrastructure complete
+  - Supports multiple comic directories
+  - Admin API at /api/libraries
+  - Not visible yet - would need UI for switching libraries
 
 ### 2026-02-05
 - **Security Hardening**: Migrated to `bcrypt` hashing with lazy migration, audited and fixed all SQL queries for full parameterization, and hardened registration logic.
