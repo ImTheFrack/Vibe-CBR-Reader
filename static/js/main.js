@@ -192,7 +192,12 @@ function onHashChange() {
             import('./admin.js')
                 .then(m => {
                     console.log('[DEBUG] admin.js imported successfully, initAdminView exists:', typeof m.initAdminView);
-                    m.initAdminView();
+                    try {
+                        const result = m.initAdminView();
+                        console.log('[DEBUG] initAdminView returned:', result);
+                    } catch (err) {
+                        console.error('[DEBUG] initAdminView threw error:', err);
+                    }
                 })
                 .catch(err => {
                     console.error('[DEBUG] Failed to import admin.js:', err);
