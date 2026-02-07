@@ -21,13 +21,23 @@ function formatReadingTime(totalSeconds) {
 }
 
 export async function initAdminView() {
+    console.log('initAdminView: Starting...');
     await loadSettings();
+    console.log('initAdminView: loadSettings done');
     await loadApprovalSetting();
+    console.log('initAdminView: loadApprovalSetting done');
     await loadUsers();
+    console.log('initAdminView: loadUsers done');
     setupApprovalToggle();
+    console.log('initAdminView: setupApprovalToggle done');
+    console.log('initAdminView: About to call setupScanButtons...');
     setupScanButtons();
+    console.log('initAdminView: setupScanButtons done');
+    console.log('initAdminView: About to call setupThumbnailSettings...');
     setupThumbnailSettings();
+    console.log('initAdminView: setupThumbnailSettings done');
     initScanStatus();
+    console.log('initAdminView: Complete!');
 }
 
 async function loadApprovalSetting() {
@@ -452,9 +462,6 @@ function showRescanConfirmationModal() {
         startScanPolling();
     });
 }
-
-// Import apiPost for the new functions
-import { apiPost } from './api.js';
 
 // Register cleanup for admin view
 if (typeof registerCleanup === 'function') {
