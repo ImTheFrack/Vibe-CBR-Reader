@@ -43,7 +43,9 @@ export async function initAdminView() {
 }
 
 async function loadApprovalSetting() {
+    console.log('loadApprovalSetting: Starting...');
     const settings = await apiGet('/api/admin/settings');
+    console.log('loadApprovalSetting: apiGet returned:', settings);
     if (!settings.error) {
         const toggle = document.getElementById('toggle-require-approval');
         if (toggle) {
@@ -71,12 +73,18 @@ function setupApprovalToggle() {
 }
 
 async function loadUsers() {
+    console.log('loadUsers: Starting...');
     const tableBody = document.getElementById('admin-users-table-body');
-    if (!tableBody) return;
+    if (!tableBody) {
+        console.log('loadUsers: No tableBody found, returning');
+        return;
+    }
 
      tableBody.innerHTML = '<tr><td colspan="9" style="padding: 2rem; text-align: center;"><div class="spinner" style="margin: 0 auto;"></div></td></tr>';
 
+     console.log('loadUsers: About to call apiGet...');
      const users = await apiGet('/api/admin/users');
+     console.log('loadUsers: apiGet returned:', users);
      
      if (users.error) {
          tableBody.innerHTML = `<tr><td colspan="9" style="padding: 2rem; text-align: center; color: var(--danger);">Error loading users: ${users.error}</td></tr>`;
@@ -234,7 +242,9 @@ window.loadGapsReport = loadGapsReport;
 let scanPollingInterval = null;
 
 export async function loadSettings() {
+    console.log('loadSettings: Starting...');
     const settings = await apiGet('/api/admin/settings');
+    console.log('loadSettings: apiGet returned:', settings);
     if (settings.error) return;
     
     const formatSelect = document.getElementById('thumb-format-select');
