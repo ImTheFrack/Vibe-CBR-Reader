@@ -32,7 +32,8 @@ def update_scan_progress(job_id: int, processed_comics: int, errors: Optional[Li
     # All values are parameterized in the UPDATE statement.
     allowed_metrics = [
         'current_file', 'phase', 'new_comics', 'deleted_comics', 'changed_comics',
-        'processed_pages', 'page_errors', 'processed_thumbnails', 'thumbnail_errors'
+        'processed_pages', 'page_errors', 'processed_thumbnails', 'thumbnail_errors',
+        'thumb_bytes_written', 'thumb_bytes_saved'
     ]
     
     for key, value in kwargs.items():
@@ -103,3 +104,24 @@ def get_running_scan_job() -> Optional[Dict[str, Any]]:
     ).fetchone()
     conn.close()
     return _parse_job(job)
+
+def stop_running_scan_job() -> bool:
+    """Request cancellation of the currently running scan job"""
+    conn = get_db_connection()
+    cursor = conn.execute(
+        '''UPDATE scan_jobs SET cancel_requested = 1 WHERE status = 'running' '''
+    )
+    rowcount = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return rowcount > 0
+
+def check_scan_cancellation(job_id: int) -> bool:
+    """Check if cancellation has been requested for the job"""
+    conn = get_db_connection()
+    row = conn.execute(
+        '''SELECT cancel_requested FROM scan_jobs WHERE id = ?''',
+        (job_id,)
+    ).fetchone()
+    conn.close()
+    return bool(row['cancel_requested']) if row else False

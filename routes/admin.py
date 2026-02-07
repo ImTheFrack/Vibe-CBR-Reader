@@ -3,7 +3,7 @@ from pydantic import BaseModel, field_validator
 from typing import List, Dict, Any, Optional
 import os
 import re
-from database import get_all_users, delete_user, update_user_role, update_user_password, approve_user, get_running_scan_job, get_latest_scan_job
+from database import get_all_users, delete_user, update_user_role, update_user_password, approve_user, get_running_scan_job, get_latest_scan_job, stop_running_scan_job, create_scan_job
 from dependencies import get_admin_user
 from db.settings import get_all_settings, set_setting
 from db.connection import get_db_connection
@@ -43,8 +43,8 @@ class ThumbnailSettings(BaseModel):
     @field_validator('thumb_height')
     @classmethod
     def validate_height(cls, v):
-        if v is not None and (v < 100 or v > 400):
-            raise ValueError('Height must be between 100 and 400')
+        if v is not None and (v < 100 or v > 600):
+            raise ValueError('Height must be between 100 and 600')
         return v
     
     @field_validator('thumb_format')
@@ -159,6 +159,17 @@ async def get_settings(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> 
                 parsed_settings[key] = value
         else:
             parsed_settings[key] = value
+            
+    # Add library stats
+    conn = get_db_connection()
+    try:
+        parsed_settings['total_series'] = conn.execute('SELECT COUNT(*) FROM series').fetchone()[0]
+        parsed_settings['total_comics'] = conn.execute('SELECT COUNT(*) FROM comics').fetchone()[0]
+    except Exception:
+        parsed_settings['total_series'] = 0
+        parsed_settings['total_comics'] = 0
+    finally:
+        conn.close()
     
     return parsed_settings
 
@@ -217,8 +228,18 @@ async def scan_library(background_tasks: BackgroundTasks, admin_user: Dict[str, 
     if running_job:
         raise HTTPException(status_code=409, detail="A scan is already in progress")
     
-    background_tasks.add_task(fast_scan_library_task)
+    job_id = create_scan_job(scan_type='fast', total_comics=0)
+    background_tasks.add_task(fast_scan_library_task, job_id)
     return {"message": "Fast scan started"}
+
+@router.post("/scan/stop")
+async def stop_scan(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
+    """Stop the currently running scan"""
+    success = stop_running_scan_job()
+    if not success:
+        raise HTTPException(status_code=404, detail="No running scan found")
+    
+    return {"message": "Scan cancellation requested"}
 
 @router.get("/scan/status")
 async def get_scan_status(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, Any]:
@@ -250,9 +271,12 @@ async def get_scan_status(admin_user: Dict[str, Any] = Depends(get_admin_user)) 
         "page_errors": latest_job.get('page_errors', 0),
         "processed_thumbnails": latest_job.get('processed_thumbnails', 0),
         "thumbnail_errors": latest_job.get('thumbnail_errors', 0),
+        "thumb_bytes_written": latest_job.get('thumb_bytes_written', 0),
+        "thumb_bytes_saved": latest_job.get('thumb_bytes_saved', 0),
         "started_at": latest_job['started_at'],
         "completed_at": latest_job['completed_at'],
-        "errors": latest_job.get('errors')
+        "errors": latest_job.get('errors'),
+        "cancel_requested": bool(latest_job.get('cancel_requested', 0))
     }
 
 @router.post("/rescan")
@@ -260,7 +284,12 @@ async def rescan_library(background_tasks: BackgroundTasks, admin_user: Dict[str
     if not os.path.exists(COMICS_DIR):
         raise HTTPException(status_code=404, detail="Comics directory not found")
     
-    background_tasks.add_task(rescan_library_task)
+    running_job = get_running_scan_job()
+    if running_job:
+        raise HTTPException(status_code=409, detail="A scan is already in progress")
+    
+    job_id = create_scan_job(scan_type='full', total_comics=0)
+    background_tasks.add_task(rescan_library_task, job_id)
     return {"message": "Full rescan started in background"}
 
 @router.post("/scan/thumbnails")
@@ -270,7 +299,8 @@ async def scan_thumbnails(background_tasks: BackgroundTasks, admin_user: Dict[st
     if running_job:
         raise HTTPException(status_code=409, detail="A scan is already in progress")
     
-    background_tasks.add_task(thumbnail_rescan_task)
+    job_id = create_scan_job(scan_type='thumbnails', total_comics=0)
+    background_tasks.add_task(thumbnail_rescan_task, job_id)
     return {"message": "Thumbnail rescan started"}
 
 @router.post("/scan/metadata")
@@ -280,5 +310,6 @@ async def scan_metadata(background_tasks: BackgroundTasks, admin_user: Dict[str,
     if running_job:
         raise HTTPException(status_code=409, detail="A scan is already in progress")
     
-    background_tasks.add_task(metadata_rescan_task)
+    job_id = create_scan_job(scan_type='metadata', total_comics=0)
+    background_tasks.add_task(metadata_rescan_task, job_id)
     return {"message": "Metadata rescan started"}

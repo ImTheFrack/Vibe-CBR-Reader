@@ -4,7 +4,7 @@ from datetime import datetime
 from config import DB_PATH
 
 # Schema version for migration tracking
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 9
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -235,7 +235,7 @@ def init_db() -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             completed_at TIMESTAMP,
-            status TEXT DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed')),
+            status TEXT DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed', 'cancelled')),
             total_comics INTEGER DEFAULT 0,
             processed_comics INTEGER DEFAULT 0,
             current_file TEXT,
@@ -248,7 +248,8 @@ def init_db() -> None:
             processed_thumbnails INTEGER DEFAULT 0,
             thumbnail_errors INTEGER DEFAULT 0,
             errors TEXT,
-            scan_type TEXT DEFAULT 'fast'
+            scan_type TEXT DEFAULT 'fast',
+            cancel_requested BOOLEAN DEFAULT 0
         )
     ''')
     
@@ -454,6 +455,20 @@ def init_db() -> None:
                 'INSERT OR IGNORE INTO admin_settings (key, value) VALUES (?, ?)',
                 (key, value)
             )
+
+    if current_version < 8:
+        try:
+            conn.execute('ALTER TABLE scan_jobs ADD COLUMN cancel_requested BOOLEAN DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+            
+    if current_version < 9:
+        # Migration 9: Add thumbnail stats to scan_jobs
+        for col in ['thumb_bytes_written', 'thumb_bytes_saved']:
+            try:
+                conn.execute(f'ALTER TABLE scan_jobs ADD COLUMN {col} INTEGER DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass
     
     if current_version < SCHEMA_VERSION:
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')

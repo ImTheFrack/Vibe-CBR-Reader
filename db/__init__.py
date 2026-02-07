@@ -18,7 +18,8 @@ from .series import (
 )
 from .jobs import (
     create_scan_job, update_scan_progress, complete_scan_job,
-    get_scan_status, get_latest_scan_job, get_running_scan_job
+    get_scan_status, get_latest_scan_job, get_running_scan_job,
+    stop_running_scan_job, check_scan_cancellation
 )
 from .settings import (
     get_setting, set_setting, get_all_settings, get_thumbnail_settings

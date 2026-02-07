@@ -189,7 +189,7 @@ function onHashChange() {
         case 'admin':
             showView('admin');
             console.log('[DEBUG] About to import admin.js');
-            import('./admin.js')
+            import('./admin.js?v=' + Date.now())
                 .then(m => {
                     console.log('[DEBUG] admin.js imported successfully, initAdminView exists:', typeof m.initAdminView);
                     try {

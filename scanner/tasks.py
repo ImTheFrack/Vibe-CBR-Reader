@@ -7,7 +7,7 @@ from config import COMICS_DIR
 from database import (
     get_db_connection, create_or_update_series,
     update_scan_progress, complete_scan_job, delete_comics_by_ids,
-    get_pending_comics, create_scan_job
+    get_pending_comics, create_scan_job, check_scan_cancellation
 )
 from .utils import is_cbr_or_cbz, get_file_size_str, parse_filename_info, parse_series_json
 from .archives import _process_single_comic
@@ -57,6 +57,13 @@ def sync_library_task(job_id: Optional[int] = None) -> Tuple[int, int]:
         path_parts = [] if rel_path == '.' else rel_path.split(os.sep)
         
         for filename in files:
+            if job_id and file_count % 20 == 0:
+                if check_scan_cancellation(job_id):
+                    logger.warning(f"Scan job {job_id} cancelled during sync phase.")
+                    conn.close()
+                    complete_scan_job(job_id, status='failed', errors=['Scan cancelled by user'])
+                    return 0, 0
+            
             if is_cbr_or_cbz(filename):
                 file_count += 1
                 filepath = os.path.join(root, filename)
@@ -105,7 +112,7 @@ def sync_library_task(job_id: Optional[int] = None) -> Tuple[int, int]:
                 if job_id and file_count % 50 == 0:
                     update_scan_progress(
                         job_id, file_count, 
-                        current_file=filename, phase="Phase 1: Syncing",
+                        current_file=os.path.join(rel_path, filename), phase="Phase 1: Syncing",
                         new_comics=new_count, changed_comics=changed_count,
                         conn=conn
                     )
@@ -192,8 +199,12 @@ def sync_library_task(job_id: Optional[int] = None) -> Tuple[int, int]:
 
 def process_library_task(job_id: Optional[int] = None) -> None:
     """PHASE 2: Background processing of pending items."""
+    from db.settings import get_thumbnail_settings
     logger.info("Phase 2: Processing metadata and thumbnails...")
     conn = get_db_connection()
+    
+    settings = get_thumbnail_settings()
+    
     total_pending = conn.execute("SELECT COUNT(*) FROM comics WHERE processed = 0").fetchone()[0]
     
     if total_pending == 0:
@@ -213,16 +224,26 @@ def process_library_task(job_id: Optional[int] = None) -> None:
     pages_err = 0
     thumb_done = 0
     thumb_err = 0
+    thumb_bytes_written = 0
+    thumb_bytes_saved = 0
     all_scan_errors = []
     
     try:
         while True:
+            if job_id and check_scan_cancellation(job_id):
+                logger.warning(f"Scan job {job_id} cancelled during processing phase.")
+                if all_scan_errors is None: all_scan_errors = []
+                all_scan_errors.append({'error': 'Scan cancelled by user'})
+                complete_scan_job(job_id, status='failed', errors=all_scan_errors, conn=conn)
+                conn.commit()
+                return
+
             pending = get_pending_comics(limit=batch_size, conn=conn)
             if not pending: break
             
             update_buffer = []
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {executor.submit(_process_single_comic, comic['id'], comic['path']): comic for comic in pending}
+                futures = {executor.submit(_process_single_comic, comic['id'], comic['path'], settings): comic for comic in pending}
                 for future in as_completed(futures):
                     try:
                         result = future.result()
@@ -232,7 +253,7 @@ def process_library_task(job_id: Optional[int] = None) -> None:
                         processed_count += 1
                         pages_err += 1
                         thumb_err += 1
-                        update_buffer.append((0, 1, 0, comic['id']))
+                        update_buffer.append((0, 1, 0, None, comic['id']))
                         if len(all_scan_errors) < 100:
                             all_scan_errors.append({'comic_id': comic['id'], 'filepath': comic['path'], 'errors': [str(e)]})
                         continue
@@ -241,31 +262,45 @@ def process_library_task(job_id: Optional[int] = None) -> None:
                     if result['file_missing'] or (result['errors'] and result['pages'] == 0):
                         pages_err += 1
                         thumb_err += 1
-                        update_buffer.append((0, 1, 0, result['comic_id']))
+                        update_buffer.append((0, 1, 0, None, result['comic_id']))
                     else:
                         if result['pages'] > 0: pages_done += 1
                         else: pages_err += 1
-                        if result['has_thumb']: thumb_done += 1
+                        if result['has_thumb']: 
+                            thumb_done += 1
+                            thumb_bytes_written += result.get('thumb_size', 0)
+                            thumb_bytes_saved += result.get('thumb_saved', 0)
                         else: thumb_err += 1
-                        update_buffer.append((result['pages'], 1, 1 if result['has_thumb'] else 0, result['comic_id']))
+                        update_buffer.append((result['pages'], 1, 1 if result['has_thumb'] else 0, result.get('thumbnail_ext'), result['comic_id']))
                     
                     if result['errors'] and len(all_scan_errors) < 100:
                         all_scan_errors.append({'comic_id': result['comic_id'], 'filepath': result['filepath'], 'errors': result['errors']})
             
             if update_buffer:
-                conn.executemany('UPDATE comics SET pages = ?, processed = ?, has_thumbnail = ? WHERE id = ?', update_buffer)
+                conn.executemany('UPDATE comics SET pages = ?, processed = ?, has_thumbnail = ?, thumbnail_ext = ? WHERE id = ?', update_buffer)
                 if job_id:
-                    last_filename = pending[-1]['path'].split(os.sep)[-1] if pending else ''
+                    last_path = pending[-1]['path']
+                    try:
+                        last_rel_path = os.path.relpath(last_path, _comics_dir)
+                    except ValueError:
+                        last_rel_path = os.path.basename(last_path)
+                        
                     conn.execute('''
                         UPDATE scan_jobs SET 
                             processed_comics = ?, current_file = ?, phase = ?,
                             processed_pages = ?, page_errors = ?, 
                             processed_thumbnails = ?, thumbnail_errors = ?,
+                            thumb_bytes_written = ?, thumb_bytes_saved = ?,
                             errors = ?
                         WHERE id = ?
-                    ''', (processed_count, last_filename, "Phase 2: Processing",
+                    ''', (processed_count, last_rel_path, "Phase 2: Processing",
                           pages_done, pages_err, thumb_done, thumb_err,
+                          thumb_bytes_written, thumb_bytes_saved,
                           json.dumps(all_scan_errors) if all_scan_errors else None, job_id))
+                    
+                    if processed_count % 50 == 0 and thumb_bytes_saved > 0:
+                        saved_mb = thumb_bytes_saved / (1024 * 1024)
+                        logger.info(f"Scan progress: Saved {saved_mb:.2f} MB so far via 'Pick Best'")
                 conn.commit()
     finally:
         conn.close()
@@ -273,10 +308,12 @@ def process_library_task(job_id: Optional[int] = None) -> None:
     if job_id:
         complete_scan_job(job_id, status='completed', errors=all_scan_errors if all_scan_errors else None)
 
-def full_scan_library_task() -> None:
+def full_scan_library_task(job_id: Optional[int] = None) -> None:
     from database import get_running_scan_job
-    if get_running_scan_job(): return
-    job_id = create_scan_job(scan_type='full', total_comics=0)
+    if job_id is None:
+        if get_running_scan_job(): return
+        job_id = create_scan_job(scan_type='full', total_comics=0)
+    
     conn = get_db_connection()
     conn.execute("UPDATE comics SET processed = 0 WHERE processed = 1 AND (pages IS NULL OR pages = 0)")
     conn.commit()
@@ -288,7 +325,8 @@ def full_scan_library_task() -> None:
         logger.error(f"Scan failed: {e}", exc_info=True)
         complete_scan_job(job_id, status='failed', errors=[str(e)])
 
-def rescan_library_task() -> None:
+def rescan_library_task(job_id: Optional[int] = None) -> None:
+    from config import BASE_CACHE_DIR
     logger.info("Starting full library rescan...")
     conn = get_db_connection()
     try:
@@ -300,19 +338,33 @@ def rescan_library_task() -> None:
         logger.error(f"Error clearing library: {e}")
     finally:
         conn.close()
-    full_scan_library_task()
+    
+    # Clear thumbnail cache to remove orphans
+    logger.info("Clearing thumbnail cache...")
+    if os.path.exists(BASE_CACHE_DIR):
+        for root, dirs, files in os.walk(BASE_CACHE_DIR):
+            for file in files:
+                if file != '_placeholder.webp':
+                    filepath = os.path.join(root, file)
+                    try:
+                        os.remove(filepath)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete {filepath}: {e}")
 
-def thumbnail_rescan_task() -> None:
+    full_scan_library_task(job_id)
+
+def thumbnail_rescan_task(job_id: Optional[int] = None) -> None:
     """Regenerate all thumbnails: clear cache, reset flags, reprocess all comics."""
     from database import get_running_scan_job
     from config import BASE_CACHE_DIR
     
-    if get_running_scan_job():
-        logger.warning("Thumbnail rescan aborted: scan already running")
-        return
+    if job_id is None:
+        if get_running_scan_job():
+            logger.warning("Thumbnail rescan aborted: scan already running")
+            return
+        job_id = create_scan_job(scan_type='thumbnails', total_comics=0)
     
     logger.info("Starting thumbnail rescan...")
-    job_id = create_scan_job(scan_type='thumbnails', total_comics=0)
     
     try:
         logger.info("Clearing thumbnail cache...")
@@ -336,21 +388,27 @@ def thumbnail_rescan_task() -> None:
         
         logger.info(f"Thumbnail flags reset for {total} comics. Starting regeneration...")
         
+        if check_scan_cancellation(job_id):
+            logger.warning(f"Thumbnail rescan job {job_id} cancelled.")
+            complete_scan_job(job_id, status='failed', errors=['Scan cancelled by user'])
+            return
+
         process_library_task(job_id)
     except Exception as e:
         logger.error(f"Thumbnail rescan failed: {e}", exc_info=True)
         complete_scan_job(job_id, status='failed', errors=[str(e)])
 
-def metadata_rescan_task() -> None:
+def metadata_rescan_task(job_id: Optional[int] = None) -> None:
     """Re-parse all series.json files and update series metadata."""
     from database import get_running_scan_job
     
-    if get_running_scan_job():
-        logger.warning("Metadata rescan aborted: scan already running")
-        return
+    if job_id is None:
+        if get_running_scan_job():
+            logger.warning("Metadata rescan aborted: scan already running")
+            return
+        job_id = create_scan_job(scan_type='metadata', total_comics=0)
     
     logger.info("Starting metadata rescan...")
-    job_id = create_scan_job(scan_type='metadata', total_comics=0)
     
     try:
         conn = get_db_connection()
@@ -370,6 +428,13 @@ def metadata_rescan_task() -> None:
         
         processed = 0
         for series_json_path in series_json_files:
+            if check_scan_cancellation(job_id):
+                logger.warning(f"Metadata rescan job {job_id} cancelled.")
+                complete_scan_job(job_id, status='failed', errors=['Scan cancelled by user'], conn=conn)
+                conn.commit()
+                conn.close()
+                return
+
             try:
                 metadata = parse_series_json(series_json_path)
                 if not metadata:

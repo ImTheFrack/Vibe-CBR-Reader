@@ -73,6 +73,7 @@ CREATE TABLE comics (
     pages INTEGER,                          -- NULL until processed or lazy-counted
     processed BOOLEAN DEFAULT 0,
     has_thumbnail BOOLEAN DEFAULT 0,        -- Added via ALTER TABLE
+    thumbnail_ext TEXT DEFAULT 'webp',      -- Added via ALTER TABLE
     volume REAL,
     chapter REAL,
     series_id INTEGER REFERENCES series(id) -- Added via ALTER TABLE
@@ -128,6 +129,7 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,             -- Currently SHA256 (needs bcrypt migration)
     email TEXT,
     role TEXT DEFAULT 'reader' CHECK(role IN ('admin', 'reader')),
+    approved BOOLEAN DEFAULT 1,             -- Added via ALTER TABLE (gate for new users)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP
 )
@@ -187,6 +189,13 @@ CREATE TABLE user_preferences (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 
+-- Admin settings (key-value store)
+CREATE TABLE admin_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+
 -- Scan job tracking
 CREATE TABLE scan_jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -233,9 +242,6 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 - `GET /api/export/status/{job_id}`: Poll export progress + disk stats (requires auth)
 - `DELETE /api/export/cancel/{job_id}`: Stop export task (requires auth)
 - `GET /api/export/download/{job_id}`: Stream final CBZ (requires auth)
-- `POST /api/scan`: Start fast scan in background (admin only)
-- `POST /api/rescan`: Full database wipe + rescan (admin only)
-- `GET /api/scan/status`: Latest scan job metrics (admin only)
 
 ### Users (`routes/users.py`)
 - `GET /api/progress`: All reading progress for current user
@@ -262,11 +268,19 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 - `GET /api/series/{series_name}`: Full series detail
 
 ### Admin (`routes/admin.py`)
-- `GET /api/admin/users`: List all users (admin only)
+- `GET /api/admin/settings`: Get all admin settings (thumbnails, approval)
+- `PUT /api/admin/settings`: Update settings
+- `GET /api/admin/users`: List all users with reading stats (admin only)
 - `PUT /api/admin/users/{user_id}/role`: Update role (admin only)
 - `PUT /api/admin/users/{user_id}/password`: Force password reset (admin only)
+- `PUT /api/admin/users/{user_id}/approve`: Approve new user (admin only)
 - `DELETE /api/admin/users/{user_id}`: Delete user (admin only)
 - `GET /api/admin/gaps`: Sequence gap detection report (admin only)
+- `POST /api/scan`: Start incremental scan (admin only)
+- `POST /api/rescan`: Start full rescan (admin only)
+- `POST /api/scan/thumbnails`: Start thumbnail rescan (admin only)
+- `POST /api/scan/metadata`: Start metadata rescan (admin only)
+- `GET /api/scan/status`: Latest scan job metrics (admin only)
 
 ## Security Implementation
 - **Hashing**: `bcrypt` with automated lazy migration from SHA256.
@@ -275,9 +289,15 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 - **Validation**: Strict role-based access control (RBAC) on `/api/admin/*` and `/api/scan/*`.
 - **SQL Safety**: 100% parameterized queries using `?` placeholders.
 
-## Scanning Architecture (Two-Phase)
+## Scanning Architecture
+- **Modes**:
+    - **Incremental**: Fast directory walk (syncs new/deleted/changed).
+    - **Full**: Wipes database and resyncs from scratch.
+    - **Thumbnails**: Regenerates all thumbnails using current settings.
+    - **Metadata**: Re-parses `series.json` without touching archives.
 - **Phase 1: Syncing**: Fast directory walk. Detects new, deleted, and changed files (via `mtime` and `size_bytes`). Updates folder structure and series records without opening archives.
 - **Phase 2: Processing**: Background worker that opens archives to count pages and extract thumbnails for "pending" items.
+- **Thumbnail Engine**: Supports WebP, PNG, JPG, and "Pick Best" (smallest file). Configurable quality, ratio, and resolution.
 - **On-Demand**: The `/api/read/{id}` endpoint performs "lazy" page counting if a comic hasn't been processed yet, ensuring the reader always has correct totals.
 
 ## Navigation System
@@ -294,6 +314,7 @@ For a detailed list of planned features, known bugs, and code quality goals, ple
 - User registration with username/password validation
 - Login with 30-day session tokens (HttpOnly + SameSite cookies)
 - Admin role with scan/user management privileges
+- User approval flow (registration gate + admin toggle)
 - User preferences (theme, reader settings, view mode, sort)
 - Logout with session cleanup
 
@@ -334,6 +355,8 @@ For a detailed list of planned features, known bugs, and code quality goals, ple
 - Series result cards with cover fan display
 
 ### Library Scanning
+- Four scan modes: Incremental, Full, Thumbnails Only, Metadata Only
+- Configurable thumbnail settings (Format, Quality, Ratio, Pick Best)
 - Two-phase scan (fast sync + background processing)
 - Full rescan with database wipe
 - Change detection via `mtime` + `size_bytes`
@@ -351,6 +374,7 @@ For a detailed list of planned features, known bugs, and code quality goals, ple
 - Cover "fan" display on folder and title cards
 
 ## Recent Changes
+- **2026-02-07**: OVERHAUL - Admin page consolidated (Scan controls, User management, Settings). Added thumbnail config (Pick Best), user approval flow, and reading stats.
 - **2026-02-05**: ENHANCED - Phase 2 completion (User Profile, Stats, FTS5 Deep Search, Background Export, Ratings, Selection Mode).
 - **2026-02-05**: OPTIMIZED - Boot sequence warming (FTS rebuild + Tag cache) and consolidated frontend loading.
 - **2026-02-03**: AUDIT - Full codebase review. 8 bugs confirmed and documented. Roadmap expanded to 7 phases.

@@ -258,30 +258,37 @@ async def list_books(
 
 @router.get("/cover/{comic_id}")
 async def get_cover(comic_id: str, current_user: Dict[str, Any] = Depends(get_current_user)) -> Response:
-    cache_path = get_thumbnail_path(comic_id)
-    
-    # If thumbnail exists in cache, serve it immediately
+    # 1. Optimistic check for WebP (most common)
+    cache_path = get_thumbnail_path(comic_id, 'webp')
     if cache_path and os.path.exists(cache_path):
         return FileResponse(cache_path)
     
-    # Thumbnail missing - generate on-demand
-    # First, get comic path from database
+    # 2. Check DB for extension and path
     conn = get_db_connection()
-    comic = conn.execute("SELECT path FROM comics WHERE id = ?", (comic_id,)).fetchone()
+    comic = conn.execute("SELECT path, thumbnail_ext FROM comics WHERE id = ?", (comic_id,)).fetchone()
     conn.close()
     
     if not comic:
         return Response(status_code=404)
+        
+    ext = comic['thumbnail_ext']
+    if ext and ext != 'webp': # We already checked webp
+        cache_path = get_thumbnail_path(comic_id, ext)
+        if cache_path and os.path.exists(cache_path):
+            return FileResponse(cache_path)
+            
+    # 3. Fallback check for other extensions (migration support or manual changes)
+    if not ext:
+        for check_ext in ['jpg', 'png', 'jpeg']:
+            alt_path = get_thumbnail_path(comic_id, check_ext)
+            if alt_path and os.path.exists(alt_path):
+                return FileResponse(alt_path)
     
     comic_path = comic['path']
     
     # Check if file exists
     if not os.path.exists(comic_path):
         return Response(status_code=404)
-    
-    # Double-check cache again (race condition: another request may have just created it)
-    if cache_path and os.path.exists(cache_path):
-        return FileResponse(cache_path)
     
     # Generate thumbnail with timeout
     result = generate_thumbnail_with_timeout(comic_path, comic_id, timeout=10)
@@ -294,12 +301,18 @@ async def get_cover(comic_id: str, current_user: Dict[str, Any] = Depends(get_cu
     if result['success']:
         # Update has_thumbnail flag in database
         conn = get_db_connection()
-        conn.execute('UPDATE comics SET has_thumbnail = 1 WHERE id = ?', (comic_id,))
+        # Note: on-demand generation currently defaults to WebP (no settings passed)
+        conn.execute("UPDATE comics SET has_thumbnail = 1, thumbnail_ext = 'webp' WHERE id = ?", (comic_id,))
         conn.commit()
         conn.close()
         
         # Serve the newly generated thumbnail
-        final_cache_path = get_thumbnail_path(comic_id)
+        # If we update generate_thumbnail_with_timeout to use settings later, we need to know what it produced.
+        # For now, it produces result['cache_path']
+        final_cache_path = result.get('cache_path')
+        if not final_cache_path:
+             final_cache_path = get_thumbnail_path(comic_id, 'webp')
+             
         if final_cache_path and os.path.exists(final_cache_path):
             return FileResponse(final_cache_path)
     

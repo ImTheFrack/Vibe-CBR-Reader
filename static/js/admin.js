@@ -247,6 +247,7 @@ export async function loadSettings() {
     console.log('loadSettings: apiGet returned:', settings);
     if (settings.error) return;
     
+    // Update thumbnail settings
     const formatSelect = document.getElementById('thumb-format-select');
     const qualitySlider = document.getElementById('thumb-quality-slider');
     const qualityValue = document.getElementById('thumb-quality-value');
@@ -265,6 +266,12 @@ export async function loadSettings() {
     if (qualitySlider && formatSelect) {
         qualitySlider.disabled = formatSelect.value === 'png';
     }
+    
+    // Update library stats
+    const totalSeriesEl = document.getElementById('library-total-series');
+    const totalComicsEl = document.getElementById('library-total-comics');
+    if (totalSeriesEl) totalSeriesEl.textContent = settings.total_series || 0;
+    if (totalComicsEl) totalComicsEl.textContent = settings.total_comics || 0;
 }
 
 function setupScanButtons() {
@@ -272,17 +279,20 @@ function setupScanButtons() {
      const fullBtn = document.getElementById('btn-scan-full');
      const thumbnailsBtn = document.getElementById('btn-scan-thumbnails');
      const metadataBtn = document.getElementById('btn-scan-metadata');
+     const stopBtn = document.getElementById('btn-scan-stop');
      
      console.log('setupScanButtons: Found buttons:', {
          incrementalBtn: !!incrementalBtn,
          fullBtn: !!fullBtn,
          thumbnailsBtn: !!thumbnailsBtn,
-         metadataBtn: !!metadataBtn
+         metadataBtn: !!metadataBtn,
+         stopBtn: !!stopBtn
      });
      
      if (incrementalBtn) {
          incrementalBtn.addEventListener('click', async () => {
              console.log('Incremental scan clicked');
+             setScanButtonsDisabled(true);
              await apiPost('/api/admin/scan');
              startScanPolling();
          });
@@ -298,6 +308,7 @@ function setupScanButtons() {
      if (thumbnailsBtn) {
          thumbnailsBtn.addEventListener('click', async () => {
              console.log('Thumbnails scan clicked');
+             setScanButtonsDisabled(true);
              await apiPost('/api/admin/scan/thumbnails');
              startScanPolling();
          });
@@ -306,8 +317,25 @@ function setupScanButtons() {
      if (metadataBtn) {
          metadataBtn.addEventListener('click', async () => {
              console.log('Metadata scan clicked');
+             setScanButtonsDisabled(true);
              await apiPost('/api/admin/scan/metadata');
              startScanPolling();
+         });
+     }
+
+     if (stopBtn) {
+         stopBtn.addEventListener('click', async () => {
+             console.log('Stop scan clicked');
+             if (confirm('Are you sure you want to stop the current scan?')) {
+                 const result = await apiPost('/api/admin/scan/stop');
+                 if (result.error) {
+                     showToast(`Error: ${result.error}`, 'error');
+                 } else {
+                     showToast('Scan cancellation requested');
+                     stopBtn.disabled = true; // Disable immediately to prevent double-click
+                     stopBtn.textContent = 'Stopping...';
+                 }
+             }
          });
      }
  }
@@ -376,7 +404,7 @@ function setupThumbnailSettings() {
 
 function initScanStatus() {
     // Initial check
-    checkScanStatus();
+    checkScanStatus(true);
 }
 
 function startScanPolling() {
@@ -385,6 +413,8 @@ function startScanPolling() {
     const statusPanel = document.getElementById('admin-scan-status');
     if (statusPanel) statusPanel.style.display = 'block';
     
+    // Check immediately then interval
+    checkScanStatus();
     scanPollingInterval = setInterval(checkScanStatus, 3000);
 }
 
@@ -395,41 +425,159 @@ function stopScanPolling() {
     }
 }
 
-async function checkScanStatus() {
+async function checkScanStatus(initial = false) {
     const status = await apiGet('/api/admin/scan/status');
     
     const statusPanel = document.getElementById('admin-scan-status');
     const progressFill = document.getElementById('admin-scan-progress-fill');
-    const currentFile = document.getElementById('admin-scan-current-file');
+    const currentFileEl = document.getElementById('admin-scan-current-file');
     const processedEl = document.getElementById('admin-scan-processed');
-    const newEl = document.getElementById('admin-scan-new');
-    const changedEl = document.getElementById('admin-scan-changed');
+    const totalEl = document.getElementById('admin-scan-total');
+    const newEl = document.getElementById('admin-metric-new');
+    const changedEl = document.getElementById('admin-metric-changed');
+    const deletedEl = document.getElementById('admin-metric-deleted');
+    const pagesEl = document.getElementById('admin-metric-pages');
+    const pageErrEl = document.getElementById('admin-metric-page-err');
+    const thumbsEl = document.getElementById('admin-metric-thumbs');
+    const thumbErrEl = document.getElementById('admin-metric-thumb-err');
+    const statusTextEl = document.getElementById('admin-scan-status-text');
+    const startedEl = document.getElementById('admin-scan-started');
+    const stopBtn = document.getElementById('btn-scan-stop');
     
     if (!status || status.error) {
         if (statusPanel) statusPanel.style.display = 'none';
         stopScanPolling();
+        if (stopBtn) {
+            stopBtn.disabled = true;
+            stopBtn.textContent = '🛑 Stop Scan';
+        }
         return;
     }
     
     if (status.status === 'running') {
         if (statusPanel) statusPanel.style.display = 'block';
         
-        const total = status.total_comics || 1;
-        const processed = status.processed_comics || 0;
-        const progress = (processed / total) * 100;
+        // Ensure polling is active if we found a running scan on initial check
+        if (initial && !scanPollingInterval) {
+            startScanPolling();
+        }
         
-        if (progressFill) progressFill.style.width = `${progress}%`;
-        if (currentFile) currentFile.textContent = status.current_file || 'Processing...';
-        if (processedEl) processedEl.textContent = processed;
+        const total = status.total_comics || 0;
+        const processed = status.processed_comics || 0;
+        const phase = status.phase || '';
+        
+        // Relativize path
+        let displayPath = status.current_file || 'Starting...';
+        if (window.state && window.state.config && window.state.config.comics_dir && status.current_file) {
+             const rootDir = window.state.config.comics_dir;
+             if (displayPath.startsWith(rootDir)) {
+                 displayPath = displayPath.substring(rootDir.length);
+                 if (displayPath.startsWith('/') || displayPath.startsWith('\\')) {
+                     displayPath = displayPath.substring(1);
+                 }
+             }
+        }
+        if (currentFileEl) currentFileEl.textContent = displayPath;
+        
+        // Phase-specific display
+        if (phase.includes('Phase 1')) {
+            // Syncing phase: Total grows as we find files. "Processed" tracks total found.
+            if (progressFill) {
+                progressFill.style.width = '100%';
+                progressFill.classList.add('indeterminate'); // We need to add this CSS class
+            }
+            // Show "Found: X"
+            const statusText = document.getElementById('admin-scan-text-container');
+            if (statusText) {
+                statusText.innerHTML = `Found <span id="admin-scan-total" style="font-weight: 600;">${total}</span> files`;
+            }
+        } else {
+             // Processing phase: Fixed total, tracking processed
+             const progress = total > 0 ? (processed / total) * 100 : 0;
+             if (progressFill) {
+                 progressFill.style.width = `${progress}%`;
+                 progressFill.classList.remove('indeterminate');
+             }
+             
+             // Restore "X of Y"
+             const statusText = document.getElementById('admin-scan-text-container');
+             if (statusText) {
+                 statusText.innerHTML = `<span id="admin-scan-processed">${processed}</span> of <span id="admin-scan-total">${total}</span> comics processed`;
+             }
+        }
+        
         if (newEl) newEl.textContent = status.new_comics || 0;
         if (changedEl) changedEl.textContent = status.changed_comics || 0;
+        if (deletedEl) deletedEl.textContent = status.deleted_comics || 0;
+        
+        if (pagesEl) pagesEl.textContent = status.processed_pages || 0;
+        if (pageErrEl) {
+            const errs = status.page_errors || 0;
+            pageErrEl.textContent = `(${errs} err)`;
+            pageErrEl.style.display = errs > 0 ? 'inline' : 'none';
+        }
+        
+        if (thumbsEl) thumbsEl.textContent = status.processed_thumbnails || 0;
+        if (thumbErrEl) {
+            const errs = status.thumbnail_errors || 0;
+            thumbErrEl.textContent = `(${errs} err)`;
+            thumbErrEl.style.display = errs > 0 ? 'inline' : 'none';
+        }
+        
+        const storageEl = document.getElementById('admin-metric-storage');
+        if (storageEl) {
+            const written = status.thumb_bytes_written || 0;
+            const saved = status.thumb_bytes_saved || 0;
+            
+            if (written > 0) {
+                const formatBytes = (b) => {
+                    if (b === 0) return '0 B';
+                    const i = Math.floor(Math.log(b) / Math.log(1024));
+                    return (b / Math.pow(1024, i)).toFixed(1) + ' ' + ['B', 'KB', 'MB', 'GB'][i];
+                };
+                
+                let text = formatBytes(written);
+                if (saved > 0) {
+                    text += ` (Saved ${formatBytes(saved)})`;
+                    storageEl.style.color = 'var(--success)';
+                } else {
+                    storageEl.style.color = 'var(--text-tertiary)';
+                }
+                storageEl.textContent = text;
+            } else {
+                storageEl.textContent = '-';
+            }
+        }
+        
+        if (statusTextEl) statusTextEl.textContent = `Running (${status.phase || 'init'})`;
+        if (startedEl) {
+            const startDate = new Date(status.started_at);
+            startedEl.textContent = startDate.toLocaleTimeString();
+        }
         
         // Disable scan buttons during scan
         setScanButtonsDisabled(true);
+        
+        // Enable stop button
+        if (stopBtn) {
+            if (status.cancel_requested) {
+                stopBtn.disabled = true;
+                stopBtn.textContent = 'Stopping...';
+            } else {
+                stopBtn.disabled = false;
+                stopBtn.textContent = '🛑 Stop Scan';
+            }
+        }
     } else {
         if (statusPanel) statusPanel.style.display = 'none';
         stopScanPolling();
         setScanButtonsDisabled(false);
+        
+        // Disable stop button
+        if (stopBtn) {
+            stopBtn.disabled = true;
+            stopBtn.textContent = '🛑 Stop Scan';
+        }
     }
 }
 
@@ -447,9 +595,11 @@ function setScanButtonsDisabled(disabled) {
 }
 
 function showRescanConfirmationModal() {
+    console.log('showRescanConfirmationModal: Creating modal...');
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000;';
+    // Use high z-index to ensure it's on top of everything. Add opacity: 1 because CSS defaults to 0.
+    overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 10002; opacity: 1;';
     
     overlay.innerHTML = `
         <div class="modal" style="background: var(--bg-secondary); padding: 2rem; border-radius: 12px; max-width: 400px; text-align: center;">
@@ -457,12 +607,15 @@ function showRescanConfirmationModal() {
             <p style="margin-bottom: 1.5rem;">Full Re-Scan will erase all data and re-scan from scratch. This cannot be undone.</p>
             <div style="display: flex; gap: 1rem; justify-content: center;">
                 <button id="modal-cancel" class="btn-secondary">Cancel</button>
-                <button id="modal-confirm" class="btn-danger" style="background: var(--danger);">Continue</button>
+                <button id="modal-confirm" class="btn-primary" style="background: var(--danger); justify-content: center;">Continue</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(overlay);
+    
+    // Force display flex (class might be hidden by default depending on CSS)
+    overlay.style.display = 'flex';
     
     overlay.querySelector('#modal-cancel').addEventListener('click', () => {
         overlay.remove();
@@ -470,6 +623,7 @@ function showRescanConfirmationModal() {
     
     overlay.querySelector('#modal-confirm').addEventListener('click', async () => {
         overlay.remove();
+        setScanButtonsDisabled(true);
         await apiPost('/api/admin/rescan');
         startScanPolling();
     });

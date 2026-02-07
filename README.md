@@ -25,6 +25,7 @@ A modern, web-based comic book reader designed for CBR and CBZ archives. Featuri
   - **Auto-Advance**: Smart timer with a decreasing progress countdown that resets on manual page flips.
   - Page bookmarks and progress tracking saved to your user account.
 - **User Dashboard**: Real-time reading statistics (started, completed, pages read, time spent).
+- **Admin Dashboard**: Centralized control for library scanning (4 modes: Incremental, Full, Thumbnails, Metadata), user management (approval flows), and system settings.
 - **Dark/Light Themes**: Customizable interface with persistent user preferences.
 - **Global Visual Tuning**: Set your baseline Brightness, Contrast, Saturation, and Tone (Sepia/Grayscale) in your user profile; these apply automatically to every comic you read.
 - **Smart Precedence Logic**: Direction, Display Mode, and Zoom are remembered per-comic to suit specific artistic styles, while visual filters remain consistent across your library for a stable reading environment.
@@ -66,6 +67,13 @@ A modern, web-based comic book reader designed for CBR and CBZ archives. Featuri
 For a detailed list of planned features, known bugs, and project roadmap, please see [TODO.md](TODO.md).
 
 ## Recent Changes
+
+### 2026-02-07
+- **Admin Overhaul**: Consolidated all admin functions into a single dashboard.
+- **Scan Modes**: Added 4 distinct scan types (Incremental, Full, Thumbnails, Metadata).
+- **Thumbnail Engine**: New "Pick Best" mode automatically selects the smallest file among WebP, PNG, and JPG. Configurable quality and resolution.
+- **User Approval**: Added optional administrator approval gate for new registrations.
+- **Reading Stats**: Admin user table now shows time spent reading and comics completed per user.
 
 ### 2026-02-06 (Bug Fixes)
 - **View Mode Fix**: Fixed view mode switching (grid/list/detailed) not working in Tags view.

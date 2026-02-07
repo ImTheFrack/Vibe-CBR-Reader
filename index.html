@@ -342,16 +342,23 @@
                 
                 <!-- Section 1: Library Metadata -->
                 <div style="margin-bottom: 3rem;">
-                    <h3 class="section-title" style="margin-bottom: 1.5rem;">📚 Library Metadata</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 class="section-title" style="margin-bottom: 0;">📚 Library Metadata</h3>
+                        <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                            <span id="library-total-series" style="font-weight: 600; color: var(--text-primary);">0</span> Series • 
+                            <span id="library-total-comics" style="font-weight: 600; color: var(--text-primary);">0</span> Chapters
+                        </div>
+                    </div>
                     
                     <!-- Scan Controls -->
                     <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border); margin-bottom: 2rem;">
                         <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600;">Scan Controls</h4>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                            <button id="btn-scan-incremental" class="btn-primary" style="padding: 0.75rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; cursor: pointer; font-weight: 600;">🔄 Incremental Scan</button>
-                            <button id="btn-scan-full" class="btn-danger" style="padding: 0.75rem 1rem; border-radius: 8px; border: none; background: var(--danger); color: white; cursor: pointer; font-weight: 600;">⚠️ Full Re-Scan</button>
-                            <button id="btn-scan-thumbnails" class="btn-primary" style="padding: 0.75rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; cursor: pointer; font-weight: 600;">🖼️ Thumbnail Rescan</button>
-                            <button id="btn-scan-metadata" class="btn-primary" style="padding: 0.75rem 1rem; border-radius: 8px; border: none; background: var(--accent); color: white; cursor: pointer; font-weight: 600;">📋 Metadata Rescan</button>
+                            <button id="btn-scan-incremental" class="btn-primary" style="justify-content: center; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--accent); color: white; cursor: pointer; font-weight: 600;">🔄 Incremental Scan</button>
+                            <button id="btn-scan-full" class="btn-danger" style="justify-content: center; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--danger); color: white; cursor: pointer; font-weight: 600;">⚠️ Full Re-Scan</button>
+                            <button id="btn-scan-thumbnails" class="btn-primary" style="justify-content: center; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--accent); color: white; cursor: pointer; font-weight: 600;">🖼️ Thumbnail Rescan</button>
+                            <button id="btn-scan-metadata" class="btn-primary" style="justify-content: center; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--accent); color: white; cursor: pointer; font-weight: 600;">📋 Metadata Rescan</button>
+                            <button id="btn-scan-stop" class="btn-danger" style="justify-content: center; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--danger); color: white; cursor: pointer; font-weight: 600;" disabled>🛑 Stop Scan</button>
                         </div>
                     </div>
                     
@@ -361,7 +368,7 @@
                         <div class="progress-bar" style="width: 100%; height: 30px; background: var(--bg-tertiary); border-radius: 15px; overflow: hidden; margin-bottom: 1rem;">
                             <div id="admin-scan-progress-fill" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.3s;"></div>
                         </div>
-                        <div style="text-align: center; margin-bottom: 1rem;">
+                        <div id="admin-scan-text-container" style="text-align: center; margin-bottom: 1rem;">
                             <span id="admin-scan-processed">0</span> of <span id="admin-scan-total">0</span> comics processed
                         </div>
                         <div style="text-align: center; margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -376,8 +383,9 @@
                             </div>
                             <div style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 8px;">
                                 <p style="margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Phase 2: Processing</p>
-                                <div style="display: flex; justify-content: space-between;"><span>Pages:</span> <span id="admin-metric-pages">0</span> <small id="admin-metric-page-err" style="color: var(--danger);">(0 err)</small></div>
-                                <div style="display: flex; justify-content: space-between;"><span>Thumbs:</span> <span id="admin-metric-thumbs">0</span> <small id="admin-metric-thumb-err" style="color: var(--danger);">(0 err)</small></div>
+                                <div style="display: flex; justify-content: space-between; white-space: nowrap;"><span>Pages:</span> <span><span id="admin-metric-pages">0</span> <small id="admin-metric-page-err" style="color: var(--danger);">(0 err)</small></span></div>
+                                <div style="display: flex; justify-content: space-between; white-space: nowrap;"><span>Thumbs:</span> <span><span id="admin-metric-thumbs">0</span> <small id="admin-metric-thumb-err" style="color: var(--danger);">(0 err)</small></span></div>
+                                <div style="display: flex; justify-content: space-between; white-space: nowrap; margin-top: 4px;"><span>Storage:</span> <span id="admin-metric-storage" style="font-size: 0.85rem; color: var(--text-tertiary);">-</span></div>
                             </div>
                         </div>
                         <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px;">
@@ -442,10 +450,11 @@
                                 <tr style="background: var(--bg-tertiary); border-bottom: 1px solid var(--border);">
                                     <th style="padding: 1rem;">Username</th>
                                     <th style="padding: 1rem;">Email</th>
+                                                                        <th style="padding: 1rem;">Approved</th>
                                     <th style="padding: 1rem;">Role</th>
+
                                     <th style="padding: 1rem;">Comics Read</th>
                                     <th style="padding: 1rem;">Time Read</th>
-                                    <th style="padding: 1rem;">Approved</th>
                                     <th style="padding: 1rem;">Created</th>
                                     <th style="padding: 1rem;">Last Login</th>
                                     <th style="padding: 1rem; text-align: right;">Actions</th>
