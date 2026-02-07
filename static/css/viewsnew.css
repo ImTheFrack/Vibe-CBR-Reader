@@ -1065,6 +1065,27 @@
     align-items: center;
 }
 
+/* Admin Tag Management */
+.admin-tag-item {
+    transition: background-color 0.2s;
+}
+
+.admin-tag-item:hover {
+    background-color: var(--bg-tertiary) !important;
+}
+
+.admin-tag-item .btn-secondary {
+    opacity: 0.6;
+}
+
+.admin-tag-item:hover .btn-secondary {
+    opacity: 1;
+}
+
+.admin-tag-suggestion:hover {
+    background-color: var(--bg-tertiary);
+}
+
 /* Metadata Tags */
 .meta-tag {
     display: inline-flex;

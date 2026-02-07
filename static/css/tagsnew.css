@@ -102,3 +102,54 @@
     transform: scale(1.1);
     transition: all var(--transition-fast);
 }
+
+/* Responsive Fixes for Tags View */
+@media (max-width: 768px) {
+    #view-tags .section-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+
+    #view-tags .header-controls {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+
+    #view-tags .control-group-main {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    #tag-search-container {
+        width: 100% !important;
+        max-width: none;
+        position: relative !important;
+        display: block !important;
+        height: auto !important;
+        background: transparent !important;
+    }
+
+    #tag-search-container .search-input {
+        width: 100% !important;
+    }
+
+    .tags-filter-bar {
+        padding: 12px;
+        gap: 8px;
+    }
+}
+
+/* Extreme Narrow Fix */
+@media (max-width: 400px) {
+    #view-tags .section-title {
+        font-size: 1.5rem;
+    }
+    
+    .tag-chip {
+        font-size: 0.8rem;
+        padding: 4px 10px;
+    }
+}

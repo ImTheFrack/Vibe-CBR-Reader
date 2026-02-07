@@ -30,6 +30,8 @@ export async function initAdminView() {
     console.log('initAdminView: loadApprovalSetting done');
     await loadUsers();
     console.log('initAdminView: loadUsers done');
+    await loadAdminTags();
+    console.log('initAdminView: loadAdminTags done');
     setupApprovalToggle();
     console.log('initAdminView: setupApprovalToggle done');
     console.log('initAdminView: About to call setupScanButtons...');
@@ -196,6 +198,251 @@ window.adminApproveUser = async (userId) => {
     }
 };
 
+// --- Tag Management ---
+let allAdminTags = [];
+let allModifications = [];
+
+export async function loadAdminTags() {
+    const activeList = document.getElementById('admin-active-tags-list');
+    const modifiedList = document.getElementById('admin-modified-tags-list');
+    if (!activeList || !modifiedList) return;
+
+    activeList.innerHTML = '<div class="spinner" style="margin: 2rem auto;"></div>';
+    modifiedList.innerHTML = '<div class="spinner" style="margin: 2rem auto;"></div>';
+
+    const data = await apiGet('/api/admin/tags');
+    if (data.error) {
+        activeList.innerHTML = `<div style="padding: 1rem; color: var(--danger);">Error: ${data.error}</div>`;
+        return;
+    }
+
+    allAdminTags = data.tags || [];
+    allModifications = data.modifications || [];
+    renderAdminTags();
+}
+
+window.filterAdminTags = (val) => {
+    renderAdminTags(val);
+};
+
+window.loadAdminTags = loadAdminTags;
+
+// Modal Logic
+let currentModTagNorm = null;
+
+window.openTagModModal = (norm, currentDisplay) => {
+    currentModTagNorm = norm;
+    
+    // Check if there's an existing modification for this tag
+    const existingMod = allModifications.find(m => m.norm === norm);
+    
+    document.getElementById('tag-mod-original').textContent = norm;
+    
+    if (existingMod) {
+        document.getElementById('tag-mod-action').value = 
+            existingMod.action === 'whitelist' ? 'rename' : existingMod.action;
+        document.getElementById('tag-mod-display').value = existingMod.display_name || existingMod.current_display || '';
+        document.getElementById('tag-mod-target').value = existingMod.target_norm || '';
+    } else {
+        document.getElementById('tag-mod-action').value = 'rename';
+        document.getElementById('tag-mod-display').value = currentDisplay || '';
+        document.getElementById('tag-mod-target').value = '';
+    }
+    
+    window.updateTagModUI();
+    
+    const modal = document.getElementById('tag-mod-modal');
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('active'), 10);
+};
+
+window.updateTagModUI = () => {
+    const action = document.getElementById('tag-mod-action').value;
+    document.getElementById('tag-mod-rename-group').style.display = (action === 'rename') ? 'block' : 'none';
+    document.getElementById('tag-mod-merge-group').style.display = (action === 'merge') ? 'block' : 'none';
+    
+    if (action === 'merge') {
+        window.filterMergeTargets('');
+    }
+};
+
+window.filterMergeTargets = (val) => {
+    const resultsContainer = document.getElementById('tag-mod-target-results');
+    if (!resultsContainer) return;
+
+    if (!val && val !== '') {
+        resultsContainer.style.display = 'none';
+        return;
+    }
+
+    const lowerVal = val.toLowerCase();
+    const suggestions = allAdminTags.filter(t => 
+        t.norm !== currentModTagNorm && 
+        (t.norm.includes(lowerVal) || t.display.toLowerCase().includes(lowerVal))
+    ).slice(0, 50); // Limit to 50 suggestions
+
+    if (suggestions.length === 0) {
+        resultsContainer.innerHTML = '<div style="padding: 0.5rem; color: var(--text-tertiary); font-size: 0.8rem;">No matching tags</div>';
+    } else {
+        resultsContainer.innerHTML = suggestions.map(tag => `
+            <div onclick="window.selectMergeTarget('${tag.norm}', '${tag.display.replace(/'/g, "\\'")}')" 
+                 style="padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border-light); font-size: 0.85rem;"
+                 class="admin-tag-suggestion">
+                <span style="font-weight: 600;">${tag.display}</span>
+                <span style="color: var(--text-tertiary); font-size: 0.75rem; margin-left: 4px;">(${tag.count})</span>
+            </div>
+        `).join('');
+    }
+    resultsContainer.style.display = 'block';
+};
+
+window.selectMergeTarget = (norm, display) => {
+    const input = document.getElementById('tag-mod-target');
+    const resultsContainer = document.getElementById('tag-mod-target-results');
+    const preview = document.getElementById('tag-mod-merge-preview');
+    
+    input.value = display;
+    resultsContainer.style.display = 'none';
+    preview.innerHTML = `Will merge <strong>${currentModTagNorm}</strong> into <strong>${norm}</strong> (${display})`;
+};
+
+window.saveTagModification = async () => {
+    const action = document.getElementById('tag-mod-action').value;
+    let result;
+    
+    if (action === 'blacklist') {
+        result = await apiPost('/api/admin/tags/blacklist', { tag: currentModTagNorm });
+    } else if (action === 'rename') {
+        const display = document.getElementById('tag-mod-display').value.trim();
+        result = await apiPost('/api/admin/tags/whitelist', { tag: currentModTagNorm, display });
+    } else if (action === 'merge') {
+        const target = document.getElementById('tag-mod-target').value.trim();
+        if (!target) {
+            showToast('Target tag required', 'error');
+            return;
+        }
+        result = await apiPost('/api/admin/tags/merge', { tag: currentModTagNorm, target });
+    }
+    
+    if (result && !result.error) {
+        showToast('Tag modification saved');
+        window.closeTagModModal();
+        await loadAdminTags();
+    } else {
+        showToast(result.error || 'Failed to save modification', 'error');
+    }
+};
+
+window.closeTagModModal = () => {
+    const modal = document.getElementById('tag-mod-modal');
+    modal.classList.remove('active');
+    setTimeout(() => modal.style.display = 'none', 300);
+};
+
+window.addWhitelistTag = async () => {
+    const tag = document.getElementById('admin-whitelist-tag').value.trim();
+    const display = document.getElementById('admin-whitelist-display').value.trim();
+    if (!tag) return;
+
+    const result = await apiPost('/api/admin/tags/whitelist', { tag, display: display || tag });
+    if (result.error) {
+        showToast(result.error, 'error');
+    } else {
+        showToast('Tag whitelisted');
+        document.getElementById('admin-whitelist-tag').value = '';
+        document.getElementById('admin-whitelist-display').value = '';
+        await loadAdminTags();
+    }
+};
+
+window.removeTagModification = async (norm) => {
+    const result = await apiDelete(`/api/admin/tags/modification/${norm}`);
+    if (result.error) {
+        showToast(result.error, 'error');
+    } else {
+        showToast('Modification removed');
+        await loadAdminTags();
+    }
+};
+
+window.adminBlacklistTag = async (tag) => {
+    const result = await apiPost('/api/admin/tags/blacklist', { tag });
+    if (result.error) {
+        showToast(result.error, 'error');
+    } else {
+        showToast('Tag blacklisted');
+        await loadAdminTags();
+    }
+};
+
+// --- Tag Management Rendering ---
+function renderAdminTags(filter = '') {
+    const activeList = document.getElementById('admin-active-tags-list');
+    const modifiedList = document.getElementById('admin-modified-tags-list');
+    if (!activeList || !modifiedList) return;
+
+    const lowerFilter = filter.toLowerCase();
+    const filteredTags = allAdminTags.filter(t => 
+        !t.is_blacklisted && 
+        (t.norm.includes(lowerFilter) || t.display.toLowerCase().includes(lowerFilter))
+    );
+    
+    // Render Active Tags
+    if (filteredTags.length === 0) {
+        activeList.innerHTML = '<div style="padding: 1rem; color: var(--text-tertiary); text-align: center;">No active tags found.</div>';
+    } else {
+        activeList.innerHTML = filteredTags.map((tag, index) => `
+            <div class="admin-tag-item ${index % 2 === 0 ? 'even-row' : 'odd-row'}" 
+                 title="${tag.series_names.slice(0, 15).join(', ')}${tag.count > tag.series_names.length ? '...' : ''}"
+                 style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-light); font-size: 0.9rem; cursor: help;">
+                <div style="display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    <span style="color: var(--text-primary); font-weight: 500;">${tag.display}</span>
+                    <span style="color: var(--text-tertiary); font-size: 0.75rem;">(${tag.count})</span>
+                    ${tag.is_whitelisted ? '<span style="color: var(--success); font-size: 0.7rem; background: var(--success-low); padding: 1px 4px; border-radius: 4px;">Whitelist</span>' : ''}
+                </div>
+                <div style="display: flex; gap: 4px;">
+                    <button onclick="window.openTagModModal('${tag.norm}', '${tag.display.replace(/'/g, "\\'")}')" class="btn-secondary" style="padding: 2px 6px; font-size: 0.7rem;" title="Modify Tag">modify</button>
+                    <button onclick="window.adminBlacklistTag('${tag.norm}')" class="btn-secondary" style="padding: 2px 6px; font-size: 0.7rem; color: var(--danger);" title="Blacklist Tag">blacklist</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Render Modified Tags
+    if (allModifications.length === 0) {
+        modifiedList.innerHTML = '<div style="padding: 1rem; color: var(--text-tertiary); text-align: center;">No tag modifications.</div>';
+    } else {
+        modifiedList.innerHTML = allModifications.map((mod, index) => {
+            let actionText = '';
+            
+            if (mod.action === 'blacklist') {
+                actionText = `----> <span style="color: var(--danger); font-weight: 600;">Blacklist</span>`;
+            } else if (mod.action === 'merge') {
+                actionText = ` --Merge--> <span style="font-weight: 600; color: var(--accent);">${mod.target_norm}</span>`;
+            } else if (mod.action === 'whitelist') {
+                actionText = ` --Renamed--> <span style="font-weight: 600; color: var(--success);">${mod.display_name}</span>`;
+            }
+
+            return `
+                <div class="admin-tag-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.75rem; font-size: 0.85rem; background: ${index % 2 === 0 ? 'var(--bg-tertiary)' : 'transparent'};">
+                    <div style="display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 10px;">
+                        <span style="font-weight: 600; color: var(--text-primary); font-family: var(--font-mono);">${mod.norm}</span>
+                        <span style="color: var(--text-tertiary); margin-left: 4px;">${actionText}</span>
+                    </div>
+                    <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                        <button onclick="window.openTagModModal('${mod.norm}')" class="btn-secondary" style="padding: 1px 6px; font-size: 0.65rem;" title="Edit modification">edit</button>
+                        <button onclick="window.removeTagModification('${mod.norm}')" class="btn-secondary" style="padding: 1px 6px; font-size: 0.65rem; color: var(--success);" title="Restore to default">restore</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+}
+
+window.filterAdminTags = (val) => {
+    renderAdminTags(val);
+};
+
 export async function loadGapsReport() {
     const container = document.getElementById('admin-gaps-container');
     if (!container) return;
@@ -279,6 +526,8 @@ function setupScanButtons() {
      const fullBtn = document.getElementById('btn-scan-full');
      const thumbnailsBtn = document.getElementById('btn-scan-thumbnails');
      const metadataBtn = document.getElementById('btn-scan-metadata');
+     const reloadBtn = document.getElementById('btn-library-reload');
+     const restartBtn = document.getElementById('btn-restart-server');
      const stopBtn = document.getElementById('btn-scan-stop');
      
      console.log('setupScanButtons: Found buttons:', {
@@ -286,6 +535,8 @@ function setupScanButtons() {
          fullBtn: !!fullBtn,
          thumbnailsBtn: !!thumbnailsBtn,
          metadataBtn: !!metadataBtn,
+         reloadBtn: !!reloadBtn,
+         restartBtn: !!restartBtn,
          stopBtn: !!stopBtn
      });
      
@@ -320,6 +571,43 @@ function setupScanButtons() {
              setScanButtonsDisabled(true);
              await apiPost('/api/admin/scan/metadata');
              startScanPolling();
+         });
+     }
+
+     if (reloadBtn) {
+         reloadBtn.addEventListener('click', async () => {
+             if (confirm('Force backend reload and refresh frontend? This will clear all system caches.')) {
+                 showToast('Reloading library data...', 'info');
+                 await apiPost('/api/admin/system/reload');
+                 window.location.reload();
+             }
+         });
+     }
+
+     if (restartBtn) {
+         restartBtn.addEventListener('click', async () => {
+             if (confirm('Are you sure you want to RESTART the entire server? This will pick up any code changes but will disconnect all users temporarily.')) {
+                 showToast('Server restarting... please wait.', 'info');
+                 
+                 // Trigger restart
+                 apiPost('/api/admin/system/restart');
+                 
+                 // Wait a bit then poll for server to come back
+                 setTimeout(() => {
+                     const poll = setInterval(async () => {
+                         try {
+                             const check = await fetch('/api/auth/check');
+                             if (check.ok) {
+                                 clearInterval(poll);
+                                 showToast('Server is back online!', 'success');
+                                 setTimeout(() => window.location.reload(), 1000);
+                             }
+                         } catch (e) {
+                             // Still down
+                         }
+                     }, 2000);
+                 }, 3000);
+             }
          });
      }
 

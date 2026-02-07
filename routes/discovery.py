@@ -136,27 +136,29 @@ async def get_suggestions(
     # Get tags from those series
     series_ids = [r['series_id'] for r in recent]
     tags_query = conn.execute(
-        '''SELECT genres, tags FROM series WHERE id IN ({})'''.format(
+        '''SELECT genres, tags, demographics FROM series WHERE id IN ({})'''.format(
             ','.join(['?'] * len(series_ids))
         ),
         series_ids
     ).fetchall()
     
     # Extract and normalize tags
+    from db import extract_tags, normalize_tag
+    import json
+    
     user_tags = set()
     for row in tags_query:
-        if row['genres']:
-            try:
-                genres = row['genres'] if isinstance(row['genres'], list) else __import__('json').loads(row['genres'])
-                user_tags.update(g.strip() for g in genres if g and isinstance(g, str))
-            except:
-                pass
-        if row['tags']:
-            try:
-                tags = row['tags'] if isinstance(row['tags'], list) else __import__('json').loads(row['tags'])
-                user_tags.update(t.strip() for t in tags if t and isinstance(t, str))
-            except:
-                pass
+        combined = []
+        try:
+            if row['genres']: combined.extend(extract_tags(json.loads(row['genres'])))
+            if row['tags']: combined.extend(extract_tags(json.loads(row['tags'])))
+            if row['demographics']: combined.extend(extract_tags(json.loads(row['demographics'])))
+        except: pass
+        
+        for t in combined:
+            norm = normalize_tag(t)
+            if norm:
+                user_tags.add(norm)
     
     if not user_tags:
         conn.close()
@@ -166,12 +168,12 @@ async def get_suggestions(
     placeholders = ','.join(['?'] * len(series_ids))
     suggestions = conn.execute(
         f'''SELECT s.id, s.name, s.title, s.synopsis, s.cover_comic_id,
-                   s.genres, s.tags, s.status, s.total_chapters,
+                   s.genres, s.tags, s.demographics, s.status, s.total_chapters,
                    COUNT(c.id) as available_chapters
             FROM series s
             LEFT JOIN comics c ON c.series_id = s.id
             WHERE s.id NOT IN ({placeholders})
-              AND (s.genres IS NOT NULL OR s.tags IS NOT NULL)
+              AND (s.genres IS NOT NULL OR s.tags IS NOT NULL OR s.demographics IS NOT NULL)
             GROUP BY s.id''',
         series_ids
     ).fetchall()
@@ -180,18 +182,17 @@ async def get_suggestions(
     scored = []
     for row in suggestions:
         series_tags = set()
-        if row['genres']:
-            try:
-                genres = row['genres'] if isinstance(row['genres'], list) else __import__('json').loads(row['genres'])
-                series_tags.update(g.strip() for g in genres if g and isinstance(g, str))
-            except:
-                pass
-        if row['tags']:
-            try:
-                tags = row['tags'] if isinstance(row['tags'], list) else __import__('json').loads(row['tags'])
-                series_tags.update(t.strip() for t in tags if t and isinstance(t, str))
-            except:
-                pass
+        combined = []
+        try:
+            if row['genres']: combined.extend(extract_tags(json.loads(row['genres'])))
+            if row['tags']: combined.extend(extract_tags(json.loads(row['tags'])))
+            if row['demographics']: combined.extend(extract_tags(json.loads(row['demographics'])))
+        except: pass
+        
+        for t in combined:
+            norm = normalize_tag(t)
+            if norm:
+                series_tags.add(norm)
         
         matches = user_tags & series_tags
         if matches:

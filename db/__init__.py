@@ -1,5 +1,8 @@
 from .connection import get_db_connection, init_db
-from .comics import delete_comics_by_ids, get_pending_comics, update_comic_metadata
+from .comics import (
+    delete_comics_by_ids, get_pending_comics, update_comic_metadata,
+    get_series_id_by_folder, update_comics_in_folder
+)
 from .users import (
     create_user, authenticate_user, create_session, validate_session, 
     delete_session, get_all_users, delete_user, update_user_role, 
@@ -14,7 +17,8 @@ from .series import (
     create_or_update_series, get_series_by_name, get_series_with_comics,
     update_comic_series_id, get_all_series, get_series_by_tags, invalidate_tag_cache,
     search_series, get_gaps_report, add_rating, get_series_rating, get_user_rating,
-    force_rebuild_fts, warm_up_metadata_cache
+    force_rebuild_fts, warm_up_metadata_cache, rename_or_merge_series,
+    normalize_tag, extract_tags
 )
 from .jobs import (
     create_scan_job, update_scan_progress, complete_scan_job,

@@ -8,7 +8,15 @@ const actionDispatcher = {
     'card-click': (id, event) => {
         // Check if we're in tags view
         if (state.currentView === 'tags') {
-            if (window.selectTag) {
+            // If we are showing results, we want to navigate to the title, NOT select a tag
+            // We need to check the tagsState from the global scope or passed in
+            const tagsResults = document.getElementById('tags-results');
+            const isShowingResults = tagsResults && tagsResults.style.display !== 'none';
+
+            if (isShowingResults) {
+                // In results view, ID is the title name
+                window.routerNavigate('library', { title: id });
+            } else if (window.selectTag) {
                 window.selectTag(id);
             }
             return;
@@ -308,10 +316,12 @@ export function clearSelection() {
 function updateSelectionUI() {
     const bar = document.getElementById('selection-action-bar');
     const countEl = document.getElementById('selection-count');
-    const count = state.selectedIds.size;
+    if (!bar) return;
+    
+    const count = state.selectedIds ? state.selectedIds.size : 0;
     if (count > 0) {
         bar.classList.add('active');
-        countEl.textContent = count;
+        if (countEl) countEl.textContent = count;
     } else {
         bar.classList.remove('active');
     }

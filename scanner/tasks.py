@@ -1,6 +1,7 @@
 import os
 import hashlib
 import json
+import sqlite3
 from typing import Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import COMICS_DIR
@@ -446,37 +447,29 @@ def metadata_rescan_task(job_id: Optional[int] = None) -> None:
                     # Use directory name as fallback
                     series_name = os.path.basename(os.path.dirname(series_json_path))
                 
-                # Update series table with new metadata
-                # Find series by name
-                series_row = conn.execute(
-                    "SELECT id FROM series WHERE name = ?", 
-                    (series_name,)
-                ).fetchone()
+                # Identify which series record we are updating by looking at comics in this directory
+                series_dir = os.path.dirname(series_json_path)
                 
-                if series_row:
-                    # Update existing series with fresh metadata
-                    metadata_json = json.dumps(metadata)
-                    conn.execute('''
-                        UPDATE series SET 
-                            synopsis = ?,
-                            authors = ?,
-                            genres = ?,
-                            tags = ?,
-                            status = ?,
-                            alt_titles = ?,
-                            external_links = ?
-                        WHERE id = ?
-                    ''', (
-                        metadata.get('synopsis'),
-                        metadata.get('authors'),
-                        metadata.get('genres'),
-                        metadata.get('tags'),
-                        metadata.get('status'),
-                        metadata.get('alt_titles'),
-                        json.dumps(metadata.get('external_links', {})),
-                        series_row['id']
-                    ))
-                    logger.debug(f"Updated metadata for series: {series_name}")
+                # Use database helpers instead of manual SQL
+                from database import get_series_id_by_folder, rename_or_merge_series, update_comics_in_folder
+                
+                series_id = get_series_id_by_folder(series_dir, conn=conn)
+                
+                if series_id:
+                    # Handle renaming or merging if the title in series.json changed
+                    series_id = rename_or_merge_series(series_id, series_name, conn=conn)
+                
+                # Update series table with new metadata (synopsis, genres, etc.)
+                series_id = create_or_update_series(
+                    name=series_name,
+                    metadata=metadata,
+                    conn=conn
+                )
+                
+                # Link all comics in this folder to this series and update redundant title/series fields
+                update_comics_in_folder(series_dir, series_id, series_name, conn=conn)
+                
+                logger.debug(f"Updated metadata for series: {series_name} (ID: {series_id})")
                 
                 processed += 1
                 if processed % 10 == 0:

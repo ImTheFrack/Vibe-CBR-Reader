@@ -8,6 +8,7 @@ import {
     sortItems, parseFileSize, TITLE_SORT_ACCESSORS, 
     COMIC_SORT_ACCESSORS, FOLDER_SORT_ACCESSORS 
 } from '../utils/sorting.js';
+import { parseMetadataField } from '../utils.js';
 import { startReading } from '../reader.js';
 import { updateBreadcrumbs } from './navigation.js';
 
@@ -355,9 +356,9 @@ export async function renderTitleDetailView() {
     const uniqueId = Math.random().toString(36).substr(2, 9);
     
     const authors = Array.isArray(seriesData.authors) ? seriesData.authors : (seriesData.authors ? [seriesData.authors] : []);
-    const genres = Array.isArray(seriesData.genres) ? seriesData.genres : (seriesData.genres ? [seriesData.genres] : []);
-    const tags = Array.isArray(seriesData.tags) ? seriesData.tags : (seriesData.tags ? [seriesData.tags] : []);
-    const demographics = Array.isArray(seriesData.demographics) ? seriesData.demographics : (seriesData.demographics ? [seriesData.demographics] : []);
+    const genres = parseMetadataField(seriesData.genres);
+    const tags = parseMetadataField(seriesData.tags);
+    const demographics = parseMetadataField(seriesData.demographics);
     
     const statusTag = seriesData.status ? `<span class="meta-tag status ${seriesData.status.toLowerCase().replace(/\s+/g, '-')}">${seriesData.status}</span>` : '';
     const yearTag = seriesData.release_year ? `<span class="meta-tag year">${seriesData.release_year}</span>` : '';

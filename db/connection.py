@@ -4,7 +4,7 @@ from datetime import datetime
 from config import DB_PATH
 
 # Schema version for migration tracking
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 11
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -469,6 +469,50 @@ def init_db() -> None:
                 conn.execute(f'ALTER TABLE scan_jobs ADD COLUMN {col} INTEGER DEFAULT 0')
             except sqlite3.OperationalError:
                 pass
+
+    if current_version < 10:
+        # Migration 10: Tag blacklist and whitelist
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS tag_blacklist (
+                tag_norm TEXT PRIMARY KEY
+            )
+        ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS tag_whitelist (
+                tag_norm TEXT PRIMARY KEY,
+                tag_display TEXT NOT NULL
+            )
+        ''')
+
+    if current_version < 11:
+        # Migration 11: Unified Tag Modifications (Blacklist, Whitelist/Rename, Merge)
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS tag_modifications (
+                source_norm TEXT PRIMARY KEY,
+                action TEXT NOT NULL CHECK(action IN ('blacklist', 'whitelist', 'merge')),
+                target_norm TEXT,
+                display_name TEXT
+            )
+        ''')
+        
+        # Migrate existing data
+        try:
+            # Blacklist -> tag_modifications
+            conn.execute('''
+                INSERT OR IGNORE INTO tag_modifications (source_norm, action)
+                SELECT tag_norm, 'blacklist' FROM tag_blacklist
+            ''')
+            # Whitelist -> tag_modifications
+            conn.execute('''
+                INSERT OR IGNORE INTO tag_modifications (source_norm, action, display_name)
+                SELECT tag_norm, 'whitelist', tag_display FROM tag_whitelist
+            ''')
+            
+            # Clean up old tables
+            conn.execute("DROP TABLE IF EXISTS tag_blacklist")
+            conn.execute("DROP TABLE IF EXISTS tag_whitelist")
+        except sqlite3.OperationalError:
+            pass # Tables might not exist if fresh install
     
     if current_version < SCHEMA_VERSION:
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')

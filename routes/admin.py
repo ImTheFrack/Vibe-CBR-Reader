@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel, field_validator
 from typing import List, Dict, Any, Optional
 import os
+import sys
 import re
 from database import get_all_users, delete_user, update_user_role, update_user_password, approve_user, get_running_scan_job, get_latest_scan_job, stop_running_scan_job, create_scan_job
 from dependencies import get_admin_user
@@ -241,6 +242,51 @@ async def stop_scan(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dic
     
     return {"message": "Scan cancellation requested"}
 
+class TagAction(BaseModel):
+    tag: str
+    display: Optional[str] = None
+    target: Optional[str] = None
+
+@router.get("/tags")
+async def get_admin_tags(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, Any]:
+    """Get all tags with stats and status (admin only)"""
+    from db.series import get_tag_management_data
+    return get_tag_management_data()
+
+@router.post("/tags/blacklist")
+async def admin_blacklist_tag(data: TagAction, admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
+    """Add a tag to the blacklist (admin only)"""
+    from db.series import blacklist_tag
+    if blacklist_tag(data.tag):
+        return {"message": f"Tag '{data.tag}' blacklisted"}
+    raise HTTPException(status_code=400, detail="Failed to blacklist tag")
+
+@router.post("/tags/whitelist")
+async def admin_whitelist_tag(data: TagAction, admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
+    """Add a tag to the whitelist (admin only)"""
+    from db.series import whitelist_tag
+    if whitelist_tag(data.tag, data.display):
+        return {"message": f"Tag '{data.tag}' whitelisted/renamed"}
+    raise HTTPException(status_code=400, detail="Failed to whitelist tag")
+
+@router.post("/tags/merge")
+async def admin_merge_tags(data: TagAction, admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
+    """Merge source tag into target tag (admin only)"""
+    from db.series import merge_tags
+    if not data.target:
+        raise HTTPException(status_code=400, detail="Target tag required for merge")
+    if merge_tags(data.tag, data.target):
+        return {"message": f"Tag '{data.tag}' merged into '{data.target}'"}
+    raise HTTPException(status_code=400, detail="Failed to merge tags")
+
+@router.delete("/tags/modification/{norm:path}")
+async def admin_remove_modification(norm: str, admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
+    """Remove any modification for this tag (admin only)"""
+    from db.series import remove_tag_modification
+    if remove_tag_modification(norm):
+        return {"message": "Tag modification removed"}
+    raise HTTPException(status_code=400, detail="Failed to remove modification")
+
 @router.get("/scan/status")
 async def get_scan_status(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, Any]:
     """Get current scan progress"""
@@ -313,3 +359,22 @@ async def scan_metadata(background_tasks: BackgroundTasks, admin_user: Dict[str,
     job_id = create_scan_job(scan_type='metadata', total_comics=0)
     background_tasks.add_task(metadata_rescan_task, job_id)
     return {"message": "Metadata rescan started"}
+
+@router.post("/system/reload")
+async def system_reload(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
+    """Force backend cache invalidation and warm up"""
+    from db.series import warm_up_metadata_cache
+    warm_up_metadata_cache()
+    return {"message": "System caches reloaded"}
+
+def restart_server():
+    """Helper to restart the current process"""
+    import time
+    time.sleep(1) # Give time for the response to be sent
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+@router.post("/system/restart")
+async def system_restart(background_tasks: BackgroundTasks, admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
+    """Gracefully restart the server process"""
+    background_tasks.add_task(restart_server)
+    return {"message": "Server restart initiated"}

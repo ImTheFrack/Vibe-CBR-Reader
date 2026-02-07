@@ -712,7 +712,7 @@
         display: flex;
     }
 
-    .search-box {
+    .header-nav .search-box {
         display: none;
         position: absolute;
         left: 0;
@@ -725,7 +725,7 @@
         align-items: center;
     }
 
-    .search-box.mobile-active {
+    .header-nav .search-box.mobile-active {
         display: flex;
     }
 

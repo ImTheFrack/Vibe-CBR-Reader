@@ -96,3 +96,57 @@ def get_duplicate_comics() -> List[Dict[str, Any]]:
     
     conn.close()
     return result
+
+def get_series_id_by_folder(directory_path: str, conn: Optional[sqlite3.Connection] = None) -> Optional[int]:
+    """Find a series_id assigned to any comic in the given directory"""
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db_connection()
+    
+    # Create LIKE patterns for both slash variants to be cross-platform robust
+    dir_f = directory_path.replace('\\', '/')
+    if not dir_f.endswith('/'): dir_f += '/'
+    
+    dir_b = directory_path.replace('/', '\\')
+    if not dir_b.endswith('\\'): dir_b += '\\'
+    
+    pattern_f = dir_f.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+    pattern_b = dir_b.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+    
+    row = conn.execute('''
+        SELECT series_id FROM comics 
+        WHERE (path LIKE ? ESCAPE '!' OR path LIKE ? ESCAPE '!')
+        AND series_id IS NOT NULL 
+        LIMIT 1
+    ''', (pattern_f, pattern_b)).fetchone()
+    
+    res = row['series_id'] if row else None
+    
+    if own_conn:
+        conn.close()
+    return res
+
+def update_comics_in_folder(directory_path: str, series_id: int, series_name: str, conn: Optional[sqlite3.Connection] = None) -> None:
+    """Update all comics in a folder to be linked to a series and have consistent title/series fields"""
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db_connection()
+        
+    dir_f = directory_path.replace('\\', '/')
+    if not dir_f.endswith('/'): dir_f += '/'
+    
+    dir_b = directory_path.replace('/', '\\')
+    if not dir_b.endswith('\\'): dir_b += '\\'
+    
+    pattern_f = dir_f.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+    pattern_b = dir_b.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+    
+    conn.execute('''
+        UPDATE comics 
+        SET series_id = ?, title = ?, series = ? 
+        WHERE (path LIKE ? ESCAPE '!' OR path LIKE ? ESCAPE '!')
+    ''', (series_id, series_name, series_name, pattern_f, pattern_b))
+    
+    if own_conn:
+        conn.commit()
+        conn.close()

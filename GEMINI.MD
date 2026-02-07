@@ -201,7 +201,7 @@ CREATE TABLE scan_jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
-    status TEXT DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed')),
+    status TEXT DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed', 'cancelled')),
     total_comics INTEGER DEFAULT 0,
     processed_comics INTEGER DEFAULT 0,
     current_file TEXT,
@@ -213,8 +213,19 @@ CREATE TABLE scan_jobs (
     page_errors INTEGER DEFAULT 0,
     processed_thumbnails INTEGER DEFAULT 0,
     thumbnail_errors INTEGER DEFAULT 0,
+    thumb_bytes_written INTEGER DEFAULT 0,
+    thumb_bytes_saved INTEGER DEFAULT 0,
     errors TEXT,                             -- JSON string
-    scan_type TEXT DEFAULT 'fast'
+    scan_type TEXT DEFAULT 'fast',
+    cancel_requested BOOLEAN DEFAULT 0
+)
+
+-- Tag modifications (unified blacklist, whitelist/rename, merge)
+CREATE TABLE tag_modifications (
+    source_norm TEXT PRIMARY KEY,
+    action TEXT NOT NULL CHECK(action IN ('blacklist', 'whitelist', 'merge')),
+    target_norm TEXT,
+    display_name TEXT
 )
 
 -- Indexes
@@ -276,6 +287,13 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 - `PUT /api/admin/users/{user_id}/approve`: Approve new user (admin only)
 - `DELETE /api/admin/users/{user_id}`: Delete user (admin only)
 - `GET /api/admin/gaps`: Sequence gap detection report (admin only)
+- `GET /api/admin/tags`: Full tag management data with modification status (admin only)
+- `POST /api/admin/tags/blacklist`: Blacklist a tag (admin only)
+- `POST /api/admin/tags/whitelist`: Whitelist or rename a tag (admin only)
+- `POST /api/admin/tags/merge`: Merge one tag into another (admin only)
+- `DELETE /api/admin/tags/modification/{norm}`: Remove a modification (admin only)
+- `POST /api/admin/system/reload`: Rebuild all metadata caches (admin only)
+- `POST /api/admin/system/restart`: Gracefully restart server process (admin only)
 - `POST /api/scan`: Start incremental scan (admin only)
 - `POST /api/rescan`: Start full rescan (admin only)
 - `POST /api/scan/thumbnails`: Start thumbnail rescan (admin only)
@@ -353,6 +371,11 @@ For a detailed list of planned features, known bugs, and code quality goals, ple
 - Filter series by tags/genres
 - Related tag refinement (shows remaining tags with counts)
 - Series result cards with cover fan display
+- **Normalization Logic**: 
+    - **Punctuation-Blind**: All non-alphanumeric characters are treated as spaces.
+    - **Accent-Insensitive**: Diacritics are removed (Pokémon -> pokemon).
+    - **Auto-Singularization**: English plural forms are automatically merged (Video Games -> video game).
+    - **Recursive Resolution**: Merged tags are resolved to their final target for all counts and matching.
 
 ### Library Scanning
 - Four scan modes: Incremental, Full, Thumbnails Only, Metadata Only

@@ -3,7 +3,8 @@ import { navigateToFolder, showView } from './library.js';
 import { state } from './state.js';
 import { renderItems, renderFan, getTitleCoverIds } from './components/index.js';
 import { navigate } from './router.js';
-import { updateSelectOptions } from './utils.js';
+import { updateSelectOptions, deburr, normalizeTag } from './utils.js';
+import { sanitizeForSort } from './utils/sorting.js';
 
 // State for tags view
 const tagsState = {
@@ -19,7 +20,9 @@ const tagsState = {
 export async function initTagsView(params = {}) {
     // Sync tags from URL params if present
     if (params.tags) {
-        tagsState.selectedTags = params.tags.split(',').map(t => decodeURIComponent(t)).filter(t => t.length > 0);
+        tagsState.selectedTags = params.tags.split(',')
+            .map(t => decodeURIComponent(t))
+            .filter(t => t.length > 0 && t !== '[]');
     } else {
         tagsState.selectedTags = [];
     }
@@ -239,8 +242,9 @@ function renderTagsGrid() {
     // Filter tags
     let tagsToRender = tagsState.availableTags;
     if (tagsState.filterText) {
+        const normalizedFilter = normalizeTag(tagsState.filterText);
         tagsToRender = tagsState.availableTags.filter(tag => 
-            tag.name.toLowerCase().includes(tagsState.filterText)
+            normalizeTag(tag.name).includes(normalizedFilter)
         );
     }
     
@@ -319,6 +323,13 @@ function renderResults() {
             matchesFilter(s, 'read', read)
         );
     }
+    
+    // Sort results alphabetically by default using natural sort
+    filteredSeries.sort((a, b) => {
+        const nameA = a.title || a.name || '';
+        const nameB = b.title || b.name || '';
+        return sanitizeForSort(nameA).localeCompare(sanitizeForSort(nameB), undefined, { numeric: true, sensitivity: 'base' });
+    });
     
     if (filteredSeries.length === 0) {
         container.innerHTML = `

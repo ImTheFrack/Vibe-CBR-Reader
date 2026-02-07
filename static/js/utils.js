@@ -17,6 +17,7 @@ export function debounce(fn, delay) {
 
 export function showToast(message, type = 'success') {
      const container = document.getElementById('toast-container');
+     if (!container) return;
      const toast = document.createElement('div');
      toast.className = `toast ${type}`;
      const icon = type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ';
@@ -76,3 +77,225 @@ export function updateSelectOptions(elementId, options, currentValue, defaultTex
          }
      }
 }
+
+/**
+ * Sanitizes and parses metadata fields that might be lists, JSON strings, or malformed "[]"
+ * @param {any} field - The metadata field value to parse
+ * @returns {Array<string>} A clean array of strings
+ */
+export function parseMetadataField(field) {
+    if (!field) return [];
+    
+    // If it's already an array, clean each item
+    if (Array.isArray(field)) {
+        const result = [];
+        field.forEach(item => {
+            const parsed = parseMetadataField(item);
+            result.push(...parsed);
+        });
+        return [...new Set(result)].filter(t => t && t !== '[]');
+    }
+    
+    // If it's a string, handle JSON or literal "[]"
+    if (typeof field === 'string') {
+        const trimmed = field.trim();
+        if (!trimmed || trimmed === '[]') return [];
+        
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                return parseMetadataField(parsed);
+            } catch (e) {
+                // If it looks like JSON but isn't, just treat as string
+            }
+        }
+        
+        // Final cleanup for single string tags
+        const clean = trimmed.replace(/^["']|["']$/g, '').trim();
+        return clean && clean !== '[]' ? [clean] : [];
+    }
+    
+    return [String(field)];
+}
+
+/**
+
+ * Removes accents/diacritics from a string
+
+ * @param {string} str - The string to deburr
+
+ * @returns {string} The deburred string
+
+ */
+
+export function deburr(str) {
+
+    if (!str) return "";
+
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+}
+
+
+
+/**
+
+
+
+ * Simple singularization matching the backend logic.
+
+
+
+ * @param {string} word 
+
+
+
+ * @returns {string}
+
+
+
+ */
+
+
+
+export function singularize(word) {
+
+
+
+    if (!word || word.length <= 3) return word;
+
+
+
+    
+
+
+
+    const exceptions = ['series', 'species', 'class', 'business', 'status', 'canvas', 'glass', 'grass', 'boss', 'less', 'tennis', 'hypnosis'];
+
+
+
+    if (exceptions.includes(word.toLowerCase())) return word;
+
+
+
+
+
+
+
+    // Handle common patterns like /s
+
+
+
+    word = word.replace(/\/s$/i, '').replace(/\(s\)$/i, '');
+
+
+
+
+
+
+
+    if (word.endsWith('ies')) return word.slice(0, -3) + 'y';
+
+
+
+    if (word.endsWith('ses') || word.endsWith('xes') || word.endsWith('ches') || word.endsWith('shes')) return word.slice(0, -2);
+
+
+
+    if (word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+
+
+
+    
+
+
+
+    return word;
+
+
+
+}
+
+
+
+
+
+
+
+/**
+
+
+
+ * Aggressively normalizes a tag for searching/comparison (lowercase, no accents, no punctuation)
+
+
+
+ * @param {string} str 
+
+
+
+ * @returns {string}
+
+
+
+ */
+
+
+
+export function normalizeTag(str) {
+
+
+
+    if (!str) return "";
+
+
+
+    // Lowercase + accents
+
+
+
+    let t = deburr(str.toLowerCase());
+
+
+
+    // Punctuation to space
+
+
+
+    t = t.replace(/[^a-z0-9]/g, ' ');
+
+
+
+    // Clean up spaces
+
+
+
+    let words = t.split(' ').filter(w => w);
+
+
+
+    if (words.length > 0) {
+
+
+
+        // Singularize last word
+
+
+
+        words[words.length - 1] = singularize(words[words.length - 1]);
+
+
+
+    }
+
+
+
+    return words.join(' ');
+
+
+
+}
+
+
+
+

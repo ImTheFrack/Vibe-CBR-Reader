@@ -70,10 +70,19 @@ For a detailed list of planned features, known bugs, and project roadmap, please
 
 ### 2026-02-07
 - **Admin Overhaul**: Consolidated all admin functions into a single dashboard.
+- **Tag Management System**: 
+  - **Unified Modifications**: New system to blacklist, rename, or merge tags from a single interface.
+  - **Advanced Normalization**: Implementation of accent-insensitive, punctuation-blind, and automatic singularization logic (e.g., "Video Games" and "video-game" are now identical).
+  - **Recursive Merging**: Support for complex merge chains with automatic count attribution.
+  - **Tag Insights**: Hover over active tags in the admin panel to see exactly which series they match.
+- **System Controls**:
+  - **Library Reload**: Force invalidation and reconstruction of all metadata caches.
+  - **Restart Server**: Gracefully restart the backend process to pick up code edits without manual terminal intervention.
 - **Scan Modes**: Added 4 distinct scan types (Incremental, Full, Thumbnails, Metadata).
 - **Thumbnail Engine**: New "Pick Best" mode automatically selects the smallest file among WebP, PNG, and JPG. Configurable quality and resolution.
 - **User Approval**: Added optional administrator approval gate for new registrations.
 - **Reading Stats**: Admin user table now shows time spent reading and comics completed per user.
+- **Mobile Responsive Fixes**: Resolved critical layout bugs in the Tags view on narrow screens.
 
 ### 2026-02-06 (Bug Fixes)
 - **View Mode Fix**: Fixed view mode switching (grid/list/detailed) not working in Tags view.

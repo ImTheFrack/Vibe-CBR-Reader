@@ -18,6 +18,17 @@ export function parseFileSize(sizeStr) {
 }
 
 /**
+ * Sanitize a string for alphabetical sorting by removing punctuation and spacing
+ * and converting to lowercase.
+ * @param {string} str 
+ * @returns {string}
+ */
+export function sanitizeForSort(str) {
+    if (!str) return '';
+    return str.replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+/**
  * Sort an array of items based on a criterion and accessor functions
  * @param {Array} items - Items to sort
  * @param {string} sortBy - Sort criteria ('alpha-asc', 'alpha-desc', 'date-added', 'page-count', 'file-size', 'recent-read')
@@ -35,10 +46,18 @@ export function sortItems(items, sortBy, accessors) {
 
     switch (sortBy) {
         case 'alpha-asc':
-            sorted.sort((a, b) => name(a).localeCompare(name(b), undefined, { numeric: true, sensitivity: 'base' }));
+            sorted.sort((a, b) => {
+                const sA = sanitizeForSort(name(a));
+                const sB = sanitizeForSort(name(b));
+                return sA.localeCompare(sB, undefined, { numeric: true, sensitivity: 'base' });
+            });
             break;
         case 'alpha-desc':
-            sorted.sort((a, b) => name(b).localeCompare(name(a), undefined, { numeric: true, sensitivity: 'base' }));
+            sorted.sort((a, b) => {
+                const sA = sanitizeForSort(name(a));
+                const sB = sanitizeForSort(name(b));
+                return sB.localeCompare(sA, undefined, { numeric: true, sensitivity: 'base' });
+            });
             break;
         case 'date-added':
             // If date accessor is provided
@@ -74,7 +93,11 @@ export function sortItems(items, sortBy, accessors) {
             break;
         default:
             // Default to alpha-asc if unknown
-            sorted.sort((a, b) => name(a).localeCompare(name(b)));
+            sorted.sort((a, b) => {
+                const sA = sanitizeForSort(name(a));
+                const sB = sanitizeForSort(name(b));
+                return sA.localeCompare(sB, undefined, { numeric: true, sensitivity: 'base' });
+            });
     }
     return sorted;
 }

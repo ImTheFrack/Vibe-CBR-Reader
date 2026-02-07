@@ -344,21 +344,69 @@
                 <div style="margin-bottom: 3rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                         <h3 class="section-title" style="margin-bottom: 0;">📚 Library Metadata</h3>
-                        <div style="font-size: 0.9rem; color: var(--text-secondary);">
-                            <span id="library-total-series" style="font-weight: 600; color: var(--text-primary);">0</span> Series • 
-                            <span id="library-total-comics" style="font-weight: 600; color: var(--text-primary);">0</span> Chapters
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem;">
+                            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                                <span id="library-total-series" style="font-weight: 600; color: var(--text-primary);">0</span> Series • 
+                                <span id="library-total-comics" style="font-weight: 600; color: var(--text-primary);">0</span> Chapters
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                                <button id="btn-library-reload" class="btn-primary" style="justify-content: center; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer; font-weight: 600; font-size: 0.8rem;">⚡ Library Reload</button>
+                                <button id="btn-restart-server" class="btn-primary" style="justify-content: center; padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--danger-low); color: var(--danger); cursor: pointer; font-weight: 600; font-size: 0.8rem;">🔌 Restart Server</button>
+                            </div>
                         </div>
                     </div>
                     
-                    <!-- Scan Controls -->
-                    <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border); margin-bottom: 2rem;">
-                        <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600;">Scan Controls</h4>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                            <button id="btn-scan-incremental" class="btn-primary" style="justify-content: center; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--accent); color: white; cursor: pointer; font-weight: 600;">🔄 Incremental Scan</button>
-                            <button id="btn-scan-full" class="btn-danger" style="justify-content: center; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--danger); color: white; cursor: pointer; font-weight: 600;">⚠️ Full Re-Scan</button>
-                            <button id="btn-scan-thumbnails" class="btn-primary" style="justify-content: center; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--accent); color: white; cursor: pointer; font-weight: 600;">🖼️ Thumbnail Rescan</button>
-                            <button id="btn-scan-metadata" class="btn-primary" style="justify-content: center; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--accent); color: white; cursor: pointer; font-weight: 600;">📋 Metadata Rescan</button>
-                            <button id="btn-scan-stop" class="btn-danger" style="justify-content: center; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--danger); color: white; cursor: pointer; font-weight: 600;" disabled>🛑 Stop Scan</button>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+                        <!-- Scan Controls -->
+                        <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
+                            <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600;">Scan Controls</h4>
+                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                    <button id="btn-scan-incremental" class="btn-primary" style="justify-content: center; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--accent); color: white; cursor: pointer; font-weight: 600; font-size: 0.85rem;">🔄 Incremental</button>
+                                    <button id="btn-scan-full" class="btn-danger" style="justify-content: center; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--danger); color: white; cursor: pointer; font-weight: 600; font-size: 0.85rem;">⚠️ Full Re-Scan</button>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                    <button id="btn-scan-thumbnails" class="btn-primary" style="justify-content: center; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--accent); color: white; cursor: pointer; font-weight: 600; font-size: 0.85rem;">🖼️ Thumbnails</button>
+                                    <button id="btn-scan-metadata" class="btn-primary" style="justify-content: center; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--accent); color: white; cursor: pointer; font-weight: 600; font-size: 0.85rem;">📋 Metadata</button>
+                                </div>
+                                <button id="btn-scan-stop" class="btn-danger" style="justify-content: center; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--danger); color: white; cursor: pointer; font-weight: 600; font-size: 0.85rem;" disabled>🛑 Stop Scan</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Thumbnail Settings -->
+                        <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
+                            <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600;">Thumbnail Settings</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.25rem; font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">Format</label>
+                                    <select id="thumb-format-select" style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.85rem;">
+                                        <option value="webp">WebP</option>
+                                        <option value="png">PNG</option>
+                                        <option value="jpg">JPG</option>
+                                        <option value="best">Pick Best</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.25rem; font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">Quality: <span id="thumb-quality-value">70</span>%</label>
+                                    <input id="thumb-quality-slider" type="range" min="0" max="100" value="70" style="width: 100%; cursor: pointer;">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.25rem; font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">Ratio</label>
+                                    <select id="thumb-ratio-select" style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.85rem;">
+                                        <option value="663:1024">American</option>
+                                        <option value="128:182">Bunko</option>
+                                        <option value="114:172">Tankobon</option>
+                                        <option value="257:364">ISO B4</option>
+                                        <option value="9:14">MAL</option>
+                                        <option value="512:713">Mangadex</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.25rem; font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">Width: <span id="thumb-width-value">225</span>px</label>
+                                    <input id="thumb-width-slider" type="range" min="60" max="300" value="225" style="width: 100%; cursor: pointer;">
+                                </div>
+                            </div>
+                            <button id="thumb-save-btn" class="btn-primary" style="width: 100%; padding: 0.6rem; border-radius: 8px; border: none; background: var(--accent); color: white; cursor: pointer; font-weight: 600; font-size: 0.85rem;">💾 Save Settings</button>
                         </div>
                     </div>
                     
@@ -396,42 +444,6 @@
                             </p>
                         </div>
                     </div>
-                    
-                    <!-- Thumbnail Settings -->
-                    <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
-                        <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600;">Thumbnail Settings</h4>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                            <div>
-                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Format</label>
-                                <select id="thumb-format-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary);">
-                                    <option value="webp">WebP</option>
-                                    <option value="png">PNG</option>
-                                    <option value="jpg">JPG</option>
-                                    <option value="best">Pick Best</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Quality: <span id="thumb-quality-value">70</span>%</label>
-                                <input id="thumb-quality-slider" type="range" min="0" max="100" value="70" style="width: 100%; cursor: pointer;">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Aspect Ratio</label>
-                                <select id="thumb-ratio-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary);">
-                                    <option value="663:1024">American (663:1024)</option>
-                                    <option value="128:182">Bunko (128:182)</option>
-                                    <option value="114:172">Tankobon (114:172)</option>
-                                    <option value="257:364">ISO B4 (257:364)</option>
-                                    <option value="9:14">MAL (9:14)</option>
-                                    <option value="512:713">Mangadex (512:713)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-weight: 600;">Width: <span id="thumb-width-value">225</span>px</label>
-                                <input id="thumb-width-slider" type="range" min="60" max="300" value="225" style="width: 100%; cursor: pointer;">
-                            </div>
-                        </div>
-                        <button id="thumb-save-btn" class="btn-primary" style="padding: 0.75rem 1.5rem; border-radius: 8px; border: none; background: var(--accent); color: white; cursor: pointer; font-weight: 600;">💾 Save Settings</button>
-                    </div>
                 </div>
                 
                 <!-- Section 2: User Management -->
@@ -467,7 +479,53 @@
                     </div>
                 </div>
                 
-                <!-- Section 3: Sequence Gaps -->
+                <!-- Section 3: Tag Management -->
+                <div style="margin-bottom: 3rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 class="section-title">🏷️ Tag Management</h3>
+                        <button class="btn-secondary" onclick="loadAdminTags()" style="padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer; font-weight: 600;">🔄 Refresh Tags</button>
+                    </div>
+                    
+                    <!-- Whitelist Add -->
+                    <div class="admin-card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border); margin-bottom: 2rem;">
+                        <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600;">Add Whitelist Tag</h4>
+                        <div style="display: flex; gap: 1rem; align-items: flex-end;">
+                            <div style="flex: 1;">
+                                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">TAG (e.g. Pokemon)</label>
+                                <input type="text" id="admin-whitelist-tag" class="search-input" style="width: 100%;" placeholder="Exact word to find...">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">DISPLAY NAME (Optional)</label>
+                                <input type="text" id="admin-whitelist-display" class="search-input" style="width: 100%;" placeholder="Pokémon">
+                            </div>
+                            <button class="btn-primary" onclick="addWhitelistTag()" style="padding: 0.8rem 1.5rem; height: 42px;">Add to Whitelist</button>
+                        </div>
+                    </div>
+
+                    <!-- Dual Column Management -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                        <!-- Active Tags -->
+                        <div>
+                            <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600; display: flex; justify-content: space-between;">
+                                <span>Active Tags (by frequency)</span>
+                                <input type="text" id="admin-tags-filter" placeholder="Filter..." oninput="filterAdminTags(this.value)" style="font-size: 0.8rem; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary);">
+                            </h4>
+                            <div id="admin-active-tags-list" style="background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border); height: 400px; overflow-y: auto; padding: 0.5rem;">
+                                <!-- Tags will appear here -->
+                            </div>
+                        </div>
+
+                        <!-- Modified Tags -->
+                        <div>
+                            <h4 style="margin-bottom: 1rem; color: var(--text-primary); font-weight: 600;">Modified Tags</h4>
+                            <div id="admin-modified-tags-list" style="background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border); height: 400px; overflow-y: auto; padding: 0.5rem;">
+                                <!-- Modified tags will appear here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Section 4: Sequence Gaps -->
                 <div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                         <h3 class="section-title">🕳️ Sequence Gaps</h3>
@@ -846,6 +904,51 @@
                     Update Password & Continue
                 </button>
             </form>
+        </div>
+    </div>
+
+    <!-- Tag Modification Modal -->
+    <div id="tag-mod-modal" class="modal-overlay" style="display: none; z-index: 10002;">
+        <div class="modal" style="max-width: 450px; min-height: 550px; display: flex; flex-direction: column; position: relative; overflow: hidden;">
+            <!-- Header with Icon Actions (Fixed) -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 2rem; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); z-index: 5;">
+                <button class="icon-btn" onclick="window.closeTagModModal()" title="Cancel" style="background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-tertiary); padding: 0.5rem; display: flex; align-items: center; justify-content: center; border-radius: 50%;">✕</button>
+                <h3 id="tag-mod-title" style="margin: 0; color: var(--accent); font-size: 1.2rem;">Modify Tag</h3>
+                <button class="icon-btn" onclick="window.saveTagModification()" title="Save Modification" style="background: var(--success-low); border: none; font-size: 1.25rem; cursor: pointer; color: var(--success); padding: 0.5rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; width: 40px; height: 40px;">✓</button>
+            </div>
+            
+            <!-- Scrollable Body -->
+            <div style="flex: 1; overflow-y: auto; padding: 2rem;">
+                <div id="tag-mod-info" style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; font-size: 0.9rem;">
+                    <div style="margin-bottom: 0.5rem; color: var(--text-secondary);">ORIGINAL TAG:</div>
+                    <div id="tag-mod-original" style="font-weight: 600; font-family: var(--font-mono); color: var(--text-primary);">tag-name</div>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">ACTION</label>
+                    <select id="tag-mod-action" class="filter-select" style="width: 100%;" onchange="window.updateTagModUI()">
+                        <option value="rename">Rename (Keep separate)</option>
+                        <option value="merge">Merge (Link to another tag)</option>
+                        <option value="blacklist">Blacklist (Hide completely)</option>
+                    </select>
+                </div>
+
+                <div id="tag-mod-rename-group" style="margin-bottom: 1.5rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">NEW DISPLAY NAME</label>
+                    <input type="text" id="tag-mod-display" class="search-input" style="width: 100%;" placeholder="e.g. Pokémon">
+                </div>
+
+                <div id="tag-mod-merge-group" style="margin-bottom: 1.5rem; display: none;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">TARGET TAG (Link to this)</label>
+                    <div style="position: relative;">
+                        <input type="text" id="tag-mod-target" class="search-input" style="width: 100%;" placeholder="Search existing tags..." oninput="window.filterMergeTargets(this.value)">
+                        <div id="tag-mod-target-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 10; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                            <!-- Suggestions will appear here -->
+                        </div>
+                    </div>
+                    <div id="tag-mod-merge-preview" style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-tertiary);"></div>
+                </div>
+            </div>
         </div>
     </div>
 
