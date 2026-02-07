@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 import os
 from database import create_user, authenticate_user, create_session, delete_session
 from dependencies import get_current_user, get_optional_user
+from db.settings import get_setting
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -26,11 +27,23 @@ async def register(user_data: UserCreate) -> Dict[str, Any]:
     if len(user_data.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
     
+    require_approval_setting = get_setting('require_approval')
+    needs_approval = require_approval_setting == '1'
+    
     # Force role to 'reader' regardless of input
     user_id = create_user(user_data.username, user_data.password, user_data.email, role="reader")
     
     if not user_id:
         raise HTTPException(status_code=400, detail="Username already exists")
+    
+    # If approval is required, set approved=0 for this new user
+    if needs_approval:
+        from database import set_setting, get_db_connection
+        conn = get_db_connection()
+        conn.execute('UPDATE users SET approved = 0 WHERE id = ?', (user_id,))
+        conn.commit()
+        conn.close()
+        return {"message": "Account created. Pending admin approval.", "user_id": user_id}
     
     return {"message": "User created successfully", "user_id": user_id}
 
@@ -41,6 +54,9 @@ async def login(user_data: UserLogin) -> JSONResponse:
     
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    if user.get('approved', 1) == 0:
+        raise HTTPException(status_code=403, detail="Account pending approval")
     
     # Create session token
     token = create_session(user['id'], expires_hours=720)  # 30 days
@@ -102,7 +118,8 @@ async def check_auth(current_user: Optional[Dict[str, Any]] = Depends(get_option
                 "username": current_user['username'],
                 "email": current_user['email'],
                 "role": current_user['role'],
-                "must_change_password": bool(current_user.get('must_change_password', 0))
+                "must_change_password": bool(current_user.get('must_change_password', 0)),
+                "approved": bool(current_user.get('approved', 1))
             }
         }
     return {"authenticated": False, "user": None}

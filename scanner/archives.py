@@ -1,7 +1,8 @@
 import os
 import zipfile
 import rarfile
-from typing import Union, Dict, List, Any, Optional
+from typing import Union, Dict, List, Any, Optional, Tuple
+from io import BytesIO
 from PIL import Image
 from config import IMG_EXTENSIONS, get_thumbnail_path
 from .utils import natural_sort_key

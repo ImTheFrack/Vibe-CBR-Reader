@@ -19,11 +19,8 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from PIL import Image, ImageDraw, ImageFont
 from config import COMICS_DIR, IMG_EXTENSIONS, get_thumbnail_path, BASE_CACHE_DIR
-from database import (
-    get_db_connection, get_reading_progress, create_scan_job, 
-    get_latest_scan_job, get_running_scan_job, complete_scan_job
-)
-from scanner import scan_library_task, fast_scan_library_task, rescan_library_task, natural_sort_key, extract_cover_image
+from database import get_db_connection, get_reading_progress
+from scanner import natural_sort_key, extract_cover_image
 from dependencies import get_current_user, get_admin_user
 from logger import logger
 
@@ -201,63 +198,6 @@ async def search(q: str, current_user: Dict[str, Any] = Depends(get_current_user
     """Search for series using FTS5"""
     from db.series import search_series
     return search_series(q)
-
-@router.post("/scan")
-async def scan_library(background_tasks: BackgroundTasks, current_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
-    if not os.path.exists(COMICS_DIR):
-        raise HTTPException(status_code=404, detail="Comics directory not found")
-    
-    # Check if a scan is already running
-    running_job = get_running_scan_job()
-    if running_job:
-        raise HTTPException(status_code=409, detail="A scan is already in progress")
-    
-    # Start fast scan (no job_id needed - it creates its own)
-    background_tasks.add_task(fast_scan_library_task)
-    return {"message": "Fast scan started"}
-
-@router.get("/scan/status")
-async def get_scan_status(current_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, Any]:
-    """Get current scan progress"""
-    latest_job = get_latest_scan_job()
-    
-    if not latest_job:
-        return {
-            "id": None,
-            "status": "idle",
-            "total_comics": 0,
-            "processed_comics": 0,
-            "started_at": None,
-            "completed_at": None,
-            "errors": None
-        }
-    
-    return {
-        "id": latest_job['id'],
-        "status": latest_job['status'],
-        "total_comics": latest_job['total_comics'],
-        "processed_comics": latest_job['processed_comics'],
-        "current_file": latest_job.get('current_file'),
-        "phase": latest_job.get('phase'),
-        "new_comics": latest_job.get('new_comics', 0),
-        "deleted_comics": latest_job.get('deleted_comics', 0),
-        "changed_comics": latest_job.get('changed_comics', 0),
-        "processed_pages": latest_job.get('processed_pages', 0),
-        "page_errors": latest_job.get('page_errors', 0),
-        "processed_thumbnails": latest_job.get('processed_thumbnails', 0),
-        "thumbnail_errors": latest_job.get('thumbnail_errors', 0),
-        "started_at": latest_job['started_at'],
-        "completed_at": latest_job['completed_at'],
-        "errors": latest_job.get('errors')
-    }
-
-@router.post("/rescan")
-async def rescan_library(background_tasks: BackgroundTasks, current_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
-    if not os.path.exists(COMICS_DIR):
-        raise HTTPException(status_code=404, detail="Comics directory not found")
-    
-    background_tasks.add_task(rescan_library_task)
-    return {"message": "Full rescan started in background"}
 
 @router.get("/books")
 async def list_books(

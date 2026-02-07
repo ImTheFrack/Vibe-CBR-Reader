@@ -2,7 +2,8 @@ from .utils import is_cbr_or_cbz, get_file_size_str, natural_sort_key, parse_fil
 from .archives import extract_cover_image, save_thumbnail
 from .tasks import (
     sync_library_task, process_library_task, 
-    full_scan_library_task, rescan_library_task
+    full_scan_library_task, rescan_library_task,
+    thumbnail_rescan_task, metadata_rescan_task
 )
 
 # Compatibility exports

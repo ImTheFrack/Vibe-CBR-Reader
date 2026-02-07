@@ -38,7 +38,7 @@ def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
     
     # Fetch user by username first to support lazy migration
     user = conn.execute(
-        'SELECT * FROM users WHERE username = ?',
+        'SELECT id, username, password_hash, email, role, must_change_password, approved FROM users WHERE username = ?',
         (username,)
     ).fetchone()
     
@@ -159,3 +159,11 @@ def user_exists(username: str) -> bool:
     result = conn.execute('SELECT 1 FROM users WHERE username = ?', (username,)).fetchone()
     conn.close()
     return result is not None
+
+def approve_user(user_id: int) -> bool:
+    """Approve a user account (admin only)"""
+    conn = get_db_connection()
+    conn.execute('UPDATE users SET approved = 1 WHERE id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+    return True

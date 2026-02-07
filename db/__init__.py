@@ -3,7 +3,7 @@ from .comics import delete_comics_by_ids, get_pending_comics, update_comic_metad
 from .users import (
     create_user, authenticate_user, create_session, validate_session, 
     delete_session, get_all_users, delete_user, update_user_role, 
-    update_user_password, user_exists
+    update_user_password, user_exists, approve_user
 )
 from .progress import (
     get_reading_progress, update_reading_progress, clear_reading_progress,

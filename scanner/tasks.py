@@ -13,8 +13,8 @@ from .utils import is_cbr_or_cbz, get_file_size_str, parse_filename_info, parse_
 from .archives import _process_single_comic
 from logger import logger
 
-# Normalize COMICS_DIR
-COMICS_DIR = os.path.normpath(os.path.abspath(COMICS_DIR))
+# Normalize COMICS_DIR for local use
+_comics_dir = os.path.normpath(os.path.abspath(COMICS_DIR))
 
 def sync_library_task(job_id: Optional[int] = None) -> Tuple[int, int]:
     """PHASE 1: Synchronize file system with database."""
@@ -37,9 +37,9 @@ def sync_library_task(job_id: Optional[int] = None) -> Tuple[int, int]:
     
     import re
     
-    for root, dirs, files in os.walk(COMICS_DIR):
+    for root, dirs, files in os.walk(_comics_dir):
         abs_root = os.path.abspath(root)
-        rel_path = os.path.relpath(abs_root, COMICS_DIR)
+        rel_path = os.path.relpath(abs_root, _comics_dir)
         
         series_json_path = os.path.join(root, "series.json")
         current_metadata = None
@@ -48,7 +48,7 @@ def sync_library_task(job_id: Optional[int] = None) -> Tuple[int, int]:
             dir_metadata_cache[abs_root] = current_metadata
         else:
             check_path = abs_root
-            while check_path.startswith(COMICS_DIR):
+            while check_path.startswith(_comics_dir):
                 if check_path in dir_metadata_cache:
                     current_metadata = dir_metadata_cache[check_path]
                     break
@@ -271,7 +271,7 @@ def process_library_task(job_id: Optional[int] = None) -> None:
         conn.close()
     
     if job_id:
-        complete_scan_job(job_id, status='completed', errors=json.dumps(all_scan_errors) if all_scan_errors else None)
+        complete_scan_job(job_id, status='completed', errors=all_scan_errors if all_scan_errors else None)
 
 def full_scan_library_task() -> None:
     from database import get_running_scan_job
@@ -286,7 +286,7 @@ def full_scan_library_task() -> None:
         process_library_task(job_id)
     except Exception as e:
         logger.error(f"Scan failed: {e}", exc_info=True)
-        complete_scan_job(job_id, status='failed', errors=str(e))
+        complete_scan_job(job_id, status='failed', errors=[str(e)])
 
 def rescan_library_task() -> None:
     logger.info("Starting full library rescan...")
@@ -301,3 +301,141 @@ def rescan_library_task() -> None:
     finally:
         conn.close()
     full_scan_library_task()
+
+def thumbnail_rescan_task() -> None:
+    """Regenerate all thumbnails: clear cache, reset flags, reprocess all comics."""
+    from database import get_running_scan_job
+    from config import BASE_CACHE_DIR
+    
+    if get_running_scan_job():
+        logger.warning("Thumbnail rescan aborted: scan already running")
+        return
+    
+    logger.info("Starting thumbnail rescan...")
+    job_id = create_scan_job(scan_type='thumbnails', total_comics=0)
+    
+    try:
+        logger.info("Clearing thumbnail cache...")
+        if os.path.exists(BASE_CACHE_DIR):
+            for root, dirs, files in os.walk(BASE_CACHE_DIR):
+                for file in files:
+                    if file != '_placeholder.webp':
+                        filepath = os.path.join(root, file)
+                        try:
+                            os.remove(filepath)
+                        except Exception as e:
+                            logger.warning(f"Failed to delete {filepath}: {e}")
+        
+        conn = get_db_connection()
+        total = conn.execute("SELECT COUNT(*) FROM comics").fetchone()[0]
+        conn.execute("UPDATE comics SET has_thumbnail = 0, thumbnail_ext = NULL, processed = 0")
+        conn.commit()
+        conn.execute("UPDATE scan_jobs SET total_comics = ? WHERE id = ?", (total, job_id))
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Thumbnail flags reset for {total} comics. Starting regeneration...")
+        
+        process_library_task(job_id)
+    except Exception as e:
+        logger.error(f"Thumbnail rescan failed: {e}", exc_info=True)
+        complete_scan_job(job_id, status='failed', errors=[str(e)])
+
+def metadata_rescan_task() -> None:
+    """Re-parse all series.json files and update series metadata."""
+    from database import get_running_scan_job
+    
+    if get_running_scan_job():
+        logger.warning("Metadata rescan aborted: scan already running")
+        return
+    
+    logger.info("Starting metadata rescan...")
+    job_id = create_scan_job(scan_type='metadata', total_comics=0)
+    
+    try:
+        conn = get_db_connection()
+        series_json_files = []
+        
+        # Walk _comics_dir to find all series.json files
+        for root, dirs, files in os.walk(_comics_dir):
+            if 'series.json' in files:
+                series_json_path = os.path.join(root, 'series.json')
+                series_json_files.append(series_json_path)
+        
+        total_files = len(series_json_files)
+        conn.execute("UPDATE scan_jobs SET total_comics = ? WHERE id = ?", (total_files, job_id))
+        conn.commit()
+        
+        logger.info(f"Found {total_files} series.json files to process")
+        
+        processed = 0
+        for series_json_path in series_json_files:
+            try:
+                metadata = parse_series_json(series_json_path)
+                if not metadata:
+                    continue
+                
+                # Extract series name from metadata or directory
+                series_name = metadata.get('series') or metadata.get('title')
+                if not series_name:
+                    # Use directory name as fallback
+                    series_name = os.path.basename(os.path.dirname(series_json_path))
+                
+                # Update series table with new metadata
+                # Find series by name
+                series_row = conn.execute(
+                    "SELECT id FROM series WHERE name = ?", 
+                    (series_name,)
+                ).fetchone()
+                
+                if series_row:
+                    # Update existing series with fresh metadata
+                    metadata_json = json.dumps(metadata)
+                    conn.execute('''
+                        UPDATE series SET 
+                            synopsis = ?,
+                            authors = ?,
+                            genres = ?,
+                            tags = ?,
+                            status = ?,
+                            alt_titles = ?,
+                            external_links = ?
+                        WHERE id = ?
+                    ''', (
+                        metadata.get('synopsis'),
+                        metadata.get('authors'),
+                        metadata.get('genres'),
+                        metadata.get('tags'),
+                        metadata.get('status'),
+                        metadata.get('alt_titles'),
+                        json.dumps(metadata.get('external_links', {})),
+                        series_row['id']
+                    ))
+                    logger.debug(f"Updated metadata for series: {series_name}")
+                
+                processed += 1
+                if processed % 10 == 0:
+                    update_scan_progress(
+                        job_id, processed,
+                        current_file=os.path.basename(series_json_path),
+                        phase="Updating metadata",
+                        conn=conn
+                    )
+                    conn.commit()
+                    
+            except Exception as e:
+                logger.error(f"Failed to process {series_json_path}: {e}", exc_info=True)
+        
+        # Invalidate tag cache so new metadata is reflected immediately
+        from database import invalidate_tag_cache
+        invalidate_tag_cache()
+        
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Metadata rescan completed: {processed}/{total_files} files processed")
+        complete_scan_job(job_id, status='completed', errors=None)
+        
+    except Exception as e:
+        logger.error(f"Metadata rescan failed: {e}", exc_info=True)
+        complete_scan_job(job_id, status='failed', errors=[str(e)])
