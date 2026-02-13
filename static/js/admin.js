@@ -82,63 +82,62 @@ async function loadUsers() {
         return;
     }
 
-     tableBody.innerHTML = '<tr><td colspan="9" style="padding: 2rem; text-align: center;"><div class="spinner" style="margin: 0 auto;"></div></td></tr>';
+     tableBody.innerHTML = '<tr><td colspan="9" class="admin-table-cell-center"><div class="spinner" style="margin: 0 auto;"></div></td></tr>';
 
      console.log('loadUsers: About to call apiGet...');
      const users = await apiGet('/api/admin/users');
      console.log('loadUsers: apiGet returned:', users);
      
-     if (users.error) {
-         tableBody.innerHTML = `<tr><td colspan="9" style="padding: 2rem; text-align: center; color: var(--danger);">Error loading users: ${users.error}</td></tr>`;
+      if (users.error) {
+          tableBody.innerHTML = `<tr><td colspan="9" class="admin-table-cell-center admin-table-cell-error">Error loading users: ${users.error}</td></tr>`;
+          return;
+      }
+
+      if (users.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="9" class="admin-table-cell-center">No users found.</td></tr>';
          return;
      }
 
-     if (users.length === 0) {
-         tableBody.innerHTML = '<tr><td colspan="9" style="padding: 2rem; text-align: center;">No users found.</td></tr>';
-        return;
-    }
+     tableBody.innerHTML = '';
+     users.forEach(user => {
+         const tr = document.createElement('tr');
+         
+          const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : 'Never';
+          const createdAt = new Date(user.created_at).toLocaleDateString();
+          const comicsRead = (user.comics_completed === 0 && user.comics_started === 0) ? '—' : `${user.comics_completed}/${user.comics_started}`;
+          const timeRead = formatReadingTime(user.total_seconds_read || 0);
 
-    tableBody.innerHTML = '';
-    users.forEach(user => {
-        const tr = document.createElement('tr');
-        tr.style.borderBottom = '1px solid var(--border)';
-        
-         const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : 'Never';
-         const createdAt = new Date(user.created_at).toLocaleDateString();
-         const comicsRead = (user.comics_completed === 0 && user.comics_started === 0) ? '—' : `${user.comics_completed}/${user.comics_started}`;
-         const timeRead = formatReadingTime(user.total_seconds_read || 0);
+          const approvalStatus = user.approved === 0 ? '⏳' : '✅';
+          const approvalButton = user.approved === 0 
+              ? `<button onclick="window.adminApproveUser(${user.id})" class="btn-secondary admin-table-btn-small" style="color: var(--success);" title="Approve User">✓ Approve</button>`
+              : '';
 
-         const approvalStatus = user.approved === 0 ? '⏳' : '✅';
-         const approvalButton = user.approved === 0 
-             ? `<button onclick="window.adminApproveUser(${user.id})" class="btn-secondary" style="padding: 4px 8px; font-size: 0.75rem; margin-right: 4px; color: var(--success);" title="Approve User">✓ Approve</button>`
-             : '';
-
-         tr.innerHTML = `
-             <td style="padding: 1rem; font-weight: 500;">${user.username}</td>
-             <td style="padding: 1rem; color: var(--text-secondary);">${user.email || '-'}</td>
-             <td style="padding: 1rem; text-align: center; font-size: 1.2rem;" title="${user.approved === 0 ? 'Pending Approval' : 'Approved'}">${approvalStatus}</td>
-             <td style="padding: 1rem;">
-                 <select onchange="window.adminUpdateRole(${user.id}, this.value)" class="sort-select" style="padding: 4px 8px; font-size: 0.85rem;">
-                     <option value="reader" ${user.role === 'reader' ? 'selected' : ''}>Reader</option>
-                     <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
-                 </select>
-             </td>
-             <td style="padding: 1rem; color: var(--text-tertiary); font-size: 0.85rem;">${comicsRead}</td>
-             <td style="padding: 1rem; color: var(--text-tertiary); font-size: 0.85rem;">${timeRead}</td>
-             <td style="padding: 1rem; color: var(--text-tertiary); font-size: 0.85rem;">${createdAt}</td>
-             <td style="padding: 1rem; color: var(--text-tertiary); font-size: 0.85rem;">${lastLogin}</td>
-             <td style="padding: 1rem; text-align: right;">
-                 ${approvalButton}
-                 <button onclick="window.adminResetPassword(${user.id}, '${user.username}')" class="btn-secondary" style="padding: 4px 8px; font-size: 0.75rem; margin-right: 4px;" title="Reset Password">
-                     🔑 Reset
-                 </button>
-                 <button onclick="window.adminDeleteUser(${user.id}, '${user.username}')" class="btn-secondary" style="padding: 4px 8px; font-size: 0.75rem; color: var(--danger);" title="Delete User">
-                     🗑️
-                 </button>
-             </td>
-         `;
-        tableBody.appendChild(tr);
-    });
+          tr.innerHTML = `
+              <td class="admin-table-cell admin-table-cell-username">${user.username}</td>
+              <td class="admin-table-cell admin-table-cell-secondary">${user.email || '-'}</td>
+              <td class="admin-table-cell admin-table-cell-center admin-table-cell-approval" title="${user.approved === 0 ? 'Pending Approval' : 'Approved'}">${approvalStatus}</td>
+              <td class="admin-table-cell">
+                  <select onchange="window.adminUpdateRole(${user.id}, this.value)" class="sort-select admin-table-select">
+                      <option value="reader" ${user.role === 'reader' ? 'selected' : ''}>Reader</option>
+                      <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+                  </select>
+              </td>
+              <td class="admin-table-cell admin-table-cell-secondary admin-table-cell-small">${comicsRead}</td>
+              <td class="admin-table-cell admin-table-cell-secondary admin-table-cell-small">${timeRead}</td>
+              <td class="admin-table-cell admin-table-cell-secondary admin-table-cell-small">${createdAt}</td>
+              <td class="admin-table-cell admin-table-cell-secondary admin-table-cell-small">${lastLogin}</td>
+              <td class="admin-table-cell admin-table-cell-actions">
+                  ${approvalButton}
+                  <button onclick="window.adminResetPassword(${user.id}, '${user.username}')" class="btn-secondary admin-table-btn-small" title="Reset Password">
+                      🔑 Reset
+                  </button>
+                  <button onclick="window.adminDeleteUser(${user.id}, '${user.username}')" class="btn-secondary admin-table-btn-small" style="color: var(--danger);" title="Delete User">
+                      🗑️
+                  </button>
+              </td>
+          `;
+         tableBody.appendChild(tr);
+     });
 }
 
 // Exposed to window for onclick handlers
@@ -210,11 +209,11 @@ export async function loadAdminTags() {
     activeList.innerHTML = '<div class="spinner" style="margin: 2rem auto;"></div>';
     modifiedList.innerHTML = '<div class="spinner" style="margin: 2rem auto;"></div>';
 
-    const data = await apiGet('/api/admin/tags');
-    if (data.error) {
-        activeList.innerHTML = `<div style="padding: 1rem; color: var(--danger);">Error: ${data.error}</div>`;
-        return;
-    }
+     const data = await apiGet('/api/admin/tags');
+     if (data.error) {
+         activeList.innerHTML = `<div class="admin-tag-list-error">Error: ${data.error}</div>`;
+         return;
+     }
 
     allAdminTags = data.tags || [];
     allModifications = data.modifications || [];
@@ -281,18 +280,17 @@ window.filterMergeTargets = (val) => {
         (t.norm.includes(lowerVal) || t.display.toLowerCase().includes(lowerVal))
     ).slice(0, 50); // Limit to 50 suggestions
 
-    if (suggestions.length === 0) {
-        resultsContainer.innerHTML = '<div style="padding: 0.5rem; color: var(--text-tertiary); font-size: 0.8rem;">No matching tags</div>';
-    } else {
-        resultsContainer.innerHTML = suggestions.map(tag => `
-            <div onclick="window.selectMergeTarget('${tag.norm}', '${tag.display.replace(/'/g, "\\'")}')" 
-                 style="padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border-light); font-size: 0.85rem;"
-                 class="admin-tag-suggestion">
-                <span style="font-weight: 600;">${tag.display}</span>
-                <span style="color: var(--text-tertiary); font-size: 0.75rem; margin-left: 4px;">(${tag.count})</span>
-            </div>
-        `).join('');
-    }
+     if (suggestions.length === 0) {
+         resultsContainer.innerHTML = '<div class="admin-tag-suggestion-empty">No matching tags</div>';
+     } else {
+         resultsContainer.innerHTML = suggestions.map(tag => `
+             <div onclick="window.selectMergeTarget('${tag.norm}', '${tag.display.replace(/'/g, "\\'")}')" 
+                  class="admin-tag-suggestion">
+                 <span class="admin-tag-suggestion-name">${tag.display}</span>
+                 <span class="admin-tag-suggestion-count">(${tag.count})</span>
+             </div>
+         `).join('');
+     }
     resultsContainer.style.display = 'block';
 };
 
@@ -387,56 +385,55 @@ function renderAdminTags(filter = '') {
         (t.norm.includes(lowerFilter) || t.display.toLowerCase().includes(lowerFilter))
     );
     
-    // Render Active Tags
-    if (filteredTags.length === 0) {
-        activeList.innerHTML = '<div style="padding: 1rem; color: var(--text-tertiary); text-align: center;">No active tags found.</div>';
-    } else {
-        activeList.innerHTML = filteredTags.map((tag, index) => `
-            <div class="admin-tag-item ${index % 2 === 0 ? 'even-row' : 'odd-row'}" 
-                 title="${tag.series_names.slice(0, 15).join(', ')}${tag.count > tag.series_names.length ? '...' : ''}"
-                 style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-light); font-size: 0.9rem; cursor: help;">
-                <div style="display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    <span style="color: var(--text-primary); font-weight: 500;">${tag.display}</span>
-                    <span style="color: var(--text-tertiary); font-size: 0.75rem;">(${tag.count})</span>
-                    ${tag.is_whitelisted ? '<span style="color: var(--success); font-size: 0.7rem; background: var(--success-low); padding: 1px 4px; border-radius: 4px;">Whitelist</span>' : ''}
-                </div>
-                <div style="display: flex; gap: 4px;">
-                    <button onclick="window.openTagModModal('${tag.norm}', '${tag.display.replace(/'/g, "\\'")}')" class="btn-secondary" style="padding: 2px 6px; font-size: 0.7rem;" title="Modify Tag">modify</button>
-                    <button onclick="window.adminBlacklistTag('${tag.norm}')" class="btn-secondary" style="padding: 2px 6px; font-size: 0.7rem; color: var(--danger);" title="Blacklist Tag">blacklist</button>
-                </div>
-            </div>
-        `).join('');
-    }
+     // Render Active Tags
+     if (filteredTags.length === 0) {
+         activeList.innerHTML = '<div class="admin-tag-list-empty">No active tags found.</div>';
+     } else {
+         activeList.innerHTML = filteredTags.map((tag, index) => `
+             <div class="admin-tag-item ${index % 2 === 0 ? 'even-row' : 'odd-row'}" 
+                  title="${tag.series_names.slice(0, 15).join(', ')}${tag.count > tag.series_names.length ? '...' : ''}">
+                 <div class="admin-tag-item-content">
+                     <span class="admin-tag-item-name">${tag.display}</span>
+                     <span class="admin-tag-item-count">(${tag.count})</span>
+                     ${tag.is_whitelisted ? '<span class="admin-tag-item-badge">Whitelist</span>' : ''}
+                 </div>
+                 <div class="admin-tag-item-actions">
+                     <button onclick="window.openTagModModal('${tag.norm}', '${tag.display.replace(/'/g, "\\'")}')" class="btn-secondary admin-tag-btn-small" title="Modify Tag">modify</button>
+                     <button onclick="window.adminBlacklistTag('${tag.norm}')" class="btn-secondary admin-tag-btn-small admin-tag-btn-danger" title="Blacklist Tag">blacklist</button>
+                 </div>
+             </div>
+         `).join('');
+     }
 
-    // Render Modified Tags
-    if (allModifications.length === 0) {
-        modifiedList.innerHTML = '<div style="padding: 1rem; color: var(--text-tertiary); text-align: center;">No tag modifications.</div>';
-    } else {
-        modifiedList.innerHTML = allModifications.map((mod, index) => {
-            let actionText = '';
-            
-            if (mod.action === 'blacklist') {
-                actionText = `----> <span style="color: var(--danger); font-weight: 600;">Blacklist</span>`;
-            } else if (mod.action === 'merge') {
-                actionText = ` --Merge--> <span style="font-weight: 600; color: var(--accent);">${mod.target_norm}</span>`;
-            } else if (mod.action === 'whitelist') {
-                actionText = ` --Renamed--> <span style="font-weight: 600; color: var(--success);">${mod.display_name}</span>`;
-            }
+     // Render Modified Tags
+     if (allModifications.length === 0) {
+         modifiedList.innerHTML = '<div class="admin-tag-list-empty">No tag modifications.</div>';
+     } else {
+         modifiedList.innerHTML = allModifications.map((mod, index) => {
+             let actionText = '';
+             
+             if (mod.action === 'blacklist') {
+                 actionText = `----> <span class="admin-tag-action-blacklist">Blacklist</span>`;
+             } else if (mod.action === 'merge') {
+                 actionText = ` --Merge--> <span class="admin-tag-action-merge">${mod.target_norm}</span>`;
+             } else if (mod.action === 'whitelist') {
+                 actionText = ` --Renamed--> <span class="admin-tag-action-rename">${mod.display_name}</span>`;
+             }
 
-            return `
-                <div class="admin-tag-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.75rem; font-size: 0.85rem; background: ${index % 2 === 0 ? 'var(--bg-tertiary)' : 'transparent'};">
-                    <div style="display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 10px;">
-                        <span style="font-weight: 600; color: var(--text-primary); font-family: var(--font-mono);">${mod.norm}</span>
-                        <span style="color: var(--text-tertiary); margin-left: 4px;">${actionText}</span>
-                    </div>
-                    <div style="display: flex; gap: 4px; flex-shrink: 0;">
-                        <button onclick="window.openTagModModal('${mod.norm}')" class="btn-secondary" style="padding: 1px 6px; font-size: 0.65rem;" title="Edit modification">edit</button>
-                        <button onclick="window.removeTagModification('${mod.norm}')" class="btn-secondary" style="padding: 1px 6px; font-size: 0.65rem; color: var(--success);" title="Restore to default">restore</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
+             return `
+                 <div class="admin-tag-item admin-tag-item-modified ${index % 2 === 0 ? 'even-row' : 'odd-row'}">
+                     <div class="admin-tag-item-content">
+                         <span class="admin-tag-item-norm">${mod.norm}</span>
+                         <span class="admin-tag-item-action">${actionText}</span>
+                     </div>
+                     <div class="admin-tag-item-actions">
+                         <button onclick="window.openTagModModal('${mod.norm}')" class="btn-secondary admin-tag-btn-tiny" title="Edit modification">edit</button>
+                         <button onclick="window.removeTagModification('${mod.norm}')" class="btn-secondary admin-tag-btn-tiny admin-tag-btn-success" title="Restore to default">restore</button>
+                     </div>
+                 </div>
+             `;
+         }).join('');
+     }
 }
 
 window.filterAdminTags = (val) => {
@@ -451,36 +448,36 @@ export async function loadGapsReport() {
 
     const gaps = await apiGet('/api/admin/gaps');
     
-    if (gaps.error) {
-        container.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--danger);">Error loading gaps: ${gaps.error}</div>`;
-        return;
-    }
+     if (gaps.error) {
+         container.innerHTML = `<div class="admin-gaps-error">Error loading gaps: ${gaps.error}</div>`;
+         return;
+     }
 
-    if (gaps.length === 0) {
-        container.innerHTML = '<div class="empty-state" style="padding: 2rem;"><div class="empty-icon">✅</div><div class="empty-title">No gaps detected!</div><p>Your collection appears to be continuous.</p></div>';
-        return;
-    }
+     if (gaps.length === 0) {
+         container.innerHTML = '<div class="empty-state admin-gaps-empty"><div class="empty-icon">✅</div><div class="empty-title">No gaps detected!</div><p>Your collection appears to be continuous.</p></div>';
+         return;
+     }
 
-    let html = `
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
-    `;
+     let html = `
+         <div class="admin-gaps-grid">
+     `;
 
-    gaps.forEach(item => {
-        html += `
-            <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; border-left: 4px solid var(--accent);">
-                <div style="font-weight: 600; margin-bottom: 0.5rem;">${item.series}</div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                    Missing ${item.type}s: <span style="color: var(--accent); font-weight: 600;">${item.count}</span>
-                </div>
-                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                    ${item.gaps.map(g => `<span style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">${g}</span>`).join('')}
-                </div>
-            </div>
-        `;
-    });
+     gaps.forEach(item => {
+         html += `
+             <div class="admin-gaps-card">
+                 <div class="admin-gaps-card-title">${item.series}</div>
+                 <div class="admin-gaps-card-subtitle">
+                     Missing ${item.type}s: <span class="admin-gaps-card-count">${item.count}</span>
+                 </div>
+                 <div class="admin-gaps-card-tags">
+                     ${item.gaps.map(g => `<span class="admin-gaps-tag">${g}</span>`).join('')}
+                 </div>
+             </div>
+         `;
+     });
 
-    html += '</div>';
-    container.innerHTML = html;
+     html += '</div>';
+     container.innerHTML = html;
 }
 
 window.loadGapsReport = loadGapsReport;
