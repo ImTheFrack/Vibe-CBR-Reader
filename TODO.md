@@ -11,8 +11,8 @@ This file tracks the project's outstanding tasks, known bugs, and future roadmap
         - **Performance**: 128x speedup via module-level caching and word-set tokenization.
         - **Task**: [Implemented] Trigger cache invalidation in `database.py` at the end of library scan jobs.
     - [x] **Filters**: [Implemented] Dynamic, context-aware UI filters with propagation for genre, status, and progress.
-- [ ] **Anonymous Star Ratings**: [Implemented] 5-star system for series with average scores and individual user vote memory.
-    - NEEDS TO BE BUGFIXED.
+- [X] **Anonymous Star Ratings**: [Implemented] 5-star system for series with average scores and individual user vote memory.
+    - apiPost added
 - [ ] **Page Annotations**: Save notes, snippets, or highlights on specific pages.
     - BACKEND HAS BEEN STARTED.
 - [ ] **Duplicate Detection**: Identify duplicate files by name, size, and fuzzy title matching.

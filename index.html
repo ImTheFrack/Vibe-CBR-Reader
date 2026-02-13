@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#ff6b35">
     <link rel="manifest" href="/static/manifest.json">
     <title>Vibe CBR Reader</title>
@@ -660,6 +660,9 @@
                 <button class="reader-btn" onclick="history.back()">
                     <span>←</span> Back
                 </button>
+                <button class="reader-btn" onclick="goToSeriesInfo()" title="View Series Info">
+                    <span>📚</span> Series
+                </button>
             </div>
             <div class="reader-title" id="reader-title">Loading...</div>
             <div class="reader-nav reader-toolbar">
@@ -699,6 +702,10 @@
             <div class="auto-advance-progress">
                 <div id="auto-advance-fill" class="auto-advance-fill"></div>
             </div>
+        </div>
+
+        <div class="reader-ui-toggle" id="reader-ui-toggle" onclick="toggleReaderUI()">
+            <span class="reader-ui-toggle-icon" id="reader-ui-toggle-icon">▼</span>
         </div>
 
         <div class="reader-footer">

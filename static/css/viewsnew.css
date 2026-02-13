@@ -95,6 +95,56 @@
     cursor: none;
 }
 
+.reader-ui-toggle {
+    position: absolute;
+    bottom: 154px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    width: 64px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-bottom: none;
+    backdrop-filter: blur(6px);
+    border-radius: 12px 12px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: bottom 0.3s ease, opacity 0.3s ease;
+    opacity: 0.8;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.reader-ui-toggle:hover,
+.reader-ui-toggle:active {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.reader-ui-toggle-icon {
+    font-size: 0.85rem;
+    color: white;
+    line-height: 1;
+    transition: transform 0.3s ease;
+}
+
+.reader-container.ui-hidden .reader-ui-toggle {
+    bottom: 0;
+    border-radius: 12px 12px 0 0;
+    opacity: 0.6;
+}
+
+.reader-container.ui-hidden .reader-ui-toggle:hover,
+.reader-container.ui-hidden .reader-ui-toggle:active {
+    opacity: 1;
+}
+
+.reader-container.ui-hidden .reader-ui-toggle-icon {
+    transform: rotate(180deg);
+}
+
 .reader-container.ui-hidden .reader-header {
     transform: translateY(-100%);
 }

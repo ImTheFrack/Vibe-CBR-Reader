@@ -68,6 +68,12 @@ For a detailed list of planned features, known bugs, and project roadmap, please
 
 ## Recent Changes
 
+### 2026-02-11
+- **Touch UI Improvements (WIP)**: Reader header/footer/scrubber now hides on touch devices when advancing pages via swipe or tap zones. Added pull tab toggle for manual show/hide. Pointer event handlers no longer re-show UI on touch interactions.
+- **E-Reader Light Mode Fix**: Fixed invisible "Scan Database" buttons in e-reader light mode by adding missing `--danger` and `--danger-low` CSS variables across all theme variants.
+- **Rating System Fix**: Fixed "apiPost is not defined" error when rating a series — added missing `apiPost` import in `library.js`.
+- **Series Navigation from Reader**: Added a "Series" button to the reader header bar, allowing direct navigation to the series detail page from within the reader (useful when launched via "Continue Reading").
+
 ### 2026-02-07
 - **Admin Overhaul**: Consolidated all admin functions into a single dashboard.
 - **Tag Management System**: 

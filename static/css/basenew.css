@@ -140,22 +140,7 @@ body {
     to { transform: translateX(0); opacity: 1; }
 }
 
-/* Modal Overlay Base */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(8px);
-    z-index: 2000;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.3s;
-}
+
 
 .modal-overlay.active {
     display: flex;

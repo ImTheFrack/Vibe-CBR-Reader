@@ -9,7 +9,7 @@
  */
 
 import { state } from './state.js';
-import { apiGet, apiDelete, apiPut } from './api.js';
+import { apiGet, apiPost, apiDelete, apiPut } from './api.js';
 import { showToast, updateSelectOptions } from './utils.js';
 import { startReading } from './reader.js';
 import { renderFan, getTitleCoverIds } from './components/index.js';

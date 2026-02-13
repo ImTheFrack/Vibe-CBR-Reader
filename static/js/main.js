@@ -17,7 +17,8 @@ import {
     prevPage, nextPage, jumpToPage, handleSliderInput, toggleBookmark, 
     showBookmarksList, closeBookmarksModal, removeBookmark, 
     toggleSettings, setSetting, navigateReaderComic, closeComicEndModal,
-    toggleFullscreen, toggleAutoAdvance, resetAllFilters
+    toggleFullscreen, toggleAutoAdvance, resetAllFilters, goToSeriesInfo,
+    toggleReaderUI
 } from './reader.js';
 import { 
     showPreferences, closePreferencesModal, setPreference, resetDefaultFilters 
@@ -92,6 +93,8 @@ window.resetAllFilters = resetAllFilters;
 window.readerToggleFullscreen = toggleFullscreen;
 window.navigateReaderComic = navigateReaderComic;
 window.closeComicEndModal = closeComicEndModal;
+window.goToSeriesInfo = goToSeriesInfo;
+window.toggleReaderUI = toggleReaderUI;
 window.showPreferences = showPreferences;
 window.closePreferencesModal = closePreferencesModal;
 window.setPreference = setPreference;

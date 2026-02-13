@@ -25,20 +25,23 @@ function showReaderUI() {
     resetReaderUITimer();
 }
 
-function hideReaderUI() {
+function hideReaderUI(force = false) {
     const reader = document.getElementById('reader');
     if (!reader) return;
     
-    // Don't hide if mouse is in the top/bottom 10%
-    const threshold = window.innerHeight * 0.1;
-    if (lastMouseY < threshold || lastMouseY > window.innerHeight - threshold) {
-        return;
+    if (!force) {
+        const threshold = window.innerHeight * 0.1;
+        if (lastMouseY < threshold || lastMouseY > window.innerHeight - threshold) {
+            return;
+        }
     }
+    
+    // Clear any pending auto-hide timer to prevent it from re-hiding or interfering
+    if (uiTimer) { clearTimeout(uiTimer); uiTimer = null; }
     
     reader.classList.add('ui-hidden');
     isUIVisible = false;
     
-    // Also close settings if UI hides
     const settings = document.getElementById('settings-panel');
     if (settings) settings.classList.remove('open');
 }
@@ -55,19 +58,23 @@ function setupReaderInteraction() {
     // Named pointer move handler for proper cleanup
     pointerMoveHandler = (e) => {
         lastMouseY = e.clientY;
+        
+        // Touch is handled by GestureController and click zones, not pointer events
+        // This prevents touch near edges from re-showing UI after it's been hidden
+        if (e.pointerType === 'touch') {
+            return;
+        }
+        
         const threshold = window.innerHeight * 0.1;
         const isControlZone = e.clientY < threshold || e.clientY > window.innerHeight - threshold;
         
         if (isControlZone) {
-            // Hovering/moving in 10% zone - always show
+            // Hovering/moving in 10% zone - always show for mouse
             showReaderUI();
             if (uiTimer) clearTimeout(uiTimer);
         } else {
-            // Middle zone logic
-            // 1. Ignore if it's a touch move (touch shouldn't show UI in middle)
-            if (e.pointerType === 'touch') return;
-            
-            // 2. Only show if movement is significant (threshold 10px)
+            // Middle zone logic - only for mouse
+            // Only show if movement is significant (threshold 10px)
             const dist = Math.sqrt(Math.pow(e.clientX - lastShowX, 2) + Math.pow(e.clientY - lastShowY, 2));
             if (dist > 10) {
                 if (!isUIVisible) showReaderUI();
@@ -80,13 +87,20 @@ function setupReaderInteraction() {
 
     // Named pointer down handler for proper cleanup
     pointerDownHandler = (e) => {
+        // Save position first for all pointer types
+        lastShowX = e.clientX;
+        lastShowY = e.clientY;
+        
+        // Only show UI on pointerdown for mouse (not touch)
+        // Touch UI control is handled by GestureController and click zones
+        if (e.pointerType === 'touch') {
+            return;
+        }
+        
         const threshold = window.innerHeight * 0.1;
         if (e.clientY < threshold || e.clientY > window.innerHeight - threshold) {
             showReaderUI();
         }
-        // Save position to prevent immediate pointermove trigger
-        lastShowX = e.clientX;
-        lastShowY = e.clientY;
     };
 
     // Use pointermove to handle mouse and touch
@@ -99,9 +113,11 @@ function setupReaderInteraction() {
     gestureController = new GestureController(reader, 
         () => { // Swipe Left
             if (state.settings.direction === 'rtl') prevPage(); else nextPage();
+            hideReaderUI(true);
         },
         () => { // Swipe Right
             if (state.settings.direction === 'rtl') nextPage(); else prevPage();
+            hideReaderUI(true);
         }
     );
 }
@@ -972,6 +988,7 @@ function saveProgress() {
 
 export function closeReader() {
     console.log("[DEBUG] closeReader called");
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     document.getElementById('reader').classList.remove('active');
     document.getElementById('reader').classList.remove('ui-hidden');
     if (uiTimer) clearTimeout(uiTimer);
@@ -992,6 +1009,17 @@ export function closeReader() {
         btn.innerHTML = '▶ Start Auto-Advance';
         btn.classList.remove('active');
     }
+}
+
+export function goToSeriesInfo() {
+    if (!state.currentComic || !state.currentComic.series) return;
+    const seriesName = state.currentComic.series;
+    closeReader();
+    router.navigate('series', { name: seriesName });
+}
+
+export function toggleReaderUI() {
+    if (isUIVisible) hideReaderUI(true); else showReaderUI();
 }
 
 export function toggleSettings() {
@@ -1268,23 +1296,20 @@ function setupClickZones() {
         e.stopPropagation();
         flashZone(newPrevZone);
         if (isRTL) nextPage(); else prevPage();
+        if (isUIVisible) hideReaderUI(true);
     });
     
     newNextZone.addEventListener('click', (e) => {
         e.stopPropagation();
         flashZone(newNextZone);
         if (isRTL) prevPage(); else nextPage();
+        if (isUIVisible) hideReaderUI(true);
     });
 
     if (newMiddleZone) {
         newMiddleZone.addEventListener('click', (e) => {
             e.stopPropagation();
-            // Middle zone: if in fullscreen, exit. If not, toggle UI.
-            if (document.fullscreenElement) {
-                document.exitFullscreen();
-            } else {
-                if (isUIVisible) hideReaderUI(); else showReaderUI();
-            }
+            if (isUIVisible) hideReaderUI(true); else showReaderUI();
         });
     }
 }
