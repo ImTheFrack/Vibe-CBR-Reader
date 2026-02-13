@@ -411,7 +411,7 @@
                     </div>
                     
                     <!-- Scan Status Panel -->
-                    <div id="admin-scan-status" class="admin-card" style="margin-bottom: 2rem; display: none;">
+                    <div id="admin-scan-status" class="admin-card admin-scan-status-hidden">
                         <h4 class="admin-card-title">Scan Status</h4>
                         <div class="admin-progress-bar">
                             <div id="admin-scan-progress-fill" class="admin-progress-fill"></div>
@@ -425,21 +425,21 @@
                         <div class="admin-metrics">
                             <div class="admin-metric-card">
                                 <p class="admin-metric-title">Phase 1: Syncing</p>
-                                <div class="admin-metric-row"><span>New:</span> <span id="admin-metric-new" style="color: var(--success);">0</span></div>
-                                <div class="admin-metric-row"><span>Changed:</span> <span id="admin-metric-changed" style="color: var(--accent);">0</span></div>
-                                <div class="admin-metric-row"><span>Deleted:</span> <span id="admin-metric-deleted" style="color: var(--danger);">0</span></div>
+                                <div class="admin-metric-row"><span>New:</span> <span id="admin-metric-new" class="admin-metric-success">0</span></div>
+                                <div class="admin-metric-row"><span>Changed:</span> <span id="admin-metric-changed" class="admin-metric-accent">0</span></div>
+                                <div class="admin-metric-row"><span>Deleted:</span> <span id="admin-metric-deleted" class="admin-metric-danger">0</span></div>
                             </div>
                             <div class="admin-metric-card">
                                 <p class="admin-metric-title">Phase 2: Processing</p>
-                                <div class="admin-metric-row"><span>Pages:</span> <span><span id="admin-metric-pages">0</span> <small id="admin-metric-page-err" style="color: var(--danger);">(0 err)</small></span></div>
-                                <div class="admin-metric-row"><span>Thumbs:</span> <span><span id="admin-metric-thumbs">0</span> <small id="admin-metric-thumb-err" style="color: var(--danger);">(0 err)</small></span></div>
-                                <div class="admin-metric-row" style="margin-top: 4px;"><span>Storage:</span> <span id="admin-metric-storage" style="font-size: 0.85rem; color: var(--text-tertiary);">-</span></div>
+                                <div class="admin-metric-row"><span>Pages:</span> <span><span id="admin-metric-pages">0</span> <small id="admin-metric-page-err" class="admin-metric-danger">(0 err)</small></span></div>
+                                <div class="admin-metric-row"><span>Thumbs:</span> <span><span id="admin-metric-thumbs">0</span> <small id="admin-metric-thumb-err" class="admin-metric-danger">(0 err)</small></span></div>
+                                <div class="admin-metric-row admin-metric-row-spacing"><span>Storage:</span> <span id="admin-metric-storage" class="admin-metric-storage">-</span></div>
                             </div>
                         </div>
                         <div class="admin-status-box">
                             <p>Status: <span id="admin-scan-status-text">Idle</span></p>
                             <p>Started: <span id="admin-scan-started">-</span></p>
-                            <p id="admin-scan-completed-container" style="display: none;">
+                            <p id="admin-scan-completed-container" class="hidden">
                                 Completed: <span id="admin-scan-completed">-</span>
                             </p>
                         </div>
@@ -450,9 +450,9 @@
                 <div class="admin-section">
                     <div class="admin-section-header">
                         <h3 class="section-title">👥 User Management</h3>
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                            <input id="toggle-require-approval" type="checkbox" style="cursor: pointer;">
-                            <span style="color: var(--text-secondary); font-weight: 600;">Require Approval</span>
+                        <label class="admin-approval-toggle">
+                            <input id="toggle-require-approval" type="checkbox" class="admin-approval-checkbox">
+                            <span class="admin-approval-label">Require Approval</span>
                         </label>
                     </div>
                     
@@ -468,7 +468,7 @@
                                     <th>Time Read</th>
                                     <th>Created</th>
                                     <th>Last Login</th>
-                                    <th style="text-align: right;">Actions</th>
+                                    <th class="text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="admin-users-table-body">
@@ -486,18 +486,18 @@
                     </div>
                     
                     <!-- Whitelist Add -->
-                    <div class="admin-card" style="margin-bottom: 2rem;">
+                    <div class="admin-card admin-whitelist-card">
                         <h4 class="admin-card-title">Add Whitelist Tag</h4>
                         <div class="admin-tag-input-group">
                             <div class="admin-tag-input-wrapper">
                                 <label class="admin-form-label">TAG (e.g. Pokemon)</label>
-                                <input type="text" id="admin-whitelist-tag" class="search-input" style="width: 100%;" placeholder="Exact word to find...">
+                                <input type="text" id="admin-whitelist-tag" class="search-input admin-input-full" placeholder="Exact word to find...">
                             </div>
                             <div class="admin-tag-input-wrapper">
                                 <label class="admin-form-label">DISPLAY NAME (Optional)</label>
-                                <input type="text" id="admin-whitelist-display" class="search-input" style="width: 100%;" placeholder="Pokémon">
+                                <input type="text" id="admin-whitelist-display" class="search-input admin-input-full" placeholder="Pokémon">
                             </div>
-                            <button class="btn-primary" onclick="addWhitelistTag()" style="padding: 0.8rem 1.5rem; height: 42px;">Add to Whitelist</button>
+                            <button class="btn-primary admin-whitelist-btn" onclick="addWhitelistTag()">Add to Whitelist</button>
                         </div>
                     </div>
 
@@ -530,10 +530,10 @@
                         <h3 class="section-title">🕳️ Sequence Gaps</h3>
                         <button class="btn-secondary" onclick="loadGapsReport()">🔄 Refresh Report</button>
                     </div>
-                    <p class="section-subtitle" style="margin-bottom: 1.5rem;">Identify missing chapters or volumes in your collection</p>
+                    <p class="section-subtitle section-subtitle-spacing">Identify missing chapters or volumes in your collection</p>
                     
                     <div id="admin-gaps-container" class="admin-card">
-                        <div class="empty-state" style="padding: 2rem;">
+                        <div class="empty-state">
                             <p>Click "Refresh Report" to scan for gaps.</p>
                         </div>
                     </div>
@@ -579,17 +579,17 @@
                         <form onsubmit="handleProfilePasswordChange(event)" id="profile-password-form">
                             <div class="profile-form-group">
                                 <label class="profile-form-label">CURRENT PASSWORD</label>
-                                <input type="password" id="profile-current-password" class="search-input" style="width: 100%; padding: 0.8rem; border-radius: 8px;" required>
+                                <input type="password" id="profile-current-password" class="search-input profile-input" required>
                             </div>
                             <div class="profile-form-group">
                                 <label class="profile-form-label">NEW PASSWORD</label>
-                                <input type="password" id="profile-new-password" class="search-input" style="width: 100%; padding: 0.8rem; border-radius: 8px;" required minlength="6">
+                                <input type="password" id="profile-new-password" class="search-input profile-input" required minlength="6">
                             </div>
-                            <div class="profile-form-group" style="margin-bottom: 1.5rem;">
+                            <div class="profile-form-group profile-form-group-spacing">
                                 <label class="profile-form-label">CONFIRM NEW PASSWORD</label>
-                                <input type="password" id="profile-confirm-password" class="search-input" style="width: 100%; padding: 0.8rem; border-radius: 8px;" required minlength="6">
+                                <input type="password" id="profile-confirm-password" class="search-input profile-input" required minlength="6">
                             </div>
-                            <button type="submit" class="btn-primary" style="width: 100%; padding: 0.8rem; border-radius: 8px;">
+                            <button type="submit" class="btn-primary profile-submit-btn">
                                 Update Password
                             </button>
                         </form>
@@ -597,44 +597,44 @@
                 </div>
                 
                 <!-- Statistics -->
-                <div class="profile-card" style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border);">
-                    <h3 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 1.2rem;">📊</span> Reading Statistics
+                <div class="profile-card">
+                    <h3 class="profile-stats-title">
+                        <span class="profile-stats-icon">📊</span> Reading Statistics
                     </h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent);" id="stats-comics-started">0</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Comics Started</div>
+                    <div class="profile-stats-grid">
+                        <div class="profile-stat-card">
+                            <div class="profile-stat-value" id="stats-comics-started">0</div>
+                            <div class="profile-stat-label">Comics Started</div>
                         </div>
-                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);" id="stats-comics-completed">0</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Comics Completed</div>
+                        <div class="profile-stat-card">
+                            <div class="profile-stat-value success" id="stats-comics-completed">0</div>
+                            <div class="profile-stat-label">Comics Completed</div>
                         </div>
-                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent);" id="stats-pages-read">0</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Approx. Pages Read</div>
+                        <div class="profile-stat-card">
+                            <div class="profile-stat-value" id="stats-pages-read">0</div>
+                            <div class="profile-stat-label">Approx. Pages Read</div>
                         </div>
-                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent);" id="stats-time-spent">0h</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">Time Spent Reading</div>
+                        <div class="profile-stat-card">
+                            <div class="profile-stat-value" id="stats-time-spent">0h</div>
+                            <div class="profile-stat-label">Time Spent Reading</div>
                         </div>
                     </div>
                     
-                    <div style="margin-top: 1.5rem; background: var(--bg-tertiary); padding: 1.25rem; border-radius: 8px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                            <span style="font-weight: 600;">Completion Rate</span>
-                            <span id="stats-completion-rate" style="color: var(--success); font-weight: 700;">0%</span>
+                    <div class="profile-completion-section">
+                        <div class="profile-completion-header">
+                            <span class="profile-completion-label">Completion Rate</span>
+                            <span id="stats-completion-rate" class="profile-completion-rate">0%</span>
                         </div>
-                        <div style="width: 100%; height: 8px; background: var(--bg-secondary); border-radius: 4px; overflow: hidden;">
-                            <div id="stats-completion-bar" style="width: 0%; height: 100%; background: var(--success); transition: width 0.5s ease-out;"></div>
+                        <div class="profile-completion-bar-bg">
+                            <div id="stats-completion-bar" class="profile-completion-bar"></div>
                         </div>
                     </div>
 
-                    <div style="margin-top: 2rem;">
-                         <h3 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 1.2rem;">⚙️</span> Account Actions
+                    <div class="profile-actions-section">
+                         <h3 class="profile-actions-title">
+                            <span class="profile-stats-icon">⚙️</span> Account Actions
                         </h3>
-                        <button class="btn-secondary" onclick="confirmPurgeHistory()" style="width: 100%; margin-bottom: 1rem; color: var(--danger); border-color: var(--danger-low);">
+                        <button class="btn-secondary btn-danger-outline" onclick="confirmPurgeHistory()">
                             🗑️ Clear Reading History
                         </button>
                     </div>

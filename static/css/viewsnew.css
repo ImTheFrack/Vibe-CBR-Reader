@@ -2427,6 +2427,120 @@
 	margin-top: 2rem;
 }
 
+/* Additional Admin Utility Classes */
+.admin-scan-status-hidden {
+	margin-bottom: 2rem;
+	display: none;
+}
+
+.admin-metric-success {
+	color: var(--success);
+}
+
+.admin-metric-accent {
+	color: var(--accent);
+}
+
+.admin-metric-danger {
+	color: var(--danger);
+}
+
+.admin-metric-row-spacing {
+	margin-top: 4px;
+}
+
+.admin-metric-storage {
+	font-size: 0.85rem;
+	color: var(--text-tertiary);
+}
+
+.admin-approval-toggle {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	cursor: pointer;
+}
+
+.admin-approval-checkbox {
+	cursor: pointer;
+}
+
+.admin-approval-label {
+	color: var(--text-secondary);
+	font-weight: 600;
+}
+
+.admin-table th.text-right {
+	text-align: right;
+}
+
+.admin-whitelist-card {
+	margin-bottom: 2rem;
+}
+
+.admin-input-full {
+	width: 100%;
+}
+
+.admin-whitelist-btn {
+	padding: 0.8rem 1.5rem;
+	height: 42px;
+}
+
+.empty-state {
+	padding: 2rem;
+}
+
+/* Profile Utility Classes */
+.profile-input {
+	width: 100%;
+	padding: 0.8rem;
+	border-radius: 8px;
+}
+
+.profile-form-group-spacing {
+	margin-bottom: 1.5rem;
+}
+
+.profile-submit-btn {
+	width: 100%;
+	padding: 0.8rem;
+	border-radius: 8px;
+}
+
+.profile-stats-title {
+	margin-bottom: 1.5rem;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.profile-stats-icon {
+	font-size: 1.2rem;
+}
+
+.profile-actions-title {
+	margin-bottom: 1.5rem;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.btn-danger-outline {
+	width: 100%;
+	margin-bottom: 1rem;
+	color: var(--danger);
+	border-color: var(--danger-low);
+}
+
+.section-subtitle-spacing {
+	margin-bottom: 1.5rem;
+}
+
+.hidden {
+	display: none;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
 	.carousel-card {
@@ -2437,6 +2551,38 @@
 		width: 44px;
 		height: 44px;
 		font-size: 1rem;
+	}
+	
+	/* Admin Mobile Responsive */
+	.admin-grid-2col {
+		grid-template-columns: 1fr;
+	}
+	
+	.admin-dual-columns {
+		grid-template-columns: 1fr;
+	}
+	
+	.admin-library-stats {
+		align-items: flex-start;
+	}
+	
+	.admin-button-group {
+		flex-direction: column;
+		width: 100%;
+	}
+	
+	.admin-button-group button {
+		width: 100%;
+	}
+	
+	/* Profile Mobile Responsive */
+	.profile-container {
+		grid-template-columns: 1fr;
+		padding: 1rem;
+	}
+	
+	.profile-stats-grid {
+		grid-template-columns: 1fr 1fr;
 	}
 }
 
