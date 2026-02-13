@@ -115,6 +115,14 @@ body {
     gap: 12px;
 }
 
+@media (max-width: 480px) {
+    .toast-container {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+    }
+}
+
 .toast {
     padding: 16px 20px;
     background: var(--bg-secondary);
