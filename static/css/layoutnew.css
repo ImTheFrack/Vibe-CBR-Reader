@@ -801,26 +801,25 @@
     .view-btn {
         min-height: 44px;
         min-width: 44px;
-    }
-    
-    .view-btn span {
-        display: none;
+        padding: 8px 12px;
     }
     
     .control-group-main {
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
         width: 100%;
         gap: 8px;
     }
     
     .view-toggle {
-        width: 100%;
-        justify-content: space-evenly;
+        flex: 0 0 auto;
     }
     
     .sort-select {
-        width: 100%;
+        flex: 1 1 auto;
+        min-width: 120px;
+        max-width: 200px;
         min-height: 44px;
         font-size: 0.875rem;
     }
