@@ -2822,6 +2822,14 @@
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+	/* Admin Tablet Responsive - Prevent Overflow */
+	.admin-dual-columns {
+		grid-template-columns: 1fr;
+		gap: 1.5rem;
+	}
+}
+
 @media (max-width: 768px) {
 	.carousel-card {
 		flex: 0 0 140px;
