@@ -24,6 +24,19 @@
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
     --transition-fast: 150ms ease;
     --transition-normal: 250ms ease;
+    /* Z-Index Hierarchy */
+    --z-content: 1;
+    --z-sticky: 90;
+    --z-header: 1000;
+    --z-hamburger: 1010;
+    --z-search-overlay: 1100;
+    --z-reader: 2000;
+    --z-reader-chrome: 100;
+    --z-selection-bar: 2100;
+    --z-comic-end: 2500;
+    --z-modal: 3000;
+    --z-toast: 3500;
+    --z-forced-modal: 4000;
 }
 
 [data-theme="light"] {
