@@ -117,6 +117,25 @@ export function updateLibraryView() {
 // Make globally available for other modules
 window.updateLibraryView = updateLibraryView;
 
+function buildFolderDescription(titlesWithCount, meta, folderClickHandler) {
+    const sorted = [...titlesWithCount].sort((a, b) => b.count - a.count);
+    const topTitles = sorted.slice(0, 5);
+    const remaining = sorted.length - topTitles.length;
+
+    if (topTitles.length === 0) return meta;
+
+    const links = topTitles.map(t => {
+        const escaped = t.name.replace(/'/g, "\\'").replace(/`/g, "\\`");
+        return `<a class="folder-desc-link" onclick="event.stopPropagation(); window.routerNavigate('library', { title: \`${escaped}\` })">${t.name}</a> <span class="folder-desc-count">(${t.count})</span>`;
+    });
+
+    let html = links.join('<br>');
+    if (remaining > 0) {
+        html += `<br><a class="folder-desc-link folder-desc-more" onclick="event.stopPropagation(); ${folderClickHandler}">+ ${remaining} more</a>`;
+    }
+    return html;
+}
+
 export function renderFolderGrid(folders) {
     const container = document.getElementById('folder-grid');
     if (!container) return;
@@ -133,42 +152,62 @@ export function renderFolderGrid(folders) {
         const folderName = folder.name === '_direct' ? 'Uncategorized' : folder.name;
         const escapedName = folder.name.replace(/'/g, "\\'");
         
+        const allTitlesWithCount = [];
+        function collectTitles(node) {
+            if (node.titles) {
+                Object.values(node.titles).forEach(t => {
+                    allTitlesWithCount.push({ name: t.name, count: t.comics ? t.comics.length : 0 });
+                });
+            }
+            if (node.subcategories) Object.values(node.subcategories).forEach(sub => collectTitles(sub));
+        }
+        collectTitles(folder);
+        const allTitleNames = allTitlesWithCount.map(t => t.name);
+
         if (state.currentLevel === 'root') {
             clickHandler = `window.routerNavigate('library', { category: \`${escapedName}\` })`;
             const subcatCount = Object.keys(folder.subcategories).length;
-            let titleCount = 0;
-            Object.values(folder.subcategories).forEach(sub => { titleCount += Object.keys(sub.titles).length; });
-            meta = `${subcatCount} subcategor${subcatCount === 1 ? 'y' : 'ies'}, ${titleCount} title${titleCount === 1 ? '' : 's'}`;
+            itemCount = allTitleNames.length;
+            meta = `${subcatCount} subcategor${subcatCount === 1 ? 'y' : 'ies'}, ${itemCount} title${itemCount === 1 ? '' : 's'}`;
             typeLabel = 'Category';
-            itemCount = titleCount;
         } else {
             clickHandler = `window.routerNavigate('library', { category: \`${state.currentLocation.category.replace(/'/g, "\\'")}\`, subcategory: \`${escapedName}\` })`;
-            const titleCount = Object.keys(folder.titles).length;
-            meta = `${titleCount} title${titleCount === 1 ? '' : 's'}`;
+            itemCount = Object.keys(folder.titles).length;
+            meta = `${itemCount} title${itemCount === 1 ? '' : 's'}`;
             typeLabel = 'Subcategory';
-            itemCount = titleCount;
         }
         
         const coverIds = getFolderCoverIds(folder);
 
+        const shuffled = [...allTitleNames].sort(() => Math.random() - 0.5);
+        const sampleNames = shuffled.slice(0, 2);
+        const remaining = allTitleNames.length - sampleNames.length;
+        let sampleText = '';
+        if (sampleNames.length > 0) {
+            sampleText = sampleNames.join(', ');
+            if (remaining > 0) sampleText += ` and ${remaining} more`;
+        }
+
         return {
             title: folderName,
             coverIds: coverIds,
-            isFolder: true,
-            metaText: meta,
-            metaItems: [typeLabel, meta],
+            isFolder: false,
+            extraClasses: 'folder-cover-card',
+            badgeText: `${itemCount} titles`,
+            metaText: `<span class="comic-chapter">${typeLabel}</span><span>${sampleText || meta}</span>`,
+            metaItems: [typeLabel, sampleText || meta],
             statValue: itemCount,
-            statLabel: 'Items',
+            statLabel: 'Titles',
             actionText: 'Open',
             subtitle: typeLabel,
-            badges: [{ text: `${itemCount} Items`, class: 'accent' }],
+            badges: [{ text: `${itemCount} Titles`, class: 'accent' }],
             stats: [
                 { value: itemCount, label: 'Titles' },
                 { value: '-', label: 'Size' },
                 { value: '-', label: 'Progress' },
                 { value: 'DIR', label: 'Format' }
             ],
-            description: `Folder containing ${meta}. Click to browse contents.`,
+            description: buildFolderDescription(allTitlesWithCount, meta, clickHandler),
             buttons: [{ text: '▶ Open Folder', class: 'primary', onClick: clickHandler }],
             onClick: clickHandler
         };
@@ -389,9 +428,35 @@ export async function renderTitleDetailView() {
     const avgRating = ratingData.series ? ratingData.series.avg_rating : 0;
     const ratingCount = ratingData.series ? ratingData.series.rating_count : 0;
 
+    // Precise image logic for Banner vs Illumination
+    let illuminationUrl = seriesData.cover_image;
+    let bannerUrl = seriesData.banner_image;
+
+    // Use the catch-all 'illumination' field only if we don't have a cover, 
+    // and only if it's not actually the banner image.
+    if (!illuminationUrl && seriesData.illumination) {
+        if (seriesData.illumination !== bannerUrl) {
+            illuminationUrl = seriesData.illumination;
+        }
+    }
+
+    // Fallback: If still no illumination, use the first comic's cover
+    if (!illuminationUrl && seriesData.comics && seriesData.comics.length > 0) {
+        illuminationUrl = `/api/cover/${seriesData.comics[0].id}`;
+    }
+
+    // If both exist and are the same, prioritize the cover image treatment (illumination)
+    if (illuminationUrl && bannerUrl && illuminationUrl === bannerUrl) {
+        bannerUrl = null;
+    }
+
+    const illuminationHtml = illuminationUrl ? `<img src="${illuminationUrl}" class="series-illumination" alt="Series Cover">` : '';
+    const bannerHtml = bannerUrl ? `<div class="metadata-banner"><img src="${bannerUrl}" alt="Series Banner"></div>` : '';
+    const titleHeaderHtml = `<div class="metadata-series-title">${seriesData.title || seriesData.name}</div>`;
+
     const ratingHtml = `
-        <div class="series-rating-container" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 12px;">
-            <div class="stars-row" style="display: flex; gap: 4px; font-size: 1.25rem;">
+        <div class="series-rating-container" style="margin-bottom: 1rem; display: flex; align-items: center; gap: 12px;">
+            <div class="stars-row" style="display: flex; gap: 4px; font-size: 1.1rem;">
                 ${[1, 2, 3, 4, 5].map(i => `
                     <span class="star ${i <= userRating ? 'active' : ''}" 
                           data-action="rate-series" data-series-id="${seriesData.id}" data-rating="${i}"
@@ -400,29 +465,33 @@ export async function renderTitleDetailView() {
                     </span>
                 `).join('')}
             </div>
-            <div class="rating-stats" style="font-size: 0.85rem; color: var(--text-secondary);">
-                <span style="font-weight: 600; color: var(--text-primary);">${avgRating}</span> (${ratingCount} votes)
+            <div class="rating-stats" style="font-size: 0.8rem; color: var(--text-secondary);">
+                <span style="font-weight: 600; color: var(--text-primary);">${avgRating}</span> (${ratingCount})
             </div>
         </div>
     `;
 
     const metadataSection = `
-        <div class="title-metadata-compact">
-            ${ratingHtml}
-            <div class="meta-header-row">
-                <div class="meta-toggle-btn" onclick="window.toggleMeta('${uniqueId}')">
-                    <span class="meta-expand-icon" id="meta-icon-${uniqueId}">▶</span>
+        <div class="title-metadata-compact" style="padding: 0; overflow: hidden;">
+            ${bannerHtml}
+            <div style="padding: 16px;">
+                ${titleHeaderHtml}
+                ${ratingHtml}
+                <div class="meta-header-row">
+                    <div class="meta-toggle-btn" onclick="window.toggleMeta('${uniqueId}')">
+                        <span class="meta-expand-icon" id="meta-icon-${uniqueId}">▶</span>
+                    </div>
+                    ${allTagsHtml}
                 </div>
-                ${allTagsHtml}
-            </div>
-            <div class="meta-expand-content" id="meta-content-${uniqueId}">
-                ${synonymsHtml}
-                <div class="title-meta-row-compact">
-                    ${statusTag}
-                    ${yearTag}
-                    ${externalLinks}
+                <div class="meta-expand-content" id="meta-content-${uniqueId}">
+                    ${synonymsHtml}
+                    <div class="title-meta-row-compact">
+                        ${statusTag}
+                        ${yearTag}
+                        ${externalLinks}
+                    </div>
+                    ${authorsDisplay}
                 </div>
-                ${authorsDisplay}
             </div>
         </div>
     `;
@@ -457,54 +526,90 @@ export async function renderTitleDetailView() {
     ` : '';
     
     const synopsisHtml = seriesData.synopsis ? 
-        `<div class="series-synopsis-block" onclick="window.toggleSynopsis('${uniqueId}')">
+        `<div class="series-synopsis-block" id="synopsis-block-${uniqueId}" onclick="window.toggleSynopsis('${uniqueId}')">
             <div class="synopsis-toggle-icon" id="toggle-icon-${uniqueId}">▶</div>
-            <p class="series-synopsis-text" id="synopsis-${uniqueId}">${seriesData.synopsis}</p>
+            <div class="series-synopsis-text" id="synopsis-${uniqueId}">
+                ${illuminationHtml}
+                ${seriesData.synopsis}
+            </div>
         </div>` : '';
 
     container.innerHTML = `
         <div class="title-detail-container">
-            <div class="title-detail-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <button class="back-btn-inline" onclick="history.back()" style="margin-bottom: 0;">
-                    <span>←</span> Back
-                </button>
-                <div class="title-detail-view-controls" style="display: flex; gap: 8px;">
-                     <div class="view-toggle">
-                        <button class="view-btn ${state.viewMode === 'grid' ? 'active' : ''}" data-view="grid" onclick="setViewMode('grid')" title="Grid View">
-                            <span>⊞</span>
+            <div class="title-detail-header-wrapper">
+                <div class="title-detail-header-content">
+                    <div class="title-detail-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <button class="back-btn-inline" onclick="history.back()" style="margin-bottom: 0;">
+                            <span>←</span> Back
                         </button>
-                        <button class="view-btn ${state.viewMode === 'list' ? 'active' : ''}" data-view="list" onclick="setViewMode('list')" title="List View">
-                            <span>☰</span>
-                        </button>
-                        <button class="view-btn ${state.viewMode === 'detailed' ? 'active' : ''}" data-view="detailed" onclick="setViewMode('detailed')" title="Detailed View">
-                            <span>▤</span>
-                        </button>
+                        <div class="title-detail-view-controls" style="display: flex; gap: 8px;">
+                             <div class="view-toggle">
+                                <button class="view-btn ${state.viewMode === 'grid' ? 'active' : ''}" data-view="grid" onclick="setViewMode('grid')" title="Grid View">
+                                    <span>⊞</span>
+                                </button>
+                                <button class="view-btn ${state.viewMode === 'list' ? 'active' : ''}" data-view="list" onclick="setViewMode('list')" title="List View">
+                                    <span>☰</span>
+                                </button>
+                                <button class="view-btn ${state.viewMode === 'detailed' ? 'active' : ''}" data-view="detailed" onclick="setViewMode('detailed')" title="Detailed View">
+                                    <span>▤</span>
+                                </button>
+                            </div>
+                            <select class="sort-select" onchange="handleSort(this.value)">
+                                <option value="alpha-asc" ${state.sortBy === 'alpha-asc' ? 'selected' : ''}>A-Z</option>
+                                <option value="alpha-desc" ${state.sortBy === 'alpha-desc' ? 'selected' : ''}>Z-A</option>
+                                <option value="date-added" ${state.sortBy === 'date-added' ? 'selected' : ''}>Date</option>
+                                <option value="page-count" ${state.sortBy === 'page-count' ? 'selected' : ''}>Pages</option>
+                                <option value="file-size" ${state.sortBy === 'file-size' ? 'selected' : ''}>Size</option>
+                                <option value="recent-read" ${state.sortBy === 'recent-read' ? 'selected' : ''}>Recent</option>
+                            </select>
+                        </div>
                     </div>
-                    <select class="sort-select" onchange="handleSort(this.value)">
-                        <option value="alpha-asc" ${state.sortBy === 'alpha-asc' ? 'selected' : ''}>A-Z</option>
-                        <option value="alpha-desc" ${state.sortBy === 'alpha-desc' ? 'selected' : ''}>Z-A</option>
-                        <option value="date-added" ${state.sortBy === 'date-added' ? 'selected' : ''}>Date</option>
-                        <option value="page-count" ${state.sortBy === 'page-count' ? 'selected' : ''}>Pages</option>
-                        <option value="file-size" ${state.sortBy === 'file-size' ? 'selected' : ''}>Size</option>
-                        <option value="recent-read" ${state.sortBy === 'recent-read' ? 'selected' : ''}>Recent</option>
-                    </select>
+                    
+                    <div class="title-details-grid">
+                        <div class="title-details-left">${synopsisHtml}</div>
+                        <div class="title-details-right" id="meta-section-${uniqueId}">${metadataSection}</div>
+                    </div>
+                    
+                    <div class="title-actions-bar" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0; margin-top: 1rem;">
+                        ${quickActions}
+                        ${readFirstBtn}
+                        ${readLatestBtn}
+                    </div>
                 </div>
             </div>
-            <div class="title-details-grid">
-                <div class="title-details-left">${synopsisHtml}</div>
-                <div class="title-details-right">${metadataSection}</div>
-            </div>
-            <div class="title-actions-bar">
-                ${quickActions}
-                ${readFirstBtn}
-                ${readLatestBtn}
-            </div>
+            
             ${fileCountHtml}
             <div class="chapters-section">
                 <div id="chapters-container"></div>
             </div>
         </div>
     `;
+
+    // Logic for conditional retraction
+    if (seriesData.synopsis) {
+        const synopsisEl = document.getElementById(`synopsis-${uniqueId}`);
+        const metaEl = document.getElementById(`meta-section-${uniqueId}`);
+        const blockEl = document.getElementById(`synopsis-block-${uniqueId}`);
+        const toggleIcon = document.getElementById(`toggle-icon-${uniqueId}`);
+        
+        if (synopsisEl && metaEl && blockEl) {
+            // Use a small timeout to ensure layout has happened
+            setTimeout(() => {
+                const synopsisHeight = synopsisEl.scrollHeight;
+                const metaHeight = metaEl.offsetHeight;
+                
+                if (synopsisHeight <= metaHeight) {
+                    // It's shorter or equal, don't retract
+                    synopsisEl.classList.add('expanded');
+                    if (toggleIcon) toggleIcon.style.visibility = 'hidden';
+                    blockEl.style.cursor = 'default';
+                    blockEl.onclick = null;
+                } else {
+                    // It's longer, keep it retracted by default (which is the CSS default)
+                }
+            }, 50);
+        }
+    }
 
     renderChapters(document.getElementById('chapters-container'), seriesData.comics);
     if (window.updateSelectionUI) window.updateSelectionUI();

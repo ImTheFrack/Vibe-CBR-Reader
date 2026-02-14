@@ -368,68 +368,117 @@ export function renderFolderSidebar() {
     const container = document.getElementById('folder-tree');
     const tree = state.folderTree;
     if (!tree || !container) return;
-    
-    // Sidebar title as "Library" link
-    container.innerHTML = `<div class="folder-item root-item"><div class="folder-header ${state.currentLevel === 'root' ? 'active' : ''}" onclick="routerNavigate('library', {})"><span class="folder-icon">📚</span><span class="folder-name">Library</span></div></div><div class="menu-divider"></div>`;
-    
-    let html = '';
-    
-    if (state.currentLevel === 'root' || state.currentLevel === 'category') {
-        html += `<div class="sidebar-section-title">Categories</div>`;
-        const categories = sortItems(Object.values(tree.categories || {}), 'alpha-asc', FOLDER_SORT_ACCESSORS);
-        categories.forEach(category => {
-            const isActive = state.currentLevel === 'category' && state.currentLocation.category === category.name;
-            html += `
-                <div class="folder-item">
-                    <div class="folder-header ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: \`${category.name}\` })">
-                        <span class="folder-icon">📁</span>
-                        <span class="folder-name">${category.name}</span>
-                        <span class="folder-count">${category.count}</span>
-                    </div>
-                </div>`;
-        });
-    } else if (state.currentLevel === 'subcategory') {
-        const cat = tree.categories[state.currentLocation.category];
-        if (cat) {
-            html += `<div class="sidebar-section-title">${cat.name} Subcategories</div>`;
-            const subs = sortItems(Object.values(cat.subcategories), 'alpha-asc', FOLDER_SORT_ACCESSORS);
-            subs.forEach(sub => {
-                const subName = sub.name === '_direct' ? 'Uncategorized' : sub.name;
-                const isActive = state.currentLocation.subcategory === sub.name;
-                html += `
-                    <div class="folder-item">
-                        <div class="folder-header ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: \`${state.currentLocation.category}\`, subcategory: \`${sub.name}\` })">
-                            <span class="folder-icon">📁</span>
-                            <span class="folder-name">${subName}</span>
-                            <span class="folder-count">${sub.count}</span>
-                        </div>
-                    </div>`;
-            });
-        }
-    } else if (state.currentLevel === 'title') {
-        const cat = tree.categories[state.currentLocation.category];
-        if (cat) {
-            const sub = cat.subcategories[state.currentLocation.subcategory];
-            if (sub) {
-                const subName = sub.name === '_direct' ? 'Uncategorized' : sub.name;
-                html += `<div class="sidebar-section-title">${subName} Titles</div>`;
-                const titles = sortItems(Object.values(sub.titles), 'alpha-asc', FOLDER_SORT_ACCESSORS);
-                titles.forEach(title => {
-                    const isActive = state.currentLocation.title === title.name;
-                    html += `
-                        <div class="folder-item">
-                            <div class="folder-header ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: \`${state.currentLocation.category}\`, subcategory: \`${state.currentLocation.subcategory}\`, title: \`${title.name.replace(/'/g, "\\'")}\` })">
-                                <span class="folder-icon">📚</span>
-                                <span class="folder-name">${title.name}</span>
-                                <span class="folder-count">${title.count}</span>
-                            </div>
-                        </div>`;
-                });
-            }
-        }
-    }
-    container.innerHTML += html;
+
+    if (!state._sidebarExpanded) state._sidebarExpanded = new Set();
+    const expanded = state._sidebarExpanded;
+
+    autoExpandToCurrentLocation(expanded);
+
+    const isRootActive = state.currentLevel === 'root';
+    let html = `<div class="folder-item root-item">
+        <div class="folder-header ${isRootActive ? 'active' : ''}" onclick="routerNavigate('library', {})">
+            <span class="folder-icon">📚</span>
+            <span class="folder-name">Library</span>
+        </div>
+    </div><div class="menu-divider"></div>`;
+
+    const categories = sortItems(Object.values(tree.categories || {}), 'alpha-asc', FOLDER_SORT_ACCESSORS);
+    categories.forEach(cat => {
+        html += renderSidebarCategory(cat, expanded);
+    });
+
+    container.innerHTML = html;
 }
+
+function autoExpandToCurrentLocation(expanded) {
+    const loc = state.currentLocation;
+    if (loc.category) expanded.add(`cat:${loc.category}`);
+    if (loc.subcategory) expanded.add(`sub:${loc.category}/${loc.subcategory}`);
+}
+
+function renderSidebarCategory(cat, expanded) {
+    const key = `cat:${cat.name}`;
+    const isExpanded = expanded.has(key);
+    const isActive = state.currentLevel === 'category' && state.currentLocation.category === cat.name;
+    const esc = cat.name.replace(/`/g, '\\`');
+    const subs = sortItems(Object.values(cat.subcategories || {}), 'alpha-asc', FOLDER_SORT_ACCESSORS);
+    const hasChildren = subs.length > 0;
+
+    let html = `<div class="folder-item">
+        <div class="folder-header ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: \`${esc}\` })">
+            ${hasChildren ? `<span class="expand-icon ${isExpanded ? 'expanded' : ''}" onclick="event.stopPropagation(); window.toggleSidebarNode('${key}')">▶</span>` : `<span class="expand-icon"></span>`}
+            <span class="folder-name">${cat.name}</span>
+            <span class="folder-count">${cat.count}</span>
+        </div>`;
+
+    if (hasChildren) {
+        html += `<div class="folder-children ${isExpanded ? 'expanded' : ''}">`;
+        subs.forEach(sub => {
+            html += renderSidebarSubcategory(cat.name, sub, expanded);
+        });
+        html += `</div>`;
+    }
+    html += `</div>`;
+    return html;
+}
+
+function renderSidebarSubcategory(catName, sub, expanded) {
+    const key = `sub:${catName}/${sub.name}`;
+    const isExpanded = expanded.has(key);
+    const isActive = state.currentLevel === 'subcategory'
+        && state.currentLocation.category === catName
+        && state.currentLocation.subcategory === sub.name;
+    const escCat = catName.replace(/`/g, '\\`');
+    const escSub = sub.name.replace(/`/g, '\\`');
+    const subDisplayName = sub.name === '_direct' ? 'Uncategorized' : sub.name;
+    const titles = sortItems(Object.values(sub.titles || {}), 'alpha-asc', FOLDER_SORT_ACCESSORS);
+    const hasChildren = titles.length > 0;
+
+    let html = `<div class="folder-item">
+        <div class="folder-header ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: \`${escCat}\`, subcategory: \`${escSub}\` })">
+            ${hasChildren ? `<span class="expand-icon ${isExpanded ? 'expanded' : ''}" onclick="event.stopPropagation(); window.toggleSidebarNode('${key}')">▶</span>` : `<span class="expand-icon"></span>`}
+            <span class="folder-name">${subDisplayName}</span>
+            <span class="folder-count">${sub.count}</span>
+        </div>`;
+
+    if (hasChildren) {
+        html += `<div class="folder-children ${isExpanded ? 'expanded' : ''}">`;
+        titles.forEach(title => {
+            html += renderSidebarTitle(catName, sub.name, title);
+        });
+        html += `</div>`;
+    }
+    html += `</div>`;
+    return html;
+}
+
+function renderSidebarTitle(catName, subName, title) {
+    const isActive = state.currentLevel === 'title'
+        && state.currentLocation.category === catName
+        && state.currentLocation.subcategory === subName
+        && state.currentLocation.title === title.name;
+    const escCat = catName.replace(/`/g, '\\`');
+    const escSub = subName.replace(/`/g, '\\`');
+    const escTitle = title.name.replace(/`/g, '\\`').replace(/'/g, "\\'");
+
+    return `<div class="folder-item">
+        <div class="folder-header sidebar-title-item ${isActive ? 'active' : ''}" onclick="routerNavigate('library', { category: \`${escCat}\`, subcategory: \`${escSub}\`, title: \`${escTitle}\` })">
+            <span class="expand-icon"></span>
+            <span class="folder-name">${title.name}</span>
+            <span class="folder-count">${title.count}</span>
+        </div>
+    </div>`;
+}
+
+window.toggleSidebarNode = function(key) {
+    if (!state._sidebarExpanded) state._sidebarExpanded = new Set();
+    if (state._sidebarExpanded.has(key)) {
+        state._sidebarExpanded.delete(key);
+    } else {
+        state._sidebarExpanded.add(key);
+    }
+    renderFolderSidebar();
+};
 
 export function updateStatsForCurrentView() {
     let comics = [];

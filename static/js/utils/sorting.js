@@ -129,13 +129,12 @@ export const TITLE_SORT_ACCESSORS = (readingProgress) => ({
 
 export const COMIC_SORT_ACCESSORS = (readingProgress) => ({
     name: (c) => {
-        // If we have volume and chapter, use them for a more reliable sort key
-        if (c.volume !== undefined || c.chapter !== undefined) {
-            const vol = (c.volume || 0).toString().padStart(5, '0');
-            const chap = (c.chapter || 0).toString().padStart(5, '0');
-            return `${vol}-${chap}-${c.title}`;
-        }
-        return c.title;
+        // We want Volumes to always come BEFORE chapters/units/etc.
+        // Prefix '0-' for volumes, '1-' for everything else
+        const typePrefix = (c.volume !== null && c.volume !== undefined && c.volume !== 0) ? '0' : '1';
+        const vol = (c.volume || 0).toString().padStart(5, '0');
+        const chap = (c.chapter || 0).toString().padStart(5, '0');
+        return `${typePrefix}-${vol}-${chap}-${c.title}`;
     },
     date: (c) => c.id,
     pages: (c) => c.pages || 0,

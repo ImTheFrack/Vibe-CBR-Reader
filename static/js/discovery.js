@@ -172,14 +172,17 @@ function createCarouselCard(comic, type) {
  * @returns {string} HTML string for the suggestion card
  */
 function createSuggestionCard(sugg) {
-    const coverUrl = sugg.cover_comic_id ? `/api/cover/${sugg.cover_comic_id}` : '/static/images/default-cover.png';
     const title = sugg.title || sugg.name || 'Unknown Series';
     const tags = sugg.matching_tags ? sugg.matching_tags.slice(0, 3).join(', ') : '';
+    
+    const coverHtml = sugg.cover_comic_id
+        ? `<img src="/api/cover/${sugg.cover_comic_id}" alt="${title}" loading="lazy">`
+        : `<div class="carousel-card-placeholder">📚</div>`;
     
     return `
         <div class="carousel-card suggestion-card" data-series-name="${sugg.name}" title="${sugg.synopsis || ''}">
             <div class="carousel-card-cover">
-                <img src="${coverUrl}" alt="${title}" loading="lazy">
+                ${coverHtml}
                 <div class="carousel-card-badge">${sugg.match_score} matches</div>
             </div>
             <div class="carousel-card-info">

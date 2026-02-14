@@ -167,11 +167,13 @@ async def get_suggestions(
     # Find series with matching tags that user hasn't read
     placeholders = ','.join(['?'] * len(series_ids))
     suggestions = conn.execute(
-        f'''SELECT s.id, s.name, s.title, s.synopsis, s.cover_comic_id,
+        f'''SELECT s.id, s.name, s.title, s.synopsis,
+                   COALESCE(valid_cover.id, MIN(c.id)) as cover_comic_id,
                    s.genres, s.tags, s.demographics, s.status, s.total_chapters,
                    COUNT(c.id) as available_chapters
             FROM series s
-            LEFT JOIN comics c ON c.series_id = s.id
+            LEFT JOIN comics c ON c.series_id = s.id AND c.has_thumbnail = 1
+            LEFT JOIN comics valid_cover ON valid_cover.id = s.cover_comic_id AND valid_cover.has_thumbnail = 1
             WHERE s.id NOT IN ({placeholders})
               AND (s.genres IS NOT NULL OR s.tags IS NOT NULL OR s.demographics IS NOT NULL)
             GROUP BY s.id''',

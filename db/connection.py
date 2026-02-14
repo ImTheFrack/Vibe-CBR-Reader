@@ -4,7 +4,7 @@ from datetime import datetime
 from config import DB_PATH
 
 # Schema version for migration tracking
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 13
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -513,6 +513,21 @@ def init_db() -> None:
             conn.execute("DROP TABLE IF EXISTS tag_whitelist")
         except sqlite3.OperationalError:
             pass # Tables might not exist if fresh install
+
+    if current_version < 12:
+        # Migration 12: Add illumination column to series table
+        try:
+            conn.execute('ALTER TABLE series ADD COLUMN illumination TEXT')
+        except sqlite3.OperationalError:
+            pass
+
+    if current_version < 13:
+        # Migration 13: Add cover_image and banner_image to series table
+        for col in ['cover_image', 'banner_image']:
+            try:
+                conn.execute(f'ALTER TABLE series ADD COLUMN {col} TEXT')
+            except sqlite3.OperationalError:
+                pass
     
     if current_version < SCHEMA_VERSION:
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')

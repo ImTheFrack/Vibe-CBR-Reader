@@ -64,6 +64,9 @@ def create_or_update_series(name: str, metadata: Optional[Dict[str, Any]] = None
                 mal_id = COALESCE(?, mal_id),
                 anilist_id = COALESCE(?, anilist_id),
                 cover_comic_id = COALESCE(?, cover_comic_id),
+                illumination = COALESCE(?, illumination),
+                cover_image = COALESCE(?, cover_image),
+                banner_image = COALESCE(?, banner_image),
                 category = COALESCE(?, category),
                 subcategory = COALESCE(?, subcategory),
                 updated_at = CURRENT_TIMESTAMP
@@ -85,6 +88,9 @@ def create_or_update_series(name: str, metadata: Optional[Dict[str, Any]] = None
             metadata.get('mal_id'),
             metadata.get('anilist_id'),
             cover_comic_id,
+            metadata.get('illumination') or metadata.get('image') or metadata.get('banner_image') or metadata.get('cover_image'),
+            metadata.get('cover_image'),
+            metadata.get('banner_image'),
             category,
             subcategory,
             name
@@ -97,8 +103,8 @@ def create_or_update_series(name: str, metadata: Optional[Dict[str, Any]] = None
                 name, title, title_english, title_japanese, synonyms, authors,
                 synopsis, genres, tags, demographics, status, total_volumes,
                 total_chapters, release_year, mal_id, anilist_id, cover_comic_id,
-                category, subcategory
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                illumination, cover_image, banner_image, category, subcategory
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             name,
             metadata.get('title'),
@@ -117,6 +123,9 @@ def create_or_update_series(name: str, metadata: Optional[Dict[str, Any]] = None
             metadata.get('mal_id'),
             metadata.get('anilist_id'),
             cover_comic_id,
+            metadata.get('illumination') or metadata.get('image') or metadata.get('banner_image') or metadata.get('cover_image'),
+            metadata.get('cover_image'),
+            metadata.get('banner_image'),
             category,
             subcategory
         ))
@@ -771,8 +780,17 @@ def search_series(query: str, limit: int = 50) -> List[Dict[str, Any]]:
     
     conn.close()
     
-    # Process JSON fields
+    lower_q = query.lower()
     for s in results:
+        match_fields = []
+        for field, label in [('name', 'Title'), ('title', 'Title'), ('title_english', 'Title'),
+                             ('synonyms', 'Alt Title'), ('authors', 'Author'), ('synopsis', 'Synopsis')]:
+            val = s.get(field)
+            if val and lower_q in str(val).lower():
+                if label not in match_fields:
+                    match_fields.append(label)
+        s['match_fields'] = match_fields
+
         for field in ['synonyms', 'authors', 'genres', 'tags', 'demographics', 'title_japanese']:
             if s.get(field):
                 try:

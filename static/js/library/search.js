@@ -48,15 +48,13 @@ export function getSearchResults() {
     const titles = [];
     const seenTitles = new Set();
     
-    // 1. First, add any results from deep metadata search (API)
     if (state.searchScope === 'everywhere' && state.apiSearchResults) {
         state.apiSearchResults.forEach(series => {
-            // Find this series in our folder tree
             const titleName = series.name;
             if (!seenTitles.has(titleName)) {
-                // We need to find the title object in our folder tree to have the comics list
                 const titleObj = findTitleInTree(titleName);
                 if (titleObj) {
+                    titleObj._matchFields = series.match_fields || [];
                     titles.push(titleObj);
                     seenTitles.add(titleName);
                 }
@@ -184,14 +182,19 @@ export function renderSearchResults() {
             // Use routerNavigate to ensure hash updates and history works
             const onClick = `window.routerNavigate('library', { title: \`${escapedName}\` })`;
             
+            const matchFields = title._matchFields || [];
+            const matchHtml = (state.searchScope === 'everywhere' && matchFields.length > 0)
+                ? matchFields.map(f => `<span class="search-match-badge">${f}</span>`).join('')
+                : '';
+
             return {
                 title: title.name,
                 coverIds: coverIds,
                 progressPercent: progressStats.percent,
                 badgeText: `${comicCount} ch`,
-                metaText: `<span class="comic-chapter">${comicCount} chapter${comicCount !== 1 ? 's' : ''}</span>`,
+                metaText: `<span class="comic-chapter">${comicCount} chapter${comicCount !== 1 ? 's' : ''}</span>${matchHtml}`,
                 extraClasses: 'title-card',
-                metaItems: [`${comicCount} chapters`, `${progressStats.totalPages} pages`],
+                metaItems: [`${comicCount} chapters`, ...matchFields.map(f => `Match: ${f}`)],
                 actionText: 'View',
                 stats: [{ value: comicCount, label: 'Chapters' }],
                 buttons: [{ text: '▶ View Series', class: 'primary', onClick: onClick }],

@@ -563,6 +563,20 @@
     border-radius: var(--radius-sm);
 }
 
+.sidebar-title-item {
+    padding: 5px 12px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.sidebar-title-item .folder-name {
+    font-style: italic;
+}
+
+.sidebar-title-item .folder-count {
+    font-size: 0.7rem;
+}
+
 .folder-children {
     margin-left: 20px;
     border-left: 1px solid var(--border-color);

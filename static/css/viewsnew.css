@@ -1396,16 +1396,69 @@
     user-select: none;
 }
 
+/* Rich Title Detail View Header/Banner */
+.title-detail-header-wrapper {
+    position: relative;
+    margin-bottom: 24px;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg-secondary);
+    display: flex;
+    flex-direction: column;
+}
+
+.title-detail-header-content {
+    position: relative;
+    padding: 24px;
+}
+
+.metadata-banner {
+    width: 100%;
+    height: auto;
+    max-height: 250px;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.metadata-banner img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.metadata-series-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.5px;
+}
+
+.series-illumination {
+    float: left;
+    max-width: 180px;
+    margin-right: 20px;
+    margin-bottom: 12px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    border: 2px solid var(--border-color);
+}
+
 .series-synopsis-text {
     color: var(--text-secondary);
-    line-height: 1.6;
-    font-size: 0.95rem;
+    line-height: 1.7;
+    font-size: 1rem;
     margin: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
+    display: block;
+    max-height: 120px;
     overflow: hidden;
     position: relative;
+    transition: max-height 0.3s ease;
+}
+
+.series-synopsis-text.expanded {
+    max-height: 2000px;
 }
 
 /* Fade out effect when collapsed */
@@ -1416,13 +1469,8 @@
     left: 0;
     right: 0;
     height: 1.6em; /* Height of one line */
-    background: linear-gradient(to bottom, transparent, var(--bg-primary));
+    background: linear-gradient(to bottom, transparent, var(--bg-secondary));
     pointer-events: none;
-}
-
-.series-synopsis-text.expanded {
-    -webkit-line-clamp: unset;
-    overflow: visible;
 }
 
 .series-synopsis-block:hover .synopsis-toggle-icon {
@@ -2114,6 +2162,17 @@
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
+}
+
+.carousel-card-placeholder {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 2.5rem;
+	background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+	color: var(--text-tertiary);
 }
 
 /* Progress bar for continue reading */

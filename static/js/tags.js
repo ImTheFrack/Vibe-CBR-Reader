@@ -261,16 +261,18 @@ function renderTagsGrid() {
 
     const items = tagsToRender.map(tag => {
         const escapedName = tag.name.replace(/'/g, "\\'");
-        
-        let metaText = `${tag.count} series`;
         const names = tag.series_names || [];
-        
-        if (tag.count === 1 && names.length > 0) {
-            metaText = `1 Series (${names[0]})`;
-        } else if (tag.count === 2 && names.length >= 2) {
-            metaText = `2 Series (${names[0]}, ${names[1]})`;
-        } else if (tag.count >= 3 && names.length >= 2) {
-            metaText = `${names[0]}, ${names[1]} and ${tag.count - 2} more`;
+
+        // Sample text for card meta (matches library folder card style)
+        const shuffled = [...names].sort(() => Math.random() - 0.5);
+        const sampleNames = shuffled.slice(0, 2);
+        const remaining = tag.count - sampleNames.length;
+        let sampleText = '';
+        if (sampleNames.length > 0) {
+            sampleText = sampleNames.join(', ');
+            if (remaining > 0) sampleText += ` and ${remaining} more`;
+        } else {
+            sampleText = `${tag.count} series`;
         }
 
         const coverHtml = (tag.covers && tag.covers.length > 0)
@@ -279,15 +281,32 @@ function renderTagsGrid() {
             
         const onClick = `window.selectTag(\`${escapedName}\`)`;
 
+        // Build detailed description with clickable series names (up to 5)
+        const topNames = names.slice(0, 5);
+        const moreCount = tag.count - topNames.length;
+        let descHtml = '';
+        if (topNames.length > 0) {
+            const links = topNames.map(name => {
+                return `<a class="folder-desc-link" onclick="event.stopPropagation(); window.selectTag(\`${escapedName}\`)">${name}</a>`;
+            });
+            descHtml = links.join('<br>');
+            if (moreCount > 0) {
+                descHtml += `<br><a class="folder-desc-link folder-desc-more" onclick="event.stopPropagation(); ${onClick}">+ ${moreCount} more</a>`;
+            }
+        } else {
+            descHtml = `Filter by tag "${tag.name}". Contains ${tag.count} series.`;
+        }
+
         return {
             title: tag.name,
             coverHtml: coverHtml,
-            isFolder: true,
-            
-            metaText: metaText,
+            isFolder: false,
+            extraClasses: 'folder-cover-card',
+            badgeText: `${tag.count} series`,
+            metaText: `<span class="comic-chapter">Tag</span><span>${sampleText}</span>`,
             
             // For list view compatibility
-            metaItems: [metaText],
+            metaItems: ['Tag', sampleText],
             statValue: tag.count,
             statLabel: 'Series',
             actionText: 'Filter',
@@ -297,7 +316,7 @@ function renderTagsGrid() {
             subtitle: 'Tag',
             badges: [{ text: `${tag.count} Series` }],
             stats: [{ value: tag.count, label: 'Series' }],
-            description: `Filter by tag "${tag.name}". Contains ${metaText}.`,
+            description: descHtml,
             buttons: [{ text: 'Select Tag', class: 'primary', onClick: onClick }],
             
             onClick: onClick
