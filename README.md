@@ -68,6 +68,19 @@ For a detailed list of planned features, known bugs, and project roadmap, please
 
 ## Recent Changes
 
+### 2026-02-13
+- **Unified Series Page**: Unified all "View Series" entry points into the main library Title View, ensuring consistent view modes, sorting, and selection capabilities.
+- **Smart Synopsis & Illumination**: Redesigned series descriptions with an "illumination" (floated cover image) and conditional retraction that only clamps if the text exceeds the height of the metadata column.
+- **Enhanced Metadata Rendering**: Integrated series banners directly into the metadata box and added a fallback to use the first chapter's cover as the series illumination when custom metadata is missing.
+- **Volume-First Natural Sort**: Refined sorting logic to always prioritize Volumes before individual Chapters/Units in natural alphabetical order.
+- **Global View Consistency**: Added selection checkboxes to List and Detailed view modes and synced sort/view controls across all discovery and filtering views.
+- **Discovery Covers Fix**: Fixed suggestions carousel showing broken cover images — SQL now validates `cover_comic_id` references and falls back to earliest comic; frontend renders CSS placeholder for series with no thumbnails.
+- **Comic-Book-Cover Folder Cards**: Library folder cards redesigned from boxy horizontal layout to tall comic-cover-shaped cards with gradient backgrounds, fan hover animation (`scale(1.15)`, cubic-bezier transition), and descriptive sample titles ("Ranma ½, Rurouni Kenshin and 42 more").
+- **Details View Title Links**: Detailed view now shows up to 5 clickable links to the most voluminous titles within each category/subcategory, sorted by comic count, with a "+ XX more" link to navigate deeper.
+- **Search Hit Location Badges**: Search results (scope: "everywhere") now display purple pill badges indicating where the match was found (Title, Synopsis, Author, Alt Title, Tags).
+- **Finder-Style Sidebar Tree**: Replaced flat sidebar with a recursive Mac Finder-style tree — categories, subcategories, and individual titles expand/collapse via arrow icons. Auto-expands to current location. Leaf title nodes styled distinctly (smaller, italic).
+- **Tags View Parity**: Tag cards now use the same comic-cover-shaped card style as library folders, with randomized sample series names, fan cover art, and clickable series links in detailed view.
+
 ### 2026-02-11
 - **Touch UI Improvements (WIP)**: Reader header/footer/scrubber now hides on touch devices when advancing pages via swipe or tap zones. Added pull tab toggle for manual show/hide. Pointer event handlers no longer re-show UI on touch interactions.
 - **E-Reader Light Mode Fix**: Fixed invisible "Scan Database" buttons in e-reader light mode by adding missing `--danger` and `--danger-low` CSS variables across all theme variants.

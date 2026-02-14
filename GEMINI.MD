@@ -30,11 +30,13 @@ This file provides the technical context for AI agents and developers working on
 - **static/js/main.js**: Application entry point and window function exposure.
 - **static/js/library/**: Modular library browsing logic.
     - `navigation.js`: Hierarchical path management and breadcrumbs.
-    - `view-renderers.js`: UI rendering for folders, titles, and comics.
-    - `search.js`: Global and scoped search implementation.
+    - `view-renderers.js`: UI rendering for folders, titles, and comics. Includes `buildFolderDescription()` for clickable title links in detailed view.
+    - `search.js`: Global and scoped search implementation. Returns `match_fields` badges (Title, Synopsis, Author, etc.) for "everywhere" scope.
+    - `selection.js`: Click dispatch and selection mode logic.
 - **static/js/components/**: Unified UI components (card-renderers, fan-renderer).
 - **static/js/reader.js**: Advanced reader engine (Single, Double, Long Strip).
-- **static/js/state.js**: Centralized global state object.
+- **static/js/discovery.js**: Discovery tab (Continue Reading, New Additions, Suggestions carousels).
+- **static/js/state.js**: Centralized global state object. Includes `_sidebarExpanded` Set for Finder tree state.
 - **static/css/**: Modularized CSS files (base, layout, views, components).
 
 ## MANGA LIBARAY Structure[
@@ -278,6 +280,11 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 - `POST /api/series/tags/filter`: Filter by tags
 - `GET /api/series/{series_name}`: Full series detail
 
+### Discovery (`routes/discovery.py`)
+- `GET /api/discovery/continue-reading`: Recently read comics for current user (requires auth)
+- `GET /api/discovery/new-additions`: Recently added comics to library (requires auth)
+- `GET /api/discovery/suggestions`: Tag-based series suggestions with validated cover images (requires auth)
+
 ### Admin (`routes/admin.py`)
 - `GET /api/admin/settings`: Get all admin settings (thumbnails, approval)
 - `PUT /api/admin/settings`: Update settings
@@ -320,6 +327,7 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 
 ## Navigation System
 - **Hierarchical Browsing**: Root → Category → Subcategory → Title.
+- **Finder-Style Sidebar Tree**: Recursive expand/collapse tree (categories → subcategories → titles) with `▶` arrow icons. State tracked in `state._sidebarExpanded` Set with keys like `cat:Action` and `sub:Action/Battle Shonen`. Auto-expands to current location on render.
 - **Dynamic Relativization**: Frontend fetches `COMICS_DIR` from backend to accurately "subtract" the root path and derive categories, regardless of library location.
 - **Contextual Back Button**: Smart navigation that remembers search queries and previous views.
 
@@ -338,10 +346,13 @@ For a detailed list of planned features, known bugs, and code quality goals, ple
 
 ### Library Management
 - Hierarchical navigation (Category > Subcategory > Title)
+- Finder-style sidebar tree with recursive expand/collapse
 - Flatten mode (view all titles in subtree)
 - Three view modes (grid, list, detailed)
+- Comic-book-cover shaped folder cards with fan hover animation and sample title names
+- Detailed view shows clickable links to top 5 most voluminous titles per folder
 - Multiple sort criteria (alpha, date, pages, size, recent)
-- Global search with scoped/everywhere toggle
+- Global search with scoped/everywhere toggle; match-field badges (Title, Synopsis, Author, etc.)
 - Admin user management panel
 
 ### Reading Experience
@@ -370,7 +381,8 @@ For a detailed list of planned features, known bugs, and code quality goals, ple
 ### Tag-Based Filtering
 - Filter series by tags/genres
 - Related tag refinement (shows remaining tags with counts)
-- Series result cards with cover fan display
+- Tag cards use comic-cover-card style with fan covers and sample series names (parity with library folder cards)
+- Detailed view shows clickable series name links per tag
 - **Normalization Logic**: 
     - **Punctuation-Blind**: All non-alphanumeric characters are treated as spaces.
     - **Accent-Insensitive**: Diacritics are removed (Pokémon -> pokemon).
@@ -394,9 +406,12 @@ For a detailed list of planned features, known bugs, and code quality goals, ple
 - Toast notifications
 - Modal dialogs (auth, preferences, bookmarks)
 - Breadcrumb navigation
-- Cover "fan" display on folder and title cards
+- Cover "fan" display on folder and title cards with hover scale animation
+- Discovery tab with Continue Reading, New Additions, and Suggestions carousels
 
 ## Recent Changes
+- **2026-02-13**: BROWSING UX - Finder-style sidebar tree, comic-cover folder cards with fan animation, clickable title links in detailed view, search match-field badges, tags view parity. Fixed discovery suggestion covers.
+- **2026-02-11**: READER UX - Touch UI auto-hide, e-reader light mode fix, rating system fix, series navigation from reader.
 - **2026-02-07**: OVERHAUL - Admin page consolidated (Scan controls, User management, Settings). Added thumbnail config (Pick Best), user approval flow, and reading stats.
 - **2026-02-05**: ENHANCED - Phase 2 completion (User Profile, Stats, FTS5 Deep Search, Background Export, Ratings, Selection Mode).
 - **2026-02-05**: OPTIMIZED - Boot sequence warming (FTS rebuild + Tag cache) and consolidated frontend loading.
