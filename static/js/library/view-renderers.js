@@ -46,7 +46,7 @@ export function updateLibraryView() {
     if (sidebar) sidebar.style.display = shouldHideSidebar ? 'none' : 'block';
     if (libraryLayout) libraryLayout.classList.toggle('sidebar-hidden', shouldHideSidebar);
 
-    const isViewingTitles = state.currentLevel === 'title' || state.flattenMode || state.currentLevel === 'subcategory';
+    const isViewingTitles = state.flattenMode || state.currentLevel === 'subcategory';
     if (filtersContainer) {
         filtersContainer.style.display = isViewingTitles ? 'flex' : 'none';
         if (isViewingTitles && window.updateDynamicFilters) {
@@ -338,21 +338,26 @@ export async function renderTitleDetailView() {
     const titleName = state.currentLocation.title;
     if (!titleName) return;
     
-    container.innerHTML = `
-        <div class="loading">
-            <div class="spinner"></div>
-            <p>Loading series information...</p>
-        </div>
-    `;
+    let seriesData = state.currentSeries;
     
-    const seriesData = await apiGet(`/api/series/${encodeURIComponent(titleName)}`);
-    
-    if (seriesData.error) {
-        renderComicsView();
-        return;
+    // Only fetch if we don't have the data or it's for a different title
+    if (!seriesData || seriesData.name !== titleName) {
+        container.innerHTML = `
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading series information...</p>
+            </div>
+        `;
+        
+        seriesData = await apiGet(`/api/series/${encodeURIComponent(titleName)}`);
+        
+        if (seriesData.error) {
+            renderComicsView();
+            return;
+        }
+        state.currentSeries = seriesData;
     }
     
-    state.currentSeries = seriesData;
     const uniqueId = Math.random().toString(36).substr(2, 9);
     
     const authors = Array.isArray(seriesData.authors) ? seriesData.authors : (seriesData.authors ? [seriesData.authors] : []);
@@ -451,35 +456,6 @@ export async function renderTitleDetailView() {
         <button class="btn-secondary" data-action="start-reading" data-comic-id="${lastComic.id}">Read Latest</button>
     ` : '';
     
-    const comicsHtml = seriesData.comics ? seriesData.comics.map((comic) => {
-        const progress = comic.user_progress;
-        const progressPercent = progress ? Math.round((progress.current_page / comic.pages) * 100) : 0;
-        const isCompleted = progress && progress.completed;
-        const isInProgress = progress && !progress.completed && progress.current_page > 0;
-        const chapterText = comic.chapter ? `Chapter ${comic.chapter}` : (comic.volume ? `Volume ${comic.volume}` : comic.filename);
-        const readStatus = isCompleted ? 'completed' : isInProgress ? 'in-progress' : '';
-        const statusIcon = isCompleted ? '✓' : isInProgress ? '⏸' : '';
-        
-        const prevBtn = comic.prev_comic ? `<button class="chapter-nav prev" data-action="start-reading" data-comic-id="${comic.prev_comic.id}" title="Previous: ${comic.prev_comic.title}">←</button>` : '';
-        const nextBtn = comic.next_comic ? `<button class="chapter-nav next" data-action="start-reading" data-comic-id="${comic.next_comic.id}" title="Next: ${comic.next_comic.title}">→</button>` : '';
-        
-        return `
-            <div class="chapter-card ${readStatus}" data-id="${comic.id}" data-action="card-click">
-                <div class="selection-checkbox" data-action="toggle-selection" data-id="${comic.id}"></div>
-                <div class="chapter-nav-buttons">${prevBtn}${nextBtn}</div>
-                <div class="chapter-cover">
-                    <img src="/api/cover/${comic.id}" alt="${chapterText}" loading="lazy">
-                    ${progress ? `<div class="chapter-progress"><div class="progress-bar" style="width: ${progressPercent}%"></div></div>` : ''}
-                    ${statusIcon ? `<div class="chapter-status">${statusIcon}</div>` : ''}
-                </div>
-                <div class="chapter-info">
-                    <div class="chapter-title">${chapterText}</div>
-                    <div class="chapter-meta">${comic.pages} pages ${progress ? `• ${progressPercent}% read` : ''}</div>
-                </div>
-            </div>
-        `;
-    }).join('') : '';
-    
     const synopsisHtml = seriesData.synopsis ? 
         `<div class="series-synopsis-block" onclick="window.toggleSynopsis('${uniqueId}')">
             <div class="synopsis-toggle-icon" id="toggle-icon-${uniqueId}">▶</div>
@@ -488,9 +464,32 @@ export async function renderTitleDetailView() {
 
     container.innerHTML = `
         <div class="title-detail-container">
-            <button class="back-btn-inline" onclick="history.back()">
-                <span>←</span> Back
-            </button>
+            <div class="title-detail-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <button class="back-btn-inline" onclick="history.back()" style="margin-bottom: 0;">
+                    <span>←</span> Back
+                </button>
+                <div class="title-detail-view-controls" style="display: flex; gap: 8px;">
+                     <div class="view-toggle">
+                        <button class="view-btn ${state.viewMode === 'grid' ? 'active' : ''}" data-view="grid" onclick="setViewMode('grid')" title="Grid View">
+                            <span>⊞</span>
+                        </button>
+                        <button class="view-btn ${state.viewMode === 'list' ? 'active' : ''}" data-view="list" onclick="setViewMode('list')" title="List View">
+                            <span>☰</span>
+                        </button>
+                        <button class="view-btn ${state.viewMode === 'detailed' ? 'active' : ''}" data-view="detailed" onclick="setViewMode('detailed')" title="Detailed View">
+                            <span>▤</span>
+                        </button>
+                    </div>
+                    <select class="sort-select" onchange="handleSort(this.value)">
+                        <option value="alpha-asc" ${state.sortBy === 'alpha-asc' ? 'selected' : ''}>A-Z</option>
+                        <option value="alpha-desc" ${state.sortBy === 'alpha-desc' ? 'selected' : ''}>Z-A</option>
+                        <option value="date-added" ${state.sortBy === 'date-added' ? 'selected' : ''}>Date</option>
+                        <option value="page-count" ${state.sortBy === 'page-count' ? 'selected' : ''}>Pages</option>
+                        <option value="file-size" ${state.sortBy === 'file-size' ? 'selected' : ''}>Size</option>
+                        <option value="recent-read" ${state.sortBy === 'recent-read' ? 'selected' : ''}>Recent</option>
+                    </select>
+                </div>
+            </div>
             <div class="title-details-grid">
                 <div class="title-details-left">${synopsisHtml}</div>
                 <div class="title-details-right">${metadataSection}</div>
@@ -502,10 +501,78 @@ export async function renderTitleDetailView() {
             </div>
             ${fileCountHtml}
             <div class="chapters-section">
-                <div class="chapters-grid">${comicsHtml || '<p>No chapters available.</p>'}</div>
+                <div id="chapters-container"></div>
             </div>
         </div>
     `;
+
+    renderChapters(document.getElementById('chapters-container'), seriesData.comics);
+    if (window.updateSelectionUI) window.updateSelectionUI();
+}
+
+export function renderChapters(container, comics) {
+    if (!container || !comics) return;
+
+    if (comics.length === 0) {
+        container.innerHTML = '<p>No chapters available.</p>';
+        return;
+    }
+
+    // Update global reading progress with the fresh data from the series API
+    comics.forEach(comic => {
+        if (comic.user_progress) {
+            state.readingProgress[comic.id] = {
+                page: comic.user_progress.current_page,
+                completed: comic.user_progress.completed,
+                lastRead: comic.user_progress.last_read ? new Date(comic.user_progress.last_read).getTime() : Date.now()
+            };
+        }
+    });
+
+    const sortedComics = sortItems(comics, state.sortBy, COMIC_SORT_ACCESSORS(state.readingProgress));
+    
+    const items = sortedComics.map(comic => {
+        const progressStats = calculateComicProgress(comic, state.readingProgress);
+        const chapterText = comic.chapter ? `Ch. ${comic.chapter}` : (comic.volume ? `Vol. ${comic.volume}` : 'One-shot');
+        
+        return {
+            id: comic.id,
+            title: comic.title || comic.filename,
+            coverUrl: `/api/cover/${comic.id}`,
+            progressPercent: progressStats.percent,
+            badgeText: chapterText,
+            metaText: `<span>${chapterText}</span><span>•</span><span>${comic.pages} pages</span>`,
+            metaItems: [
+                chapterText,
+                `${comic.pages} pages`,
+                progressStats.isCompleted ? '✓ Completed' : (progressStats.hasProgress ? `${Math.round(progressStats.percent)}%` : 'Unread'),
+                comic.size_str || 'Unknown size'
+            ],
+            statValue: comic.size_str || 'Unknown',
+            statLabel: 'Size',
+            actionText: 'Read',
+            onAction: `startReading('${comic.id}')`,
+            subtitle: comic.series,
+            badges: [
+                { text: chapterText, class: 'accent' },
+                { text: `${comic.pages} pages` },
+                ...(progressStats.isCompleted ? [{ text: '✓ Completed', style: 'background: var(--success);' }] : [])
+            ],
+            stats: [
+                { value: comic.pages, label: 'Pages' },
+                { value: comic.size_str || 'Unknown', label: 'File Size' },
+                { value: `${Math.round(progressStats.percent)}%`, label: 'Progress' },
+                { value: comic.filename.split('.').pop().toUpperCase(), label: 'Format' }
+            ],
+            description: `${comic.series} - ${chapterText}.`,
+            buttons: [
+                { text: progressStats.hasProgress ? '▶ Continue Reading' : '▶ Start Reading', class: 'primary', onClick: `startReading('${comic.id}')` }
+            ],
+            onClick: `startReading('${comic.id}')`
+        };
+    });
+
+    renderItems(container, items, state.viewMode);
 }
 
 export function showView(viewName) {

@@ -477,8 +477,20 @@ export function setViewMode(mode) {
 
 export function handleSort(sortValue) {
     state.sortBy = sortValue;
+    
+    // Sync all sort selects
+    document.querySelectorAll('.sort-select').forEach(select => {
+        select.value = sortValue;
+    });
+
     if (state.isAuthenticated) apiPut('/api/preferences', { default_sort_by: sortValue });
-    updateLibraryView();
+    
+    // Re-render current view
+    if (state.currentView === 'tags' && window.updateTagsView) {
+        window.updateTagsView();
+    } else {
+        updateLibraryView();
+    }
 }
 
 /**
@@ -573,34 +585,6 @@ export async function loadRecentReads() {
             `;
         }).join('');
     }
-}
-
-export function openComic(comicId) {
-    // This is the old "Series Detail View" renderer that was in app.js
-    // For now we keep it here for compatibility, but it could be moved.
-    const comic = state.comics.find(c => c.id === comicId);
-    if (!comic) return;
-    
-    const seriesComics = state.comics.filter(c => c.series === comic.series).sort((a, b) => {
-        if (a.volume !== b.volume) return (a.volume || 0) - (b.volume || 0);
-        return (a.chapter || 0) - (b.chapter || 0);
-    });
-
-    const detailDiv = document.getElementById('series-detail');
-    if (!detailDiv) return;
-    
-    detailDiv.innerHTML = `
-        <div class="series-hero">
-            <div class="series-cover"><img src="/api/cover/${comicId}"></div>
-            <div class="series-info">
-                <h1>${comic.series}</h1>
-                <div class="series-meta"><span class="series-tag status">${comic.category}</span>${comic.volume ? `<span class="series-tag">Vol. ${comic.volume}</span>` : ''}${comic.chapter ? `<span class="series-tag">Ch. ${comic.chapter}</span>` : ''}</div>
-                <div class="series-actions"><button class="btn-primary" onclick="startReading('${comicId}')">Read Now</button><button class="btn-secondary" onclick="history.back()">Back</button></div>
-            </div>
-        </div>
-        <div class="chapter-list">${seriesComics.map(c => `<div class="chapter-item" onclick="startReading('${c.id}')"><div class="chapter-title">${c.chapter ? `Chapter ${c.chapter}` : c.filename}</div></div>`).join('')}</div>
-    `;
-    if (window.showView) window.showView('series');
 }
 
 export function continueReading(comicId) {

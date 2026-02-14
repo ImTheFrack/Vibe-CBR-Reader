@@ -3,7 +3,7 @@ import { renderItems, getTitleCoverIds } from '../components/index.js';
 import { aggregateProgress } from '../utils/progress.js';
 import { apiGet } from '../api.js';
 import { debounce, findTitleInTree } from '../utils.js';
-import { sanitizeForSort } from '../utils/sorting.js';
+import { sortItems, TITLE_SORT_ACCESSORS } from '../utils/sorting.js';
 
 export async function handleSearch(query) {
     state.searchQuery = query.trim();
@@ -174,11 +174,7 @@ export function renderSearchResults() {
             return;
         }
         
-        const sortedResults = [...results].sort((a, b) => {
-            const sA = sanitizeForSort(a.name);
-            const sB = sanitizeForSort(b.name);
-            return sA.localeCompare(sB, undefined, { numeric: true, sensitivity: 'base' });
-        });
+        const sortedResults = sortItems(results, state.sortBy, TITLE_SORT_ACCESSORS(state.readingProgress));
         
         const items = sortedResults.map(title => {
             const comicCount = title.comics.length;

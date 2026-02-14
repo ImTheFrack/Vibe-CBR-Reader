@@ -1150,6 +1150,14 @@
     font-weight: bold;
 }
 
+.list-cover .selection-checkbox {
+    top: 4px;
+    left: 4px;
+    width: 20px;
+    height: 20px;
+    font-size: 0.75rem;
+}
+
 [data-ereader="true"] .selection-checkbox {
     border: 2px solid var(--border-color);
     background: var(--bg-primary);

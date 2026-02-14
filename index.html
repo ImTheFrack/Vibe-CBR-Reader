@@ -269,6 +269,14 @@
                                 <span>▤</span>
                             </button>
                         </div>
+                        <select class="sort-select" id="tag-sort-select" onchange="handleSort(this.value)">
+                            <option value="alpha-asc">A-Z</option>
+                            <option value="alpha-desc">Z-A</option>
+                            <option value="date-added">Date</option>
+                            <option value="page-count">Pages</option>
+                            <option value="file-size">Size</option>
+                            <option value="recent-read">Recent</option>
+                        </select>
                     </div>
 
                     <div class="filters-stack" id="tags-filters" style="display: none;">
@@ -318,13 +326,6 @@
             <!-- Results Grid (Hidden by default) -->
             <div id="tags-results" class="comics-grid" style="display: none;">
                 <!-- Matching series will appear here -->
-            </div>
-        </div>
-
-        <!-- Series Detail View -->
-        <div id="view-series" class="view">
-            <div class="series-detail" id="series-detail">
-                <!-- Populated dynamically -->
             </div>
         </div>
 

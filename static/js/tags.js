@@ -4,7 +4,7 @@ import { state } from './state.js';
 import { renderItems, renderFan, getTitleCoverIds } from './components/index.js';
 import { navigate } from './router.js';
 import { updateSelectOptions, deburr, normalizeTag } from './utils.js';
-import { sanitizeForSort } from './utils/sorting.js';
+import { sortItems, TITLE_SORT_ACCESSORS } from './utils/sorting.js';
 
 // State for tags view
 const tagsState = {
@@ -324,14 +324,10 @@ function renderResults() {
         );
     }
     
-    // Sort results alphabetically by default using natural sort
-    filteredSeries.sort((a, b) => {
-        const nameA = a.title || a.name || '';
-        const nameB = b.title || b.name || '';
-        return sanitizeForSort(nameA).localeCompare(sanitizeForSort(nameB), undefined, { numeric: true, sensitivity: 'base' });
-    });
+    // Sort results using global sort setting
+    const sortedSeries = sortItems(filteredSeries, state.sortBy, TITLE_SORT_ACCESSORS(state.readingProgress));
     
-    if (filteredSeries.length === 0) {
+    if (sortedSeries.length === 0) {
         container.innerHTML = `
              <div class=\"empty-state\">
                 <div class=\"empty-icon\">🔍</div>
@@ -341,7 +337,7 @@ function renderResults() {
         return;
     }
 
-     const items = filteredSeries.map(series => {
+     const items = sortedSeries.map(series => {
          const seriesName = series.name || 'Unknown Series';
          const seriesTitle = series.title || seriesName;
          

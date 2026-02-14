@@ -8,7 +8,7 @@ import {
 import { 
      loadLibrary, navigateToRoot, navigateToFolder, 
      navigateUp, toggleFlattenMode, setViewMode, handleSort, 
-     handleSearch, toggleSearchScope, showView, openComic, 
+     handleSearch, toggleSearchScope, showView, 
      toggleMobileSidebar, navigateTitleComic, renderTitleFan, toggleMeta, continueReading,
      handleLibraryClick
  } from './library.js';
@@ -71,7 +71,6 @@ window.showView = (view) => {
     }
 };
 window.routerNavigate = router.navigate;
-window.openComic = openComic;
 window.continueReading = continueReading;
 window.toggleMobileSidebar = toggleMobileSidebar;
 window.navigateTitleComic = navigateTitleComic;
@@ -159,11 +158,8 @@ function onHashChange() {
         
         case 'series':
             if (route.params.name) {
-                // Find first comic in the series
-                const seriesComic = state.comics.find(c => c.series === route.params.name);
-                if (seriesComic) {
-                    openComic(seriesComic.id);
-                }
+                showView('library');
+                navigateToFolder('title', route.params.name);
             }
             break;
         

@@ -60,7 +60,10 @@ const CARD_SCHEMAS = {
 
             return `
                 <div class="list-item" data-action="card-click" data-id="${itemId}">
-                    <div class="list-cover" style="display:flex;align-items:center;justify-content:center;">${coverHtml}</div>
+                    <div class="list-cover" style="display:flex;align-items:center;justify-content:center;">
+                        ${!data.isFolder ? `<div class="selection-checkbox" data-action="toggle-selection" data-id="${itemId}"></div>` : ''}
+                        ${coverHtml}
+                    </div>
                     <div class="list-info">
                         <div class="list-title">${data.title}</div>
                         <div class="list-meta">
@@ -97,7 +100,10 @@ const CARD_SCHEMAS = {
 
             return `
                 <div class="detailed-card" data-action="card-click" data-id="${itemId}">
-                    <div class="detailed-cover" style="display:flex;align-items:center;justify-content:center;">${coverHtml}</div>
+                    <div class="detailed-cover" style="display:flex;align-items:center;justify-content:center;">
+                        ${!data.isFolder ? `<div class="selection-checkbox" data-action="toggle-selection" data-id="${itemId}"></div>` : ''}
+                        ${coverHtml}
+                    </div>
                     <div class="detailed-content">
                         <div class="detailed-header">
                             <div class="detailed-title-group"><div class="detailed-title">${data.title}</div><div class="detailed-subtitle">${data.subtitle || ''}</div></div>

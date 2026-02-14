@@ -128,7 +128,15 @@ export const TITLE_SORT_ACCESSORS = (readingProgress) => ({
 });
 
 export const COMIC_SORT_ACCESSORS = (readingProgress) => ({
-    name: (c) => c.title,
+    name: (c) => {
+        // If we have volume and chapter, use them for a more reliable sort key
+        if (c.volume !== undefined || c.chapter !== undefined) {
+            const vol = (c.volume || 0).toString().padStart(5, '0');
+            const chap = (c.chapter || 0).toString().padStart(5, '0');
+            return `${vol}-${chap}-${c.title}`;
+        }
+        return c.title;
+    },
     date: (c) => c.id,
     pages: (c) => c.pages || 0,
     size: (c) => c.size_str,
