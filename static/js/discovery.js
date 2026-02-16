@@ -8,24 +8,27 @@ import { showToast } from './utils.js';
 
 /**
  * Loads discovery data from API endpoints concurrently
- * Fetches new additions and suggestions, then renders them
+ * Fetches new additions, suggestions, and user lists, then renders them
  */
 export async function loadDiscoveryData() {
     try {
-        // Show loading state
         const newGrid = document.getElementById('discovery-new-grid');
         const suggestionsGrid = document.getElementById('discovery-suggestions-grid');
+        const myListsGrid = document.getElementById('discovery-my-lists-grid');
+        const publicListsGrid = document.getElementById('discovery-public-lists-grid');
         
         if (newGrid) newGrid.innerHTML = '<div class="loading-state">Loading...</div>';
         if (suggestionsGrid) suggestionsGrid.innerHTML = '<div class="loading-state">Loading...</div>';
+        if (myListsGrid) myListsGrid.innerHTML = '<div class="loading-state">Loading...</div>';
+        if (publicListsGrid) publicListsGrid.innerHTML = '<div class="loading-state">Loading...</div>';
         
-        // Fetch new additions and suggestions endpoints concurrently
-        const [newData, suggestionsData] = await Promise.all([
+        const [newData, suggestionsData, myListsData, publicListsData] = await Promise.all([
             apiGet('/api/discovery/new-additions'),
-            apiGet('/api/discovery/suggestions')
+            apiGet('/api/discovery/suggestions'),
+            apiGet('/api/discovery/my-lists'),
+            apiGet('/api/discovery/public-lists')
         ]);
         
-        // Handle new additions
         if (newData.error) {
             console.error('Failed to load new additions:', newData.error);
             if (newGrid) newGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-title">Failed to load new additions</div></div>';
@@ -34,7 +37,6 @@ export async function loadDiscoveryData() {
             renderNewAdditions(comics);
         }
         
-        // Handle suggestions
         if (suggestionsData.error) {
             console.error('Failed to load suggestions:', suggestionsData.error);
             const suggGrid = document.getElementById('discovery-suggestions-grid');
@@ -42,6 +44,22 @@ export async function loadDiscoveryData() {
         } else {
             const suggestions = Array.isArray(suggestionsData) ? suggestionsData : suggestionsData.items || [];
             renderSuggestions(suggestions);
+        }
+        
+        if (myListsData.error) {
+            console.error('Failed to load my lists:', myListsData.error);
+            if (myListsGrid) myListsGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Failed to load lists</div></div>';
+        } else {
+            const myLists = myListsData.items || [];
+            renderMyListsCarousel(myLists);
+        }
+        
+        if (publicListsData.error) {
+            console.error('Failed to load public lists:', publicListsData.error);
+            if (publicListsGrid) publicListsGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">🌐</div><div class="empty-title">Failed to load public lists</div></div>';
+        } else {
+            const publicLists = publicListsData.items || [];
+            renderPublicListsCarousel(publicLists);
         }
     } catch (error) {
         console.error('Error loading discovery data:', error);
@@ -194,14 +212,144 @@ function createSuggestionCard(sugg) {
 }
 
 /**
+ * Renders user's lists carousel
+ * @param {Array} lists - Array of list objects
+ */
+export function renderMyListsCarousel(lists) {
+    const grid = document.getElementById('discovery-my-lists-grid');
+    const section = document.getElementById('discovery-my-lists-section');
+    if (!grid) return;
+    
+    if (section) {
+        section.style.display = 'block';
+        
+        const header = section.querySelector('.discovery-section-header');
+        if (header && !header.querySelector('.discovery-actions')) {
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'discovery-actions';
+            actionsDiv.style.display = 'flex';
+            actionsDiv.style.gap = '8px';
+            actionsDiv.style.marginLeft = 'auto';
+            actionsDiv.style.marginRight = '16px';
+            
+            actionsDiv.innerHTML = `
+                <button class="btn-secondary" onclick="showCreateListModal()" style="padding: 6px 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+                    <span>➕</span> Create
+                </button>
+                <button class="btn-secondary" onclick="routerNavigate('lists', {})" style="padding: 6px 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+                    <span>⚙️</span> Manage
+                </button>
+            `;
+            
+            const nav = header.querySelector('.carousel-nav');
+            if (nav) {
+                header.insertBefore(actionsDiv, nav);
+            } else {
+                header.appendChild(actionsDiv);
+            }
+        }
+    }
+    
+    if (!lists || lists.length === 0) {
+        grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No lists yet</div><div class="empty-subtitle">Create a list to organize your collection</div></div>';
+        return;
+    }
+    
+    grid.innerHTML = lists.map(list => createListCard(list, 'my')).join('');
+    
+    grid.querySelectorAll('.carousel-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const listId = card.dataset.listId;
+            if (listId) {
+                openListDetail(listId);
+            }
+        });
+    });
+}
+
+/**
+ * Renders public lists carousel
+ * @param {Array} lists - Array of public list objects
+ */
+export function renderPublicListsCarousel(lists) {
+    const grid = document.getElementById('discovery-public-lists-grid');
+    const section = document.getElementById('discovery-public-lists-section');
+    if (!grid) return;
+    
+    if (!lists || lists.length === 0) {
+        if (section) section.style.display = 'none';
+        return;
+    }
+    
+    if (section) section.style.display = 'block';
+    grid.innerHTML = lists.map(list => createListCard(list, 'public')).join('');
+    
+    grid.querySelectorAll('.carousel-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const listId = card.dataset.listId;
+            if (listId) {
+                openListDetail(listId);
+            }
+        });
+    });
+}
+
+/**
+ * Creates a list card HTML element
+ * @param {Object} list - List data object
+ * @param {string} type - Card type: 'my' or 'public'
+ * @returns {string} HTML string for the card
+ */
+function createListCard(list, type) {
+    const coverHtml = list.cover_url
+        ? `<img src="${list.cover_url}" alt="${list.name}" loading="lazy">`
+        : `<div class="carousel-card-placeholder">📋</div>`;
+    
+    const subtitle = type === 'public' && list.owner_username
+        ? `by ${list.owner_username} • ${list.item_count} items`
+        : `${list.item_count} item${list.item_count !== 1 ? 's' : ''}`;
+    
+    const publicBadge = type === 'my' && list.is_public
+        ? '<div class="carousel-card-badge">Public</div>'
+        : '';
+    
+    return `
+        <div class="carousel-card list-card" data-list-id="${list.id}" title="${list.description || ''}">
+            <div class="carousel-card-cover">
+                ${coverHtml}
+                ${publicBadge}
+            </div>
+            <div class="carousel-card-info">
+                <div class="carousel-card-title">${list.name}</div>
+                <div class="carousel-card-series">${subtitle}</div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Opens a list detail view
+ * @param {string} listId - The list ID to navigate to
+ */
+function openListDetail(listId) {
+    if (window.routerNavigate) {
+        window.routerNavigate('list-detail', { listId: listId });
+    } else {
+        console.error('No navigation method available');
+    }
+}
+
+/**
  * Scrolls a carousel container left or right
- * @param {string} type - Carousel type: 'new' or 'suggestions'
+ * @param {string} type - Carousel type: 'new', 'suggestions', 'my-lists', or 'public-lists'
  * @param {number} direction - Scroll direction: -1 (left) or 1 (right)
  */
 export function scrollCarousel(type, direction) {
      const containerMap = {
          'new': 'discovery-new-grid',
-         'suggestions': 'discovery-suggestions-grid'
+         'suggestions': 'discovery-suggestions-grid',
+         'my-lists': 'discovery-my-lists-grid',
+         'public-lists': 'discovery-public-lists-grid'
      };
      const containerId = containerMap[type];
      if (!containerId) return;
