@@ -3,7 +3,7 @@
  * Handles loading and rendering of user lists and list details.
  */
 
-import { apiGet, apiPost, apiDelete } from './api.js';
+import { apiGet, apiPost, apiDelete, apiPut } from './api.js';
 import { state } from './state.js';
 import { showToast } from './utils.js';
 
@@ -282,6 +282,8 @@ export async function loadListDetail(listId) {
       subtitleEl.textContent = `${itemCount} series • ${privacyText}`;
     }
 
+    state.currentListData = data;
+
     renderListDetail(data);
   } catch (error) {
     console.error('Error loading list detail:', error);
@@ -421,6 +423,273 @@ export async function handleDeleteList(listId) {
   }
 }
 
+/**
+ * Shows the edit list modal
+ */
+export function showEditListModal() {
+  const list = state.currentListData;
+  if (!list) return;
+
+  const existingModal = document.getElementById('edit-list-modal');
+  if (existingModal) existingModal.remove();
+
+  const modalHtml = `
+    <div id="edit-list-modal" class="modal-overlay active" onclick="closeEditListModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h3>✏️ Edit List</h3>
+          <button class="modal-close" onclick="closeEditListModal()">&times;</button>
+        </div>
+        <form id="edit-list-form" onsubmit="handleEditListSubmit(event)">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">List Name *</label>
+              <input type="text" id="edit-list-name" class="form-input" required
+                value="${list.name || ''}" maxlength="100">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <textarea id="edit-list-description" class="form-input" rows="3">${list.description || ''}</textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-checkbox">
+                <input type="checkbox" id="edit-list-public" ${list.is_public ? 'checked' : ''}>
+                <span>Make this list public</span>
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closeEditListModal()">Cancel</button>
+            <button type="submit" class="btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  
+  // Focus name input
+  setTimeout(() => {
+    const nameInput = document.getElementById('edit-list-name');
+    if (nameInput) nameInput.focus();
+  }, 100);
+}
+
+/**
+ * Closes the edit list modal
+ * @param {Event} event - Click event (optional)
+ */
+export function closeEditListModal(event) {
+  if (event && event.target !== event.currentTarget) return;
+  const modal = document.getElementById('edit-list-modal');
+  if (modal) modal.remove();
+}
+
+/**
+ * Handles edit list form submission
+ * @param {Event} event - Form submit event
+ */
+export async function handleEditListSubmit(event) {
+  event.preventDefault();
+  const listId = state.currentListData?.id;
+  if (!listId) return;
+
+  const name = document.getElementById('edit-list-name').value.trim();
+  const description = document.getElementById('edit-list-description').value.trim();
+  const isPublic = document.getElementById('edit-list-public').checked;
+
+  if (!name) {
+    showToast('List name is required', 'error');
+    return;
+  }
+
+  try {
+    const result = await apiPut(`/api/lists/${listId}`, {
+      name,
+      description,
+      is_public: isPublic
+    });
+
+    if (result.error) {
+      showToast(`Failed to update list: ${result.error}`, 'error');
+      return;
+    }
+
+    showToast('List updated successfully');
+    closeEditListModal();
+    await loadListDetail(listId);
+  } catch (error) {
+    console.error('Error updating list:', error);
+    showToast('Failed to update list', 'error');
+  }
+}
+
+/**
+ * Shows AI recommendations modal for the current list
+ */
+export async function showListAIRecommendations() {
+  const list = state.currentListData;
+  if (!list) return;
+  
+  if (!list.items || list.items.length === 0) {
+    showToast('Add some items to the list first to get recommendations', 'info');
+    return;
+  }
+
+  const existingModal = document.getElementById('list-ai-modal');
+  if (existingModal) existingModal.remove();
+
+  const modalHtml = `
+    <div id="list-ai-modal" class="modal-overlay active" onclick="closeListAIRecommendations(event)">
+      <div class="modal modal-large" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h3>🤖 AI Recommendations</h3>
+          <button class="modal-close" onclick="closeListAIRecommendations()">&times;</button>
+        </div>
+        <div class="modal-body" id="list-ai-content">
+          <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Analyzing your list and generating recommendations...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  try {
+    const seriesIds = list.items.map(item => item.series_id);
+    
+    const result = await apiPost('/api/ai/recommendations', {
+      series_ids: seriesIds,
+      attributes: {}
+    });
+
+    if (result.error) {
+      const content = document.getElementById('list-ai-content');
+      if (content) {
+        content.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">⚠️</div>
+            <div class="empty-title">Failed to get recommendations</div>
+            <div class="empty-subtitle">${result.error}</div>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    renderListRecommendations(result.recommendations);
+
+  } catch (error) {
+    console.error('Error getting recommendations:', error);
+    const content = document.getElementById('list-ai-content');
+    if (content) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">⚠️</div>
+          <div class="empty-title">Error</div>
+          <div class="empty-subtitle">Failed to generate recommendations</div>
+        </div>
+      `;
+    }
+  }
+}
+
+/**
+ * Renders recommendations in the modal
+ * @param {Array} recommendations - List of recommendation objects
+ */
+function renderListRecommendations(recommendations) {
+  const container = document.getElementById('list-ai-content');
+  if (!container) return;
+
+  if (!recommendations || recommendations.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🤔</div>
+        <div class="empty-title">No recommendations found</div>
+        <div class="empty-subtitle">Try adding more varied series to your list</div>
+      </div>
+    `;
+    return;
+  }
+
+  const html = `
+    <div class="recommendations-grid">
+      ${recommendations.map(rec => `
+        <div class="recommendation-card">
+          <div class="recommendation-info">
+            <div class="recommendation-title">${rec.title}</div>
+            <div class="recommendation-reason">${rec.reason || 'Recommended based on your list'}</div>
+          </div>
+          ${rec.series_id ? `
+            <button class="btn-sm btn-primary" onclick="addRecommendationToList('${rec.series_id}', '${rec.title.replace(/'/g, "\\'")}')">
+              Add
+            </button>
+          ` : `
+            <button class="btn-sm btn-secondary" onclick="window.routerNavigate('library', { search: '${rec.title.replace(/'/g, "\\'")}' }); closeListAIRecommendations();">
+              Search
+            </button>
+          `}
+        </div>
+      `).join('')}
+    </div>
+  `;
+  
+  container.innerHTML = html;
+}
+
+/**
+ * Closes the AI recommendations modal
+ * @param {Event} event - Click event (optional)
+ */
+export function closeListAIRecommendations(event) {
+  if (event && event.target !== event.currentTarget) return;
+  const modal = document.getElementById('list-ai-modal');
+  if (modal) modal.remove();
+}
+
+/**
+ * Adds a recommended series to the current list
+ * @param {string} seriesId - Series ID to add
+ * @param {string} title - Series title for toast
+ */
+export async function addRecommendationToList(seriesId, title) {
+  const listId = state.currentListData?.id;
+  if (!listId) return;
+
+  try {
+    const result = await apiPost(`/api/lists/${listId}/items`, {
+      series_id: parseInt(seriesId)
+    });
+
+    if (result.error) {
+      showToast(`Failed to add: ${result.error}`, 'error');
+      return;
+    }
+
+    showToast(`Added "${title}" to list`);
+    
+    // Refresh list detail in background
+    await loadListDetail(listId);
+    
+    // Disable the button to prevent double-add
+    const btn = document.querySelector(`button[onclick*="${seriesId}"]`);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Added';
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-secondary');
+    }
+  } catch (error) {
+    console.error('Error adding recommendation:', error);
+    showToast('Failed to add series', 'error');
+  }
+}
+
 // Export all public functions to window for HTML onclick handlers
 window.loadListsView = loadListsView;
 window.renderListsGrid = renderListsGrid;
@@ -432,3 +701,9 @@ window.loadListDetail = loadListDetail;
 window.renderListDetail = renderListDetail;
 window.handleRemoveFromList = handleRemoveFromList;
 window.handleDeleteList = handleDeleteList;
+window.showEditListModal = showEditListModal;
+window.closeEditListModal = closeEditListModal;
+window.handleEditListSubmit = handleEditListSubmit;
+window.showListAIRecommendations = showListAIRecommendations;
+window.closeListAIRecommendations = closeListAIRecommendations;
+window.addRecommendationToList = addRecommendationToList;

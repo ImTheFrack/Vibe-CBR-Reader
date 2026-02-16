@@ -278,6 +278,14 @@
                     </h2>
                     <p class="section-subtitle" id="list-detail-subtitle"></p>
                 </div>
+                <div class="header-controls">
+                    <button class="btn-secondary" onclick="showEditListModal()">
+                        <span>✏️</span> Edit
+                    </button>
+                    <button class="btn-primary" onclick="showListAIRecommendations()">
+                        <span>🤖</span> AI Recommendations
+                    </button>
+                </div>
             </div>
             <div id="list-detail-grid" class="comics-grid">
                 <div class="loading">Loading...</div>
@@ -1135,6 +1143,6 @@
     </div>
 
     <script src="/static/js/ui-utils.js"></script>
-    <script type="module" src="/static/js/main.js?v=2"></script>
+    <script type="module" src="/static/js/main.js?v=4"></script>
 </body>
 </html>
