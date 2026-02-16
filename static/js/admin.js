@@ -58,7 +58,8 @@ async function loadApprovalSetting() {
 
 function setupApprovalToggle() {
     const toggle = document.getElementById('toggle-require-approval');
-    if (toggle) {
+    if (toggle && !toggle.dataset.init) {
+        toggle.dataset.init = 'true';
         toggle.addEventListener('change', async (e) => {
             const result = await apiPut('/api/admin/settings', { 
                 require_approval: e.target.checked ? 1 : 0 
@@ -537,7 +538,8 @@ function setupScanButtons() {
          stopBtn: !!stopBtn
      });
      
-     if (incrementalBtn) {
+     if (incrementalBtn && !incrementalBtn.dataset.init) {
+         incrementalBtn.dataset.init = 'true';
          incrementalBtn.addEventListener('click', async () => {
              console.log('Incremental scan clicked');
              setScanButtonsDisabled(true);
@@ -546,14 +548,16 @@ function setupScanButtons() {
          });
      }
      
-     if (fullBtn) {
+     if (fullBtn && !fullBtn.dataset.init) {
+         fullBtn.dataset.init = 'true';
          fullBtn.addEventListener('click', () => {
              console.log('Full scan clicked');
              showRescanConfirmationModal();
          });
      }
      
-     if (thumbnailsBtn) {
+     if (thumbnailsBtn && !thumbnailsBtn.dataset.init) {
+         thumbnailsBtn.dataset.init = 'true';
          thumbnailsBtn.addEventListener('click', async () => {
              console.log('Thumbnails scan clicked');
              setScanButtonsDisabled(true);
@@ -562,7 +566,8 @@ function setupScanButtons() {
          });
      }
      
-     if (metadataBtn) {
+     if (metadataBtn && !metadataBtn.dataset.init) {
+         metadataBtn.dataset.init = 'true';
          metadataBtn.addEventListener('click', async () => {
              console.log('Metadata scan clicked');
              setScanButtonsDisabled(true);
@@ -571,7 +576,8 @@ function setupScanButtons() {
          });
      }
 
-     if (reloadBtn) {
+     if (reloadBtn && !reloadBtn.dataset.init) {
+         reloadBtn.dataset.init = 'true';
          reloadBtn.addEventListener('click', async () => {
              if (confirm('Force backend reload and refresh frontend? This will clear all system caches.')) {
                  showToast('Reloading library data...', 'info');
@@ -581,7 +587,8 @@ function setupScanButtons() {
          });
      }
 
-     if (restartBtn) {
+     if (restartBtn && !restartBtn.dataset.init) {
+         restartBtn.dataset.init = 'true';
          restartBtn.addEventListener('click', async () => {
              if (confirm('Are you sure you want to RESTART the entire server? This will pick up any code changes but will disconnect all users temporarily.')) {
                  showToast('Server restarting... please wait.', 'info');
@@ -608,7 +615,8 @@ function setupScanButtons() {
          });
      }
 
-     if (stopBtn) {
+     if (stopBtn && !stopBtn.dataset.init) {
+         stopBtn.dataset.init = 'true';
          stopBtn.addEventListener('click', async () => {
              console.log('Stop scan clicked');
              if (confirm('Are you sure you want to stop the current scan?')) {
@@ -644,28 +652,32 @@ function setupThumbnailSettings() {
          saveBtn: !!saveBtn
      });
      
-     if (formatSelect && qualitySlider) {
+     if (formatSelect && !formatSelect.dataset.init) {
+         formatSelect.dataset.init = 'true';
          formatSelect.addEventListener('change', () => {
              console.log('Format changed to:', formatSelect.value);
-             qualitySlider.disabled = formatSelect.value === 'png';
+             if (qualitySlider) qualitySlider.disabled = formatSelect.value === 'png';
          });
      }
      
-     if (qualitySlider && qualityValue) {
+     if (qualitySlider && !qualitySlider.dataset.init) {
+         qualitySlider.dataset.init = 'true';
          qualitySlider.addEventListener('input', () => {
              console.log('Quality slider moved to:', qualitySlider.value);
-             qualityValue.textContent = qualitySlider.value;
+             if (qualityValue) qualityValue.textContent = qualitySlider.value;
          });
      }
      
-     if (widthSlider && widthValue) {
+     if (widthSlider && !widthSlider.dataset.init) {
+         widthSlider.dataset.init = 'true';
          widthSlider.addEventListener('input', () => {
              console.log('Width slider moved to:', widthSlider.value);
-             widthValue.textContent = widthSlider.value;
+             if (widthValue) widthValue.textContent = widthSlider.value;
          });
      }
      
-     if (saveBtn) {
+     if (saveBtn && !saveBtn.dataset.init) {
+         saveBtn.dataset.init = 'true';
          saveBtn.addEventListener('click', async () => {
              console.log('Save button clicked');
              const settings = {

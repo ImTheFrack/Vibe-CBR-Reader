@@ -41,7 +41,7 @@ A modern, web-based comic book reader designed for CBR and CBZ archives. Featuri
 - **Path Traversal Protection**: Securely serves comic files while preventing unauthorized access to the filesystem.
 
 ### Scalability & Architecture
-- **Modular Design**: Refactored backend and frontend into logical packages (`db/`, `scanner/`, `library/`) for maintainability.
+- **Modular Design**: Refactored backend and frontend into logical packages (`db/`, `scanner/`, `library/`, `reader/`, `admin/`) for maintainability.
 - **Structured Logging**: Centralized logging system with console output and rotating file backups.
 - **Portable Configuration**: Full support for environment variables via `.env` files.
 - **Large Libraries**: Optimized to support 10k+ comics with efficient SQLite WAL-mode queries.
@@ -67,6 +67,15 @@ A modern, web-based comic book reader designed for CBR and CBZ archives. Featuri
 For a detailed list of planned features, known bugs, and project roadmap, please see [TODO.md](TODO.md).
 
 ## Recent Changes
+
+### 2026-02-16
+- **Major JavaScript Modular Refactor**: Split monolithic frontend files into focused, maintainable modules.
+  - **Reader Module**: Split `reader.js` (1428 lines) into 13 focused modules: UI, gestures, prefetch, core, navigation, bookmarks, annotations, filters, auto-advance, progress, scrubber, and click-zones.
+  - **Admin Module**: Split `admin.js` (921 lines) into 6 modules: users, tags, scan, settings, system.
+  - **Library Renderers**: Split `view-renderers.js` (764 lines) into 4 modules: folder, title, comic, and detail renderers.
+  - **Action Registry**: New central event delegation system using `data-action` attributes and `ACTION_REGISTRY` for cleaner event handling.
+  - **Barrel Exports**: Each module directory has an `index.js` for clean imports.
+  - **Test Infrastructure**: Added vitest configuration for future JavaScript unit testing.
 
 ### 2026-02-14
 - **Page Annotations UI**: Complete reader integration for adding, viewing, editing, and deleting page-level notes. Features slide-out panel, badge indicator showing annotation count per page, and navigation from annotation list to specific pages.

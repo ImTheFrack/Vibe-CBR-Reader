@@ -687,6 +687,34 @@
     color: var(--bg-primary);
 }
 
+.btn-danger {
+    padding: 12px 24px;
+    background: var(--danger);
+    border: none;
+    border-radius: var(--radius-md);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-danger:hover {
+    background: #dc3545;
+    transform: translateY(-1px);
+}
+
+.btn-danger:disabled {
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+    transform: none;
+    opacity: 0.7;
+}
+
 .btn-large {
     padding: 14px 28px;
     font-size: 1rem;

@@ -28,14 +28,36 @@ This file provides the technical context for AI agents and developers working on
 - **config.py**: Portable configuration using `python-dotenv`.
 
 ### Frontend Architecture (Modular Vanilla ES6)
-- **static/js/main.js**: Application entry point and window function exposure.
+- **static/js/main.js**: Application entry point, window function exposure, and action registry setup.
+- **static/js/actions.js**: Central action registry for event delegation (data-action handlers).
 - **static/js/library/**: Modular library browsing logic.
     - `navigation.js`: Hierarchical path management and breadcrumbs.
-    - `view-renderers.js`: UI rendering for folders, titles, and comics. Includes `buildFolderDescription()` for clickable title links in detailed view.
+    - `view-renderers.js`: UI rendering coordinator for folders, titles, and comics.
     - `search.js`: Global and scoped search implementation. Returns `match_fields` badges (Title, Synopsis, Author, etc.) for "everywhere" scope.
     - `selection.js`: Click dispatch and selection mode logic.
+    - `renderers/`: Split rendering modules (folder-renderer, title-renderer, comic-renderer, detail-renderer).
 - **static/js/components/**: Unified UI components (card-renderers, fan-renderer).
-- **static/js/reader.js**: Advanced reader engine (Single, Double, Long Strip).
+- **static/js/reader/**: Modular reader engine (refactored from monolithic reader.js).
+    - `core.js`: Main entry point and page loading.
+    - `ui.js`: UI visibility management (show/hide toolbar).
+    - `gestures.js`: Touch gesture handling (swipe detection).
+    - `prefetch.js`: Image prefetching and caching.
+    - `navigation.js`: Page navigation (next/prev/jump).
+    - `bookmarks.js`: Bookmark CRUD operations.
+    - `annotations.js`: Annotation management.
+    - `filters.js`: Visual filters (brightness, contrast, etc.).
+    - `auto-advance.js`: Auto-advance timer functionality.
+    - `progress.js`: Reading progress tracking.
+    - `scrubber.js`: Page scrubber UI.
+    - `click-zones.js`: Click zone handling for navigation.
+    - `index.js`: Barrel export for all reader modules.
+- **static/js/admin/**: Modular admin panel (refactored from monolithic admin.js).
+    - `users.js`: User management (list, roles, passwords, approval).
+    - `tags.js`: Tag management (blacklist, whitelist, merge).
+    - `scan.js`: Scan controls and status polling.
+    - `settings.js`: Thumbnail and approval settings.
+    - `system.js`: System controls (reload, restart).
+    - `index.js`: Barrel export for all admin modules.
 - **static/js/discovery.js**: Discovery tab (Continue Reading, New Additions, Suggestions carousels).
 - **static/js/state.js**: Centralized global state object. Includes `_sidebarExpanded` Set for Finder tree state.
 - **static/css/**: Modularized CSS files (base, layout, views, components).
@@ -539,13 +561,31 @@ window.functionName = functionName;
 // Example: renderTagsGrid in tags.js must be exported for setViewMode in library.js
 ```
 
-### Event Delegation
-Global event delegation is set up in `main.js` on the document level to catch clicks from any view:
+### Event Delegation with Action Registry
+Global event delegation uses a central action registry in `actions.js`. Actions are registered in `main.js` and dispatched via `data-action` attributes:
+
 ```javascript
+// Registration (in main.js)
+import { registerAction, ACTION_REGISTRY } from './actions.js';
+registerAction('close-reader', closeReader);
+registerAction('toggle-bookmark', toggleBookmark);
+
+// Dispatch (global handler in main.js)
 document.addEventListener('click', (event) => {
     const actionElement = event.target.closest('[data-action]');
-    // ... handle card-click, toggle-selection, etc.
+    if (!actionElement) return;
+    
+    const action = actionElement.dataset.action;
+    const handler = ACTION_REGISTRY.actions.get(action);
+    
+    if (handler) {
+        handler(event, actionElement);
+    }
 });
+
+// Usage in HTML/templates
+<button data-action="close-reader">Close</button>
+<button data-action="toggle-bookmark" data-page="5">Bookmark</button>
 ```
 
 ### Filter Application
