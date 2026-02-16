@@ -29,13 +29,11 @@ import {
 } from './library/selection.js';
 import { showToast } from './utils.js';
 import { initTagsView } from './tags.js';
-import * as router from './router.js';
+import * as router from './router.js?v=2';
 import { loadDiscoveryData, scrollCarousel, refreshSuggestions } from './discovery.js';
 import { loadListsView, loadListDetail } from './lists.js';
 import './recipe-mixer.js';
 import { ACTION_REGISTRY, registerAction, registerInput, registerChange } from './actions.js';
-
-console.log('Main.js loaded');
 
 // Hamburger Menu
 export function toggleHamburger() {

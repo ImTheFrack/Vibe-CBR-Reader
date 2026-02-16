@@ -107,6 +107,15 @@ export function parseHash(hash) {
         case 'discovery':
             return { view: 'discovery', params };
 
+        case 'lists':
+            return { view: 'lists', params };
+
+        case 'list-detail':
+            if (segments.length >= 2) {
+                params.id = decodeURIComponent(segments[1]);
+            }
+            return { view: 'list-detail', params };
+
         default:
             // Unknown route - fall back to library
             console.warn(`Unknown route: ${view}, falling back to library`);
@@ -184,6 +193,15 @@ export function buildHash(view, params = {}) {
 
         case 'admin':
             // admin - no additional params for now
+            break;
+
+        case 'lists':
+            break;
+
+        case 'list-detail':
+            if (params.id) {
+                hash += `/${encodeURIComponent(params.id)}`;
+            }
             break;
 
         // recent, scan - no additional params

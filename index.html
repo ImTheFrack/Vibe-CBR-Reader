@@ -215,6 +215,73 @@
                     <div class="loading">Loading...</div>
                 </div>
             </div>
+
+            <!-- My Lists Section -->
+            <div class="discovery-section" id="discovery-my-lists-section">
+                <div class="discovery-section-header">
+                    <h3>📋 My Lists</h3>
+                    <div class="carousel-nav">
+                        <button class="carousel-btn prev" onclick="scrollCarousel('my-lists', -1)">←</button>
+                        <button class="carousel-btn next" onclick="scrollCarousel('my-lists', 1)">→</button>
+                    </div>
+                </div>
+                <div class="carousel-container" id="discovery-my-lists-grid">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Public Lists Section -->
+            <div class="discovery-section" id="discovery-public-lists-section">
+                <div class="discovery-section-header">
+                    <h3>🌐 Lists from Others</h3>
+                    <div class="carousel-nav">
+                        <button class="carousel-btn prev" onclick="scrollCarousel('public-lists', -1)">←</button>
+                        <button class="carousel-btn next" onclick="scrollCarousel('public-lists', 1)">→</button>
+                    </div>
+                </div>
+                <div class="carousel-container" id="discovery-public-lists-grid">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lists View -->
+        <div id="view-lists" class="view">
+            <div class="section-header">
+                <div class="header-with-actions">
+                    <div>
+                        <h2 class="section-title">
+                            <span>📋</span>
+                            My Lists
+                        </h2>
+                        <p class="section-subtitle">Your personal comic collections</p>
+                    </div>
+                    <button class="btn-primary" onclick="openRecipeMixerModal()">
+                        <span>🧪</span> Recipe Mixer
+                    </button>
+                </div>
+            </div>
+            <div id="lists-grid" class="comics-grid">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- List Detail View -->
+        <div id="view-list-detail" class="view">
+            <div class="section-header">
+                <div class="header-info">
+                    <div class="breadcrumbs-inline" id="list-detail-breadcrumbs">
+                    </div>
+                    <h2 class="section-title">
+                        <span>📋</span>
+                        <span id="list-detail-title">List</span>
+                    </h2>
+                    <p class="section-subtitle" id="list-detail-subtitle"></p>
+                </div>
+            </div>
+            <div id="list-detail-grid" class="comics-grid">
+                <div class="loading">Loading...</div>
+            </div>
         </div>
 
         <!-- Recent View -->
@@ -408,6 +475,42 @@
                                 </div>
                             </div>
                             <button id="thumb-save-btn" class="btn-primary">💾 Save Settings</button>
+                        </div>
+                        
+                        <!-- AI Settings -->
+                        <div class="admin-card">
+                            <h4 class="admin-card-title">🤖 AI Settings</h4>
+                            <div id="ai-settings-form-container">
+                                <div class="admin-grid-2col">
+                                    <div>
+                                        <label class="admin-form-label">Provider</label>
+                                        <select id="ai-provider-select" class="admin-select">
+                                            <option value="openai">OpenAI</option>
+                                            <option value="anthropic">Anthropic</option>
+                                            <option value="google">Google (Gemini)</option>
+                                            <option value="ollama">Ollama (Local)</option>
+                                            <option value="custom">Custom</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="admin-form-label">Model</label>
+                                        <input type="text" id="ai-model-input" class="search-input" placeholder="gpt-4o-mini">
+                                    </div>
+                                    <div style="grid-column: 1 / -1;">
+                                        <label class="admin-form-label">API Key</label>
+                                        <input type="password" id="ai-api-key-input" class="search-input" placeholder="Enter API key...">
+                                        <small style="color: var(--text-secondary); font-size: 0.75rem;">Leave blank to keep existing key. Only last 4 characters shown.</small>
+                                    </div>
+                                    <div style="grid-column: 1 / -1;">
+                                        <label class="admin-form-label">Base URL (Optional)</label>
+                                        <input type="text" id="ai-base-url-input" class="search-input" placeholder="https://api.openai.com/v1">
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 12px; margin-top: 16px;">
+                                    <button id="ai-test-btn" class="btn-secondary">🔌 Test Connection</button>
+                                    <button id="ai-save-btn" class="btn-primary">💾 Save Settings</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -651,7 +754,21 @@
         </div>
         <div class="selection-actions">
             <button class="btn-primary" onclick="handleBatchExport()">📦 Export as CBZ</button>
+            <button class="btn-primary" onclick="showAddToListModal()">📋 Add to List</button>
             <button class="btn-secondary" onclick="clearSelection()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Recipe Mixer Modal -->
+    <div id="recipe-mixer-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Recipe Mixer</h3>
+                <button class="modal-close" onclick="closeRecipeMixerModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="recipe-mixer-modal-body">
+                <!-- Mixer UI rendered here -->
+            </div>
         </div>
     </div>
 
@@ -912,6 +1029,40 @@
         </div>
     </div>
 
+    <!-- Add to List Modal -->
+    <div id="add-to-list-modal" class="modal-overlay" style="display: none; z-index: 10003;">
+        <div class="modal" style="max-width: 400px; padding: 2rem;">
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <h2 style="margin-bottom: 0.5rem; color: var(--accent);">📋 Add to List</h2>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Add <span id="add-to-list-count">0</span> selected items to a list</p>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-tertiary);">SELECT LIST</label>
+                <select id="add-to-list-select" class="filter-select" style="width: 100%; margin-bottom: 1rem;">
+                    <option value="">Choose a list...</option>
+                </select>
+
+                <div id="create-list-section" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-tertiary);">CREATE NEW LIST</label>
+                    <input type="text" id="new-list-name" class="search-input" style="width: 100%; margin-bottom: 0.75rem;" placeholder="List name">
+                    <input type="text" id="new-list-description" class="search-input" style="width: 100%;" placeholder="Description (optional)">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn-secondary" onclick="closeAddToListModal()" style="flex: 1;">Cancel</button>
+                <button class="btn-primary" id="add-to-list-btn" onclick="handleAddToListConfirm()" style="flex: 1;" disabled>Add to List</button>
+            </div>
+
+            <div style="margin-top: 1rem; text-align: center;">
+                <button class="btn-text" onclick="toggleCreateListSection()" style="font-size: 0.85rem; color: var(--accent);">
+                    + Create new list
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Forced Password Change Modal -->
     <div id="forced-password-modal" class="modal-overlay" style="display: none; z-index: 10000; background: rgba(0,0,0,0.9); backdrop-filter: blur(5px);">
         <div class="modal-content" style="max-width: 400px; padding: 2.5rem; border-radius: 16px; border: 1px solid var(--accent);">
@@ -984,6 +1135,6 @@
     </div>
 
     <script src="/static/js/ui-utils.js"></script>
-    <script type="module" src="/static/js/main.js"></script>
+    <script type="module" src="/static/js/main.js?v=2"></script>
 </body>
 </html>
