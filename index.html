@@ -677,6 +677,9 @@
                 <button class="reader-btn" id="bookmarks-list-btn" onclick="showBookmarksList()" title="View bookmarks">
                     <span>📑</span>
                 </button>
+                <button class="reader-btn" id="annotation-btn" onclick="toggleAnnotationPanel()" title="Annotations">
+                    <span>📝</span>
+                </button>
                 <button class="reader-btn" onclick="toggleSettings()">
                     <span>⚙️</span> Settings
                 </button>
@@ -840,23 +843,42 @@
                 </div>
             </div>
 
-            <div class="setting-group">
-                <label class="setting-label">Keyboard Shortcuts</label>
-                <div style="font-size: 0.8rem; color: var(--text-tertiary); line-height: 1.8;">
-                    <div>← / A - Previous page</div>
-                    <div>→ / D / Space - Next page</div>
-                    <div>Shift + ← - Previous chapter</div>
-                    <div>Shift + → - Next chapter</div>
-                    <div>F - Fullscreen</div>
-                    <div>B - Toggle bookmark</div>
-                    <div>ESC - Close reader</div>
+                        <div class="setting-group">
+                            <label class="setting-label">Keyboard Shortcuts</label>
+                            <div style="font-size: 0.8rem; color: var(--text-tertiary); line-height: 1.8;">
+                                <div>← / A - Previous page</div>
+                                <div>→ / D / Space - Next page</div>
+                                <div>Shift + ← - Previous chapter</div>
+                                <div>Shift + → - Next chapter</div>
+                                <div>F - Fullscreen</div>
+                                <div>B - Toggle bookmark</div>
+                                <div>ESC - Close reader</div>
+                            </div>
+                        </div>
+                    </div>
+            
+                    <!-- Annotation Panel -->
+                    <div class="annotation-panel" id="annotation-panel">
+                        <div class="annotation-panel-header">
+                            <h3>📝 Annotations</h3>
+                            <button class="annotation-close-btn" onclick="toggleAnnotationPanel()">&times;</button>
+                        </div>
+                        <div class="annotation-panel-body">
+                            <div class="annotation-add-form">
+                                <textarea id="annotation-note-input" placeholder="Add a note for this page..." rows="3"></textarea>
+                                <div class="annotation-add-actions">
+                                    <span class="annotation-page-label" id="annotation-page-label">Page 1</span>
+                                    <button class="btn-primary" onclick="addAnnotation()">Add Note</button>
+                                </div>
+                            </div>
+                            <div class="annotation-list" id="annotation-list">
+                                <div class="annotation-empty">No annotations for this comic</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="toast-container" id="toast-container"></div>
-
+            
+                <div class="toast-container" id="toast-container"></div>
     <!-- Progress Modal -->
     <div id="progress-modal" class="modal-overlay" style="display: none; z-index: 10001;">
         <div class="modal" style="max-width: 400px; padding: 2.5rem; border: 1px solid var(--accent);">

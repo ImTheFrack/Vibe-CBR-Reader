@@ -17,12 +17,13 @@ This file provides the technical context for AI agents and developers working on
     - `comics.py`: Core comic metadata storage and retrieval.
     - `series.py`: Series metadata and optimized tag-based filtering.
     - `progress.py`: Reading progress and user preferences.
+    - `annotations.py`: Page-level annotations CRUD.
     - `jobs.py`: Scan job tracking and metrics.
 - **scanner/**: Library scanning package.
     - `tasks.py`: Phase 1 (Sync) and Phase 2 (Process) background workers.
     - `archives.py`: CBR/CBZ extraction and thumbnail generation.
     - `utils.py`: Natural sorting and filename parsing.
-- **routes/**: API route logic (auth, library, users, series, admin).
+- **routes/**: API route logic (auth, library, users, series, annotations, admin).
 - **logger.py**: Centralized `vibe` logger with rotating file handler (`vibe.log`).
 - **config.py**: Portable configuration using `python-dotenv`.
 
@@ -168,6 +169,23 @@ CREATE TABLE bookmarks (
     UNIQUE(user_id, comic_id, page_number)
 )
 
+-- Page-level annotations (notes and highlights)
+CREATE TABLE page_annotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    comic_id TEXT NOT NULL REFERENCES comics(id) ON DELETE CASCADE,
+    page_number INTEGER NOT NULL,
+    note TEXT,
+    highlight_text TEXT,
+    x REAL,
+    y REAL,
+    width REAL,
+    height REAL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, comic_id, page_number, x, y)
+)
+
 -- User preferences (1:1 with users)
 CREATE TABLE user_preferences (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -271,6 +289,13 @@ CREATE INDEX idx_comics_series_id ON comics(series_id);
 - `GET /api/bookmarks/{comic_id}`: Comic-specific bookmarks
 - `POST /api/bookmarks`: Add bookmark
 - `DELETE /api/bookmarks/{comic_id}/{page_number}`: Remove bookmark
+
+### Annotations (`routes/annotations.py`)
+- `GET /api/annotations/{comic_id}`: List all annotations for a comic (requires auth)
+- `GET /api/annotations/{comic_id}/{page_number}`: List annotations for specific page (requires auth)
+- `POST /api/annotations`: Create annotation with note and optional highlight coordinates (requires auth)
+- `PUT /api/annotations/{annotation_id}`: Update annotation (requires auth)
+- `DELETE /api/annotations/{annotation_id}`: Delete annotation (requires auth)
 
 ### Series (`routes/series.py`)
 - `GET /api/series`: All series with filtering

@@ -13,8 +13,9 @@ This file tracks the project's outstanding tasks, known bugs, and future roadmap
     - [x] **Filters**: [Implemented] Dynamic, context-aware UI filters with propagation for genre, status, and progress.
 - [X] **Anonymous Star Ratings**: [Implemented] 5-star system for series with average scores and individual user vote memory.
     - apiPost added
-- [ ] **Page Annotations**: Save notes, snippets, or highlights on specific pages.
-    - BACKEND HAS BEEN STARTED.
+- [x] **Page Annotations**: Save notes, snippets, or highlights on specific pages.
+    - Backend: Complete (db/annotations.py, routes/annotations.py)
+    - Frontend: Complete (reader.js, annotation panel in index.html, CSS in viewsnew.css)
 - [ ] **Duplicate Detection**: Identify duplicate files by name, size, and fuzzy title matching.
     - BACKEND HAS BEEN STARTED.
 - [ ] **External Metadata**: Auto-fetch from MAL, AniList, or internal `ComicInfo.xml`.

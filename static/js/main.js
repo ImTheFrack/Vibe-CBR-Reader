@@ -18,7 +18,8 @@ import {
     showBookmarksList, closeBookmarksModal, removeBookmark, 
     toggleSettings, setSetting, navigateReaderComic, closeComicEndModal,
     toggleFullscreen, toggleAutoAdvance, resetAllFilters, goToSeriesInfo,
-    toggleReaderUI
+    toggleReaderUI, toggleAnnotationPanel, addAnnotation, deleteAnnotation, editAnnotation,
+    updateAnnotation
 } from './reader.js';
 import { 
     showPreferences, closePreferencesModal, setPreference, resetDefaultFilters 
@@ -30,6 +31,7 @@ import { showToast } from './utils.js';
 import { initTagsView } from './tags.js';
 import * as router from './router.js';
 import { loadDiscoveryData, scrollCarousel, refreshSuggestions } from './discovery.js';
+import { ACTION_REGISTRY, registerAction, registerInput, registerChange } from './actions.js';
 
 // Hamburger Menu
 export function toggleHamburger() {
@@ -94,6 +96,10 @@ window.navigateReaderComic = navigateReaderComic;
 window.closeComicEndModal = closeComicEndModal;
 window.goToSeriesInfo = goToSeriesInfo;
 window.toggleReaderUI = toggleReaderUI;
+window.toggleAnnotationPanel = toggleAnnotationPanel;
+window.addAnnotation = addAnnotation;
+window.deleteAnnotation = deleteAnnotation;
+window.editAnnotation = editAnnotation;
 window.showPreferences = showPreferences;
 window.closePreferencesModal = closePreferencesModal;
 window.setPreference = setPreference;
@@ -101,6 +107,37 @@ window.resetDefaultFilters = resetDefaultFilters;
 window.showToast = showToast;
 window.scrollCarousel = scrollCarousel;
 window.refreshSuggestions = refreshSuggestions;
+
+function registerAllActions() {
+  registerAction('close-reader', closeReader);
+  registerAction('prev-page', prevPage);
+  registerAction('next-page', nextPage);
+  registerAction('jump-to-page', (e, el) => jumpToPage(el.dataset.page));
+  registerAction('toggle-bookmark', toggleBookmark);
+  registerAction('show-bookmarks', showBookmarksList);
+  registerAction('close-bookmarks-modal', closeBookmarksModal);
+  registerAction('remove-bookmark', (e, el) => removeBookmark(el.dataset.page));
+  registerAction('toggle-settings', toggleSettings);
+  registerAction('set-setting', (e, el) => setSetting(el.dataset.setting, el.dataset.value));
+  registerAction('toggle-auto-advance', toggleAutoAdvance);
+  registerAction('reset-all-filters', resetAllFilters);
+  registerAction('toggle-fullscreen', toggleFullscreen);
+  registerAction('navigate-reader-comic', (e, el) => navigateReaderComic(el.dataset.direction));
+  registerAction('close-comic-end-modal', closeComicEndModal);
+  registerAction('go-to-series-info', goToSeriesInfo);
+  registerAction('toggle-reader-ui', toggleReaderUI);
+  registerAction('toggle-annotation-panel', toggleAnnotationPanel);
+  registerAction('add-annotation', addAnnotation);
+  registerAction('delete-annotation', (e, el) => deleteAnnotation(el.dataset.id));
+  registerAction('edit-annotation', (e, el) => editAnnotation(el.dataset.id));
+  registerAction('update-annotation', (e, el) => updateAnnotation(el.dataset.id));
+  registerAction('start-reading', (e, el) => {
+    e.stopPropagation();
+    const comicId = el.dataset.comicId;
+    const page = el.dataset.page ? parseInt(el.dataset.page) : undefined;
+    startReading(comicId, page);
+  });
+}
 
 // Hash Change Handler
 function onHashChange() {
@@ -256,13 +293,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
     }
     
-    // Global event delegation for data-action elements (catches clicks from any view)
+    registerAllActions();
+
     document.addEventListener('click', (event) => {
         const actionElement = event.target.closest('[data-action]');
         if (!actionElement) return;
-        
+
         const action = actionElement.dataset.action;
-        
+        const handler = ACTION_REGISTRY.actions.get(action);
+
+        if (handler) {
+            handler(event, actionElement);
+            return;
+        }
+
         if (action === 'card-click') {
             handleCardClick(actionElement, event);
         } else if (action === 'toggle-selection') {
@@ -275,11 +319,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (window.handleRateSeries) {
                 window.handleRateSeries(seriesId, rating);
             }
-        } else if (action === 'start-reading') {
-            event.stopPropagation();
-            const comicId = actionElement.dataset.comicId;
-            const page = actionElement.dataset.page ? parseInt(actionElement.dataset.page) : undefined;
-            startReading(comicId, page);
         }
     });
     

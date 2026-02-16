@@ -1,0 +1,12 @@
+export { showReaderUI, hideReaderUI, resetReaderUITimer, toggleReaderUI, getUIState, setLastMousePosition, setLastMouseY } from './ui.js';
+export { GestureController } from './gestures.js';
+export { PrefetchManager, prefetchManager } from './prefetch.js';
+export { createReaderImage, applyImageZoom, getSessionStartTime, setSessionStartTime } from './core.js';
+export { nextPage, prevPage, jumpToPage, handleSliderInput, navigateReaderComic } from './navigation.js';
+export { loadBookmarks, addBookmark, removeBookmark, toggleBookmark, updateBookmarkUI, showBookmarksList, closeBookmarksModal, ensureBookmarkButton } from './bookmarks.js';
+export { loadAnnotations, toggleAnnotationPanel, updateAnnotationPageLabel, setupAnnotationPanelListeners, addAnnotation, deleteAnnotation, editAnnotation, updateAnnotation, renderAnnotationsList, updateAnnotationButtonUI } from './annotations.js';
+export { applyFilters, setSetting, resetAllFilters, toggleSettings } from './filters.js';
+export { toggleAutoAdvance, startAutoAdvanceTimer, stopAutoAdvance, getAutoAdvanceState } from './auto-advance.js';
+export { loadProgressFromAPI, saveProgressToAPI, saveProgress, setSessionStartTime as setProgressSessionStartTime, getSessionStartTime as getProgressSessionStartTime } from './progress.js';
+export { renderScrubber, updateScrubberActive } from './scrubber.js';
+export { setupClickZones } from './click-zones.js';

@@ -65,6 +65,10 @@ export const state = {
     userPreferences: null,
     // Bookmarks for current comic
     currentBookmarks: [],
+    // Annotations for current comic
+    currentAnnotations: [],
+    // Annotation panel visibility
+    annotationPanelVisible: false,
     // Current series data (for title detail view)
     currentSeries: null,
     // Reader navigation state

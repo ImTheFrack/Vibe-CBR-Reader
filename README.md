@@ -68,7 +68,8 @@ For a detailed list of planned features, known bugs, and project roadmap, please
 
 ## Recent Changes
 
-### 2026-02-13
+### 2026-02-14
+- **Page Annotations UI**: Complete reader integration for adding, viewing, editing, and deleting page-level notes. Features slide-out panel, badge indicator showing annotation count per page, and navigation from annotation list to specific pages.
 - **Unified Series Page**: Unified all "View Series" entry points into the main library Title View, ensuring consistent view modes, sorting, and selection capabilities.
 - **Smart Synopsis & Illumination**: Redesigned series descriptions with an "illumination" (floated cover image) and conditional retraction that only clamps if the text exceeds the height of the metadata column.
 - **Enhanced Metadata Rendering**: Integrated series banners directly into the metadata box and added a fallback to use the first chapter's cover as the series illumination when custom metadata is missing.
@@ -134,10 +135,12 @@ For a detailed list of planned features, known bugs, and project roadmap, please
   - Chrome/Edge: Click the install icon in the address bar (➕ or 📱 icon)
   - Safari: Use "Add to Home Screen" from the share menu
   - Result: App becomes installable with offline support
-- **Page Annotations (Backend Only)**:  Backend infrastructure complete, but no UI yet
-  - API endpoints exist at /api/annotations/*
-  - Database schema supports notes and highlights
-  - Not visible yet - would need reader UI integration
+- **Page Annotations**: Full reader integration for per-page notes
+  - API endpoints at /api/annotations/*
+  - Database schema supports notes and highlights (coordinates)
+  - Slide-out panel in reader with add/edit/delete functionality
+  - Badge indicator on annotation button showing count for current page
+  - Click page badge to jump to annotated page
 - **Duplicate Detection (Admin Only)** : dashboard → Coming soon section
   - API at /api/admin/duplicates
   - Shows duplicate comics by file hash or size+filename

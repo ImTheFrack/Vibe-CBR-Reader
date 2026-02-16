@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { apiGet, apiPost, apiDelete } from './api.js';
+import { apiGet, apiPost, apiPut, apiDelete } from './api.js';
 import { showToast } from './utils.js';
 import { setPreference } from './preferences.js';
 import * as router from './router.js';
@@ -29,6 +29,12 @@ function hideReaderUI(force = false) {
     const reader = document.getElementById('reader');
     if (!reader) return;
     
+    // Never hide if user is typing or an input is focused
+    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+        resetReaderUITimer(); // Check again later
+        return;
+    }
+
     if (!force) {
         const threshold = window.innerHeight * 0.1;
         if (lastMouseY < threshold || lastMouseY > window.innerHeight - threshold) {
@@ -327,11 +333,13 @@ export async function startReading(comicId, page = 0) {
     showReaderUI();
     
     await loadBookmarks(comicId);
+    await loadAnnotations(comicId);
     ensureBookmarkButton();
     await loadPage(startPage);
     applyFilters();
     renderScrubber();
     updateReaderUI();
+    setupAnnotationPanelListeners();
     
     // Sync slider UI
     const sliders = ['brightness', 'contrast', 'saturation', 'invert', 'toneValue'];
@@ -501,6 +509,229 @@ export function closeBookmarksModal() {
     if (overlay) {
         overlay.classList.remove('active');
         setTimeout(() => overlay.remove(), 300);
+    }
+}
+
+// ===== ANNOTATION FUNCTIONS =====
+
+async function loadAnnotations(comicId) {
+    if (!state.isAuthenticated) {
+        state.currentAnnotations = [];
+        return;
+    }
+    const result = await apiGet(`/api/annotations/${comicId}`);
+    if (!result.error && Array.isArray(result)) {
+        state.currentAnnotations = result;
+    } else {
+        state.currentAnnotations = [];
+    }
+    renderAnnotationsList();
+}
+
+export function toggleAnnotationPanel() {
+    const panel = document.getElementById('annotation-panel');
+    if (!panel) return;
+    
+    state.annotationPanelVisible = !state.annotationPanelVisible;
+    panel.classList.toggle('open', state.annotationPanelVisible);
+    
+    if (state.annotationPanelVisible) {
+        updateAnnotationPageLabel();
+        renderAnnotationsList();
+    }
+}
+
+function updateAnnotationPageLabel() {
+    const label = document.getElementById('annotation-page-label');
+    if (label) {
+        label.textContent = `Page ${state.currentPage + 1}`;
+    }
+}
+
+function setupAnnotationPanelListeners() {
+    const noteInput = document.getElementById('annotation-note-input');
+    if (noteInput) {
+        // Keep UI visible while typing
+        noteInput.addEventListener('input', () => {
+            showReaderUI();
+            resetReaderUITimer();
+        });
+        
+        // Also reset timer on focus
+        noteInput.addEventListener('focus', () => {
+            showReaderUI();
+            resetReaderUITimer();
+        });
+    }
+}
+
+export async function addAnnotation() {
+    if (!state.isAuthenticated) {
+        showToast('Please log in to add annotations', 'error');
+        return;
+    }
+    if (!state.currentComic) return;
+    
+    const noteInput = document.getElementById('annotation-note-input');
+    const note = noteInput ? noteInput.value.trim() : '';
+    
+    if (!note) {
+        showToast('Please enter a note', 'error');
+        return;
+    }
+    
+    const result = await apiPost('/api/annotations', {
+        comic_id: state.currentComic.id,
+        page_number: state.currentPage,
+        note: note
+    });
+    
+    if (result.error) {
+        showToast('Failed to add annotation', 'error');
+    } else {
+        showToast('Annotation added!', 'success');
+        if (noteInput) noteInput.value = '';
+        await loadAnnotations(state.currentComic.id);
+    }
+}
+
+export async function deleteAnnotation(annotationId) {
+    if (!state.isAuthenticated || !state.currentComic) return;
+    
+    const result = await apiDelete(`/api/annotations/${annotationId}`);
+    if (result.error) {
+        showToast('Failed to delete annotation', 'error');
+    } else {
+        showToast('Annotation deleted', 'success');
+        await loadAnnotations(state.currentComic.id);
+    }
+}
+
+export function editAnnotation(annotationId) {
+    const annotation = state.currentAnnotations.find(a => a.id === annotationId);
+    if (!annotation) return;
+    
+    const noteInput = document.getElementById('annotation-note-input');
+    if (noteInput) {
+        noteInput.value = annotation.note || '';
+        noteInput.focus();
+        noteInput.dataset.editId = annotationId;
+        
+        const addBtn = noteInput.parentElement.querySelector('.btn-primary');
+        if (addBtn) {
+            addBtn.textContent = 'Update';
+            addBtn.onclick = () => updateAnnotation(annotationId);
+        }
+    }
+}
+
+export async function updateAnnotation(annotationId) {
+    if (!state.isAuthenticated) return;
+    
+    const noteInput = document.getElementById('annotation-note-input');
+    const note = noteInput ? noteInput.value.trim() : '';
+    
+    if (!note) {
+        showToast('Please enter a note', 'error');
+        return;
+    }
+    
+    const result = await apiPut(`/api/annotations/${annotationId}`, {
+        note: note
+    });
+    
+    if (result.error) {
+        showToast('Failed to update annotation', 'error');
+    } else {
+        showToast('Annotation updated!', 'success');
+        if (noteInput) {
+            noteInput.value = '';
+            delete noteInput.dataset.editId;
+        }
+        const addBtn = noteInput?.parentElement?.querySelector('.btn-primary');
+        if (addBtn) {
+            addBtn.textContent = 'Add Note';
+            addBtn.onclick = addAnnotation;
+        }
+        await loadAnnotations(state.currentComic.id);
+    }
+}
+
+function renderAnnotationsList() {
+    const list = document.getElementById('annotation-list');
+    if (!list) return;
+    
+    const annotations = state.currentAnnotations;
+    
+    if (annotations.length === 0) {
+        list.innerHTML = '<div class="annotation-empty">No annotations for this comic</div>';
+        return;
+    }
+    
+    const sorted = [...annotations].sort((a, b) => {
+        if (a.page_number !== b.page_number) return a.page_number - b.page_number;
+        return new Date(b.created_at) - new Date(a.created_at);
+    });
+    
+    list.innerHTML = sorted.map(a => `
+        <div class="annotation-item ${a.page_number === state.currentPage ? 'current-page' : ''}" data-page="${a.page_number}">
+            <div class="annotation-item-header">
+                <span class="annotation-page-badge" data-action="jump-to-page" data-page="${a.page_number}">P.${a.page_number + 1}</span>
+                <div class="annotation-item-actions">
+                    <button class="annotation-action-btn" data-action="edit-annotation" data-id="${a.id}" title="Edit">✏️</button>
+                    <button class="annotation-action-btn delete" data-action="delete-annotation" data-id="${a.id}" title="Delete">🗑️</button>
+                </div>
+            </div>
+            <div class="annotation-item-note">${escapeHtml(a.note || '')}</div>
+            ${a.highlight_text ? `<div class="annotation-item-highlight">"${escapeHtml(a.highlight_text)}"</div>` : ''}
+        </div>
+    `).join('');
+    
+    list.querySelectorAll('[data-action]').forEach(el => {
+        const action = el.dataset.action;
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (action === 'jump-to-page') {
+                const page = parseInt(el.dataset.page);
+                jumpToPage(page);
+            } else if (action === 'edit-annotation') {
+                const id = parseInt(el.dataset.id);
+                editAnnotation(id);
+            } else if (action === 'delete-annotation') {
+                const id = parseInt(el.dataset.id);
+                deleteAnnotation(id);
+            }
+        });
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function updateAnnotationButtonUI() {
+    const btn = document.getElementById('annotation-btn');
+    if (!btn) return;
+    
+    const pageAnnotations = state.currentAnnotations.filter(a => a.page_number === state.currentPage);
+    const hasAnnotations = pageAnnotations.length > 0;
+    const count = pageAnnotations.length;
+    
+    btn.classList.toggle('has-annotations', hasAnnotations);
+    
+    let badge = btn.querySelector('.annotation-badge');
+    if (count > 0) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'annotation-badge';
+            btn.appendChild(badge);
+        }
+        badge.textContent = count;
+        badge.style.display = 'flex';
+    } else if (badge) {
+        badge.style.display = 'none';
     }
 }
 
@@ -852,6 +1083,9 @@ export function updateReaderUI() {
 
     updateBookmarkUI();
     updateScrubberActive();
+    updateAnnotationPageLabel();
+    updateAnnotationButtonUI();
+    if (state.annotationPanelVisible) renderAnnotationsList();
     saveProgress();
 }
 
@@ -1214,6 +1448,12 @@ export function resetAllFilters() {
 export function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
         if (!state.currentComic) return;
+        
+        // Ignore shortcuts if user is typing in an input or textarea
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            return;
+        }
+
         const isRTL = state.settings.direction === 'rtl';
         const keys = state.settings.keybindings;
 
@@ -1268,6 +1508,7 @@ export function toggleFullscreen() {
 }
 
 function flashZone(zone) {
+    if (state.ereader) return;
     zone.classList.add('active');
     setTimeout(() => zone.classList.remove('active'), 200);
 }

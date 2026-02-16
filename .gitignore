@@ -93,6 +93,11 @@ poetry.lock
 # pdm
 .pdm.toml
 
+# Node.js / npm
+node_modules/
+package-lock.json
+yarn.lock
+
 # PEP 582
 __pypackages__/
 
