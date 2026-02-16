@@ -344,3 +344,169 @@ window.handleCardClick = handleCardClick;
 window.toggleItemSelection = toggleItemSelection;
 window.handleCancelExport = handleCancelExport;
 window.updateSelectionUI = updateSelectionUI;
+
+export async function showAddToListModal() {
+    if (!state.selectedIds || state.selectedIds.size === 0) {
+        showToast('No items selected', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('add-to-list-modal');
+    const countEl = document.getElementById('add-to-list-count');
+    const selectEl = document.getElementById('add-to-list-select');
+    const btn = document.getElementById('add-to-list-btn');
+
+    countEl.textContent = state.selectedIds.size;
+
+    selectEl.innerHTML = '<option value="">Choose a list...</option>';
+    selectEl.value = '';
+    btn.disabled = true;
+    document.getElementById('create-list-section').style.display = 'none';
+    document.getElementById('new-list-name').value = '';
+    document.getElementById('new-list-description').value = '';
+
+    try {
+        const result = await apiGet('/api/lists?limit=100');
+        if (result.items && result.items.length > 0) {
+            result.items.forEach((lst) => {
+                const option = document.createElement('option');
+                option.value = lst.id;
+                option.textContent = `${lst.name} (${lst.item_count || 0} items)`;
+                selectEl.appendChild(option);
+            });
+        }
+    } catch (err) {
+        console.error('Failed to load lists:', err);
+        showToast('Failed to load your lists', 'error');
+    }
+
+    selectEl.onchange = () => {
+        btn.disabled = !selectEl.value;
+    };
+
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('active'), 10);
+}
+
+export function closeAddToListModal() {
+    const modal = document.getElementById('add-to-list-modal');
+    modal.classList.remove('active');
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 300);
+}
+
+export function toggleCreateListSection() {
+    const section = document.getElementById('create-list-section');
+    const selectEl = document.getElementById('add-to-list-select');
+    const btn = document.getElementById('add-to-list-btn');
+
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+        selectEl.value = '';
+        btn.disabled = true;
+        document.getElementById('new-list-name').focus();
+    } else {
+        section.style.display = 'none';
+    }
+}
+
+export async function handleAddToListConfirm() {
+    const selectEl = document.getElementById('add-to-list-select');
+    const createSection = document.getElementById('create-list-section');
+
+    if (createSection.style.display !== 'none') {
+        await handleCreateListAndAdd();
+    } else if (selectEl.value) {
+        await handleAddToList(parseInt(selectEl.value), Array.from(state.selectedIds));
+    }
+}
+
+export async function handleAddToList(listId, selectedIds) {
+    if (!listId || !selectedIds || selectedIds.length === 0) {
+        showToast('No list or items selected', 'error');
+        return;
+    }
+
+    const seriesIds = new Set();
+    const allComics = state.comics || [];
+
+    for (const selectedId of selectedIds) {
+        const comic = allComics.find((c) => c.id === selectedId || String(c.id) === String(selectedId));
+        if (comic && comic.series_id) {
+            seriesIds.add(comic.series_id);
+        } else {
+            const titleObj = findTitleInTree(selectedId);
+            if (titleObj && titleObj.id) {
+                seriesIds.add(titleObj.id);
+            } else {
+                const seriesComics = allComics.filter((c) => c.series === selectedId);
+                if (seriesComics.length > 0 && seriesComics[0].series_id) {
+                    seriesIds.add(seriesComics[0].series_id);
+                }
+            }
+        }
+    }
+
+    if (seriesIds.size === 0) {
+        showToast('No valid series found in selection', 'error');
+        return;
+    }
+
+    try {
+        const result = await apiPost(`/api/lists/${listId}/items/bulk`, {
+            series_ids: Array.from(seriesIds)
+        });
+
+        closeAddToListModal();
+        showToast(`Added ${result.added} series to list`, 'success');
+        clearSelection();
+    } catch (err) {
+        console.error('Failed to add to list:', err);
+        showToast('Failed to add to list: ' + err.message, 'error');
+    }
+}
+
+export async function handleCreateListAndAdd() {
+    const nameInput = document.getElementById('new-list-name');
+    const descInput = document.getElementById('new-list-description');
+    const name = nameInput.value.trim();
+
+    if (!name) {
+        showToast('Please enter a list name', 'error');
+        return;
+    }
+
+    try {
+        const createResult = await apiPost('/api/lists', {
+            name: name,
+            description: descInput.value.trim() || null,
+            is_public: false
+        });
+
+        if (createResult.error) {
+            throw new Error(createResult.error);
+        }
+
+        const listId = createResult.id;
+        await handleAddToList(listId, Array.from(state.selectedIds));
+    } catch (err) {
+        console.error('Failed to create list:', err);
+        showToast('Failed to create list: ' + err.message, 'error');
+    }
+}
+
+export function showAddToListModalForSeries(seriesId) {
+    if (!seriesId) {
+        showToast('No series selected', 'error');
+        return;
+    }
+    state.selectedIds = new Set([String(seriesId)]);
+    showAddToListModal();
+}
+
+window.showAddToListModal = showAddToListModal;
+window.closeAddToListModal = closeAddToListModal;
+window.toggleCreateListSection = toggleCreateListSection;
+window.handleAddToListConfirm = handleAddToListConfirm;
+window.showAddToListModalForSeries = showAddToListModalForSeries;
