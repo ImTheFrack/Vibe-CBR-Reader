@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from database import get_all_series, get_series_with_comics
 from dependencies import get_current_user
+from db.lists import get_series_lists
 
 router = APIRouter(prefix="/api/series", tags=["series"])
 
@@ -149,5 +150,8 @@ async def get_series_detail(series_name: str, current_user: Dict[str, Any] = Dep
             'volume': continue_comic.get('volume'),
             'page': progress.get('current_page', 0) if progress else 0
         }
+    
+    # Get lists this series belongs to
+    series['lists'] = get_series_lists(series['id'], user_id)
     
     return series

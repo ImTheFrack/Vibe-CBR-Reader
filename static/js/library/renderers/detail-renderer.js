@@ -46,6 +46,45 @@ export async function renderTitleDetailView() {
     </div>
   ` : '';
 
+  const lists = seriesData.lists || [];
+  let listsHtml = '';
+  
+  if (lists.length > 0) {
+    const visibleLists = lists.slice(0, 3);
+    const hiddenLists = lists.slice(3);
+    const hasMore = hiddenLists.length > 0;
+    
+    listsHtml = `
+      <div class="lists-row" style="margin-top: 8px; margin-left: 32px; display: flex; flex-wrap: wrap; gap: 6px;">
+        ${visibleLists.map(l => `
+          <span class="meta-tag list-badge" 
+                data-action="navigate-to-list" 
+                data-list-id="${l.id}"
+                style="background-color: var(--accent-primary-dim); color: var(--accent-primary); cursor: pointer; border: 1px solid var(--accent-primary-dim); display: inline-flex; align-items: center; gap: 4px;">
+            <span style="opacity: 0.7; font-size: 0.9em;">In List:</span> ${l.name}
+          </span>
+        `).join('')}
+        ${hasMore ? `
+          <span class="meta-tag list-badge-more" 
+                onclick="this.style.display='none'; document.getElementById('hidden-lists-${uniqueId}').style.display='contents';"
+                style="background-color: var(--bg-tertiary); cursor: pointer; color: var(--text-secondary);">
+            +${hiddenLists.length} more
+          </span>
+          <div id="hidden-lists-${uniqueId}" style="display: none;">
+            ${hiddenLists.map(l => `
+              <span class="meta-tag list-badge" 
+                    data-action="navigate-to-list" 
+                    data-list-id="${l.id}"
+                    style="background-color: var(--accent-primary-dim); color: var(--accent-primary); cursor: pointer; border: 1px solid var(--accent-primary-dim); display: inline-flex; align-items: center; gap: 4px;">
+                <span style="opacity: 0.7; font-size: 0.9em;">In List:</span> ${l.name}
+              </span>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
   const malLink = seriesData.mal_id ? `<a href="https://myanimelist.net/manga/${seriesData.mal_id}" target="_blank" class="external-link mal">🔗 MAL</a>` : '';
   const anilistLink = seriesData.anilist_id ? `<a href="https://anilist.co/manga/${seriesData.anilist_id}" target="_blank" class="external-link anilist">🔗 AniList</a>` : '';
   const externalLinks = malLink || anilistLink ? `<div class="external-links-inline">${malLink}${anilistLink}</div>` : '';
@@ -102,13 +141,14 @@ export async function renderTitleDetailView() {
       <div style="padding: 16px;">
         ${titleHeaderHtml}
         ${ratingHtml}
-        <div class="meta-header-row">
-          <div class="meta-toggle-btn" data-action="toggle-meta" data-id="${uniqueId}">
-            <span class="meta-expand-icon" id="meta-icon-${uniqueId}">▶</span>
+          <div class="meta-header-row">
+            <div class="meta-toggle-btn" data-action="toggle-meta" data-id="${uniqueId}">
+              <span class="meta-expand-icon" id="meta-icon-${uniqueId}">▶</span>
+            </div>
+            ${allTagsHtml}
           </div>
-          ${allTagsHtml}
-        </div>
-        <div class="meta-expand-content" id="meta-content-${uniqueId}">
+          ${listsHtml}
+          <div class="meta-expand-content" id="meta-content-${uniqueId}">
           ${synonymsHtml}
           <div class="title-meta-row-compact">
             ${statusTag}
@@ -199,6 +239,9 @@ export async function renderTitleDetailView() {
             ${quickActions}
             ${readFirstBtn}
             ${readLatestBtn}
+            <button class="btn-secondary" data-action="add-to-list" data-series-id="${seriesData.id}">
+              <span>📋</span> Add to List
+            </button>
           </div>
         </div>
       </div>

@@ -31,7 +31,11 @@ import { showToast } from './utils.js';
 import { initTagsView } from './tags.js';
 import * as router from './router.js';
 import { loadDiscoveryData, scrollCarousel, refreshSuggestions } from './discovery.js';
+import { loadListsView, loadListDetail } from './lists.js';
+import './recipe-mixer.js';
 import { ACTION_REGISTRY, registerAction, registerInput, registerChange } from './actions.js';
+
+console.log('Main.js loaded');
 
 // Hamburger Menu
 export function toggleHamburger() {
@@ -107,6 +111,8 @@ window.resetDefaultFilters = resetDefaultFilters;
 window.showToast = showToast;
 window.scrollCarousel = scrollCarousel;
 window.refreshSuggestions = refreshSuggestions;
+window.loadListsView = loadListsView;
+window.loadListDetail = loadListDetail;
 
 function registerAllActions() {
   registerAction('close-reader', closeReader);
@@ -131,11 +137,22 @@ function registerAllActions() {
   registerAction('delete-annotation', (e, el) => deleteAnnotation(el.dataset.id));
   registerAction('edit-annotation', (e, el) => editAnnotation(el.dataset.id));
   registerAction('update-annotation', (e, el) => updateAnnotation(el.dataset.id));
+  registerAction('navigate-to-list', (e, el) => {
+    const listId = el.dataset.listId;
+    router.navigate('list-detail', { id: listId });
+  });
   registerAction('start-reading', (e, el) => {
     e.stopPropagation();
     const comicId = el.dataset.comicId;
     const page = el.dataset.page ? parseInt(el.dataset.page) : undefined;
     startReading(comicId, page);
+  });
+  registerAction('add-to-list', (e, el) => {
+    e.stopPropagation();
+    const seriesId = el.dataset.seriesId;
+    if (seriesId && window.showAddToListModalForSeries) {
+      window.showAddToListModalForSeries(seriesId);
+    }
   });
 }
 
@@ -248,6 +265,18 @@ function onHashChange() {
         case 'discovery':
             showView('discovery');
             loadDiscoveryData();
+            break;
+
+        case 'lists':
+            showView('lists');
+            loadListsView();
+            break;
+
+        case 'list-detail':
+            if (route.params.id) {
+                showView('list-detail');
+                loadListDetail(route.params.id);
+            }
             break;
     }
 }
