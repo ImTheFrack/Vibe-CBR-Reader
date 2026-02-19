@@ -463,11 +463,10 @@ export async function getRecommendations() {
   const grid = document.getElementById('recommendations-grid');
 
   mixerState.isLoading = true;
-  let loadingTimer;
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-small"></span> Getting recommendations...';
+    btn.innerHTML = '<span class="spinner-small"></span> Starting...';
   }
 
   if (resultsSection) {
@@ -475,25 +474,7 @@ export async function getRecommendations() {
   }
 
   if (grid) {
-    grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p id="rec-loading-msg">AI is cooking up recommendations...</p></div>';
-    
-    // Start a timer to update the loading message for long-running requests
-    let seconds = 0;
-    loadingTimer = setInterval(() => {
-      seconds++;
-      const msgEl = document.getElementById('rec-loading-msg');
-      if (!msgEl) return;
-      
-      if (seconds === 5) {
-        msgEl.textContent = "Analyzing your request...";
-      } else if (seconds === 15) {
-        msgEl.textContent = "Searching through manga databases...";
-      } else if (seconds === 30) {
-        msgEl.textContent = "Still working! Web searches can take a moment...";
-      } else if (seconds === 60) {
-        msgEl.textContent = "Processing a lot of data, almost there...";
-      }
-    }, 1000);
+    grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p id="rec-loading-msg">Contacting AI...</p></div>';
   }
 
   showDebugSection();
@@ -501,7 +482,8 @@ export async function getRecommendations() {
   updateDebugResponse('Waiting for response...');
 
   try {
-    const response = await apiPost('/api/ai/recommendations', {
+    // 1. Start the job
+    const startResponse = await apiPost('/api/ai/recommendations', {
       series_ids: mixerState.baseSeriesIds,
       attributes: mixerState.useCustomWeights ? mixerState.attributes : {},
       use_web_search: mixerState.useWebSearch,
@@ -509,19 +491,51 @@ export async function getRecommendations() {
       custom_request: mixerState.customRequest || ''
     });
 
-    updateDebugPrompt(response.system_prompt, response.prompt);
-    updateDebugResponse(JSON.stringify(response.recommendations, null, 2));
-
-    if (response.error) {
-      throw new Error(response.error);
+    if (startResponse.error) {
+      throw new Error(startResponse.error);
     }
 
-    mixerState.recommendations = response.recommendations || [];
+    const jobId = startResponse.job_id;
+    let jobStatus = 'pending';
+    let result = null;
+
+    // 2. Poll for status
+    while (jobStatus === 'pending' || jobStatus === 'processing') {
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s
+      
+      const statusResponse = await apiGet(`/api/ai/recommendations/status/${jobId}`);
+      if (statusResponse.error) {
+        throw new Error(`Status check failed: ${statusResponse.error}`);
+      }
+      
+      jobStatus = statusResponse.status;
+      
+      // Update UI with progress message
+      const msgEl = document.getElementById('rec-loading-msg');
+      if (msgEl && statusResponse.progress_message) {
+        msgEl.textContent = statusResponse.progress_message;
+      }
+      
+      if (jobStatus === 'completed') {
+        result = statusResponse.result;
+      } else if (jobStatus === 'failed') {
+        throw new Error(statusResponse.error || 'AI Job failed');
+      }
+    }
+
+    // 3. Process Result
+    if (!result) throw new Error('Job completed but no result returned');
+
+    updateDebugPrompt(result.system_prompt, result.prompt);
+    updateDebugResponse(JSON.stringify(result.recommendations, null, 2));
+
+    mixerState.recommendations = result.recommendations || [];
     renderRecommendations(mixerState.recommendations);
 
-    if (response.cached) {
+    if (result.cached) {
       showToast('Showing cached recommendations', 'info');
     }
+
   } catch (error) {
     console.error('Error getting recommendations:', error);
 
@@ -538,7 +552,6 @@ export async function getRecommendations() {
     showToast('Failed to get recommendations: ' + error.message, 'error');
   } finally {
     mixerState.isLoading = false;
-    if (loadingTimer) clearInterval(loadingTimer);
 
     if (btn) {
       btn.disabled = false;

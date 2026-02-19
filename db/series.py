@@ -971,8 +971,14 @@ def get_series_by_tags(selected_tags: Optional[List[str]] = None) -> Dict[str, A
     for series in processed_series:
         series_all_norms = set()
         for n in series['explicit_norms']:
-            series_all_norms.add(resolve_norm(n, modifications))
-            for parent in containment_map.get(n, []):
+            resolved = resolve_norm(n, modifications)
+            # Check blacklist
+            mod = modifications.get(resolved)
+            if mod and mod['action'] == 'blacklist':
+                continue
+            
+            series_all_norms.add(resolved)
+            for parent in containment_map.get(resolved, []):
                 series_all_norms.add(resolve_norm(parent, modifications))
         
         metadata_text = normalize_text(f"{series['title'] or ''} {series['name'] or ''} {series['synopsis'] or ''}")
@@ -986,6 +992,12 @@ def get_series_by_tags(selected_tags: Optional[List[str]] = None) -> Dict[str, A
                     if potential_tag in clean_metadata:
                         if re.search(r'\b' + re.escape(potential_tag) + r'\b', clean_metadata):
                             actual_norm = resolve_norm(potential_tag, modifications)
+                            
+                            # Check blacklist
+                            mod = modifications.get(actual_norm)
+                            if mod and mod['action'] == 'blacklist':
+                                continue
+
                             series_all_norms.add(actual_norm)
                             for parent in containment_map.get(actual_norm, []):
                                 series_all_norms.add(resolve_norm(parent, modifications))

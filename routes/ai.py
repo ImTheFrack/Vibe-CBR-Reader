@@ -7,7 +7,7 @@ import asyncio
 import logging
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 from dependencies import get_current_user
@@ -15,6 +15,7 @@ from db.connection import get_db_connection
 from ai.client import get_ai_client
 from ai.cache import hash_request, get_cached_recommendations, cache_recommendations
 from ai.prompts import RECIPE_MIXER_SYSTEM_PROMPT, build_recipe_prompt
+from ai.jobs import create_job, get_job, update_job, cleanup_old_jobs
 from db.series import get_series_by_name
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 # Timeout for AI requests in seconds
-AI_TIMEOUT_SECONDS = 30
+AI_TIMEOUT_SECONDS = 120
 
 
 # --- Pydantic Models ---
@@ -35,6 +36,19 @@ class RecommendationsRequest(BaseModel):
     use_web_search: bool = False
     ignore_cache: bool = False
     custom_request: str = ''
+
+
+class RecommendationJobStart(BaseModel):
+    job_id: str
+    message: str
+
+
+class RecommendationJobStatus(BaseModel):
+    id: str
+    status: str
+    progress_message: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
 
 
 class RecommendationItem(BaseModel):
@@ -217,69 +231,62 @@ def match_recommendation_to_library(rec: Dict[str, Any]) -> Dict[str, Any]:
     return rec
 
 
-# --- Endpoints ---
-
-
-@router.post("/recommendations", response_model=RecommendationsResponse)
-async def get_recommendations(
-    data: RecommendationsRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user)
-) -> RecommendationsResponse:
-    """Get AI-powered manga recommendations based on selected series.
-
-    Uses Recipe Mixer system to generate recommendations by analyzing
-    the base series and specified attributes (aspects to keep/change).
-
-    Args:
-        data: Request containing series_ids, attributes, and options
-
-    Returns:
-        RecommendationsResponse with list of recommendations
-    """
-    user_id = current_user['id']
-
-    if not data.series_ids:
-        return RecommendationsResponse(
-            recommendations=[],
-            message="No series provided for recommendations"
-        )
-
-    all_series = []
-    for sid in data.series_ids:
-        s = get_series_data(sid)
-        if s:
-            all_series.append(s)
-
-    if not all_series:
-        return RecommendationsResponse(
-            recommendations=[],
-            message="None of the provided series were found"
-        )
-
-    request_hash = hash_request(all_series, data.attributes, data.custom_request)
-
-    cached = None if data.ignore_cache else get_cached_recommendations(user_id, request_hash)
-    if cached is not None:
-        logger.info(f"Returning cached recommendations for user {user_id}")
-        enriched = [match_recommendation_to_library(rec) for rec in cached]
-        user_prompt = build_recipe_prompt(all_series, data.attributes, data.custom_request)
-        return RecommendationsResponse(
-            recommendations=enriched,
-            cached=True,
-            prompt=user_prompt,
-            system_prompt=RECIPE_MIXER_SYSTEM_PROMPT
-        )
-
-    user_prompt = build_recipe_prompt(all_series, data.attributes, data.custom_request)
-
+async def generate_recommendations_task(job_id: str, data: RecommendationsRequest, user_id: int):
+    """Background task to generate recommendations."""
+    update_job(job_id, status="processing", message="Analyzing request...")
+    
     try:
+        # 1. Fetch Series Data
+        all_series = []
+        for sid in data.series_ids:
+            s = get_series_data(sid)
+            if s:
+                all_series.append(s)
+
+        if not all_series and data.series_ids:
+            update_job(job_id, error="None of the provided series were found")
+            return
+
+        # 2. Check Cache
+        request_hash = hash_request(all_series, data.attributes, data.custom_request)
+        cached = None if data.ignore_cache else get_cached_recommendations(user_id, request_hash)
+        
+        if cached is not None:
+            logger.info(f"Returning cached recommendations for user {user_id}")
+            enriched = [match_recommendation_to_library(rec) for rec in cached]
+            user_prompt = build_recipe_prompt(all_series, data.attributes, data.custom_request)
+            
+            result = {
+                "recommendations": enriched,
+                "cached": True,
+                "prompt": user_prompt,
+                "system_prompt": RECIPE_MIXER_SYSTEM_PROMPT
+            }
+            update_job(job_id, result=result, message="Completed (Cached)")
+            return
+
+        # 3. Call AI
+        user_prompt = build_recipe_prompt(all_series, data.attributes, data.custom_request)
+        
+        # Define progress callback
+        received_chars = 0
+        async def progress(delta: str):
+            nonlocal received_chars
+            received_chars += len(delta)
+            # Update status every ~50 chars to avoid spamming updates
+            if received_chars % 50 < len(delta) or received_chars < 100:
+                update_job(job_id, message=f"Receiving response... ({received_chars} chars)")
+
         ai_client = get_ai_client()
+        update_job(job_id, message="Contacting AI provider...")
+        
         recommendations = await asyncio.wait_for(
             ai_client.get_recommendations(
                 base_series=all_series,
                 attributes=data.attributes,
                 use_web_search=data.use_web_search,
                 custom_request=data.custom_request,
+                progress_callback=progress,
             ),
             timeout=AI_TIMEOUT_SECONDS
         )
@@ -288,31 +295,61 @@ async def get_recommendations(
             cache_recommendations(user_id, request_hash, recommendations)
 
         if not recommendations:
-            return RecommendationsResponse(
-                recommendations=[],
-                message="Could not generate recommendations. Check AI configuration.",
-                prompt=user_prompt,
-                system_prompt=RECIPE_MIXER_SYSTEM_PROMPT
-            )
+            update_job(job_id, error="Could not generate recommendations. Check AI configuration.")
+            return
 
+        # 4. Process Results
+        update_job(job_id, message="Processing library matches...")
         enriched = [match_recommendation_to_library(rec) for rec in recommendations]
 
-        return RecommendationsResponse(
-            recommendations=enriched,
-            prompt=user_prompt,
-            system_prompt=RECIPE_MIXER_SYSTEM_PROMPT
-        )
+        result = {
+            "recommendations": enriched,
+            "prompt": user_prompt,
+            "system_prompt": RECIPE_MIXER_SYSTEM_PROMPT,
+            "cached": False
+        }
+        update_job(job_id, result=result, message="Completed")
 
     except asyncio.TimeoutError:
-        logger.error(f"AI request timed out after {AI_TIMEOUT_SECONDS}s for user {user_id}")
-        return RecommendationsResponse(
-            recommendations=[],
-            message=f"AI request timed out after {AI_TIMEOUT_SECONDS} seconds. Please try again."
-        )
-
+        logger.error(f"AI request timed out for job {job_id}")
+        update_job(job_id, error=f"AI request timed out after {AI_TIMEOUT_SECONDS} seconds.")
     except Exception as e:
-        logger.error(f"Error generating recommendations: {e}")
-        return RecommendationsResponse(
-            recommendations=[],
-            message=f"Error generating recommendations: {str(e)}"
-        )
+        logger.error(f"Error in recommendation job {job_id}: {e}")
+        update_job(job_id, error=str(e))
+
+
+# --- Endpoints ---
+
+
+@router.post("/recommendations", response_model=RecommendationJobStart)
+async def start_recommendations_job(
+    data: RecommendationsRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> RecommendationJobStart:
+    """Start a background job to generate AI recommendations."""
+    cleanup_old_jobs()  # Maintenance
+    
+    job_id = create_job()
+    background_tasks.add_task(generate_recommendations_task, job_id, data, current_user['id'])
+    
+    return RecommendationJobStart(job_id=job_id, message="Recommendation job started")
+
+
+@router.get("/recommendations/status/{job_id}", response_model=RecommendationJobStatus)
+async def get_recommendation_status(
+    job_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> RecommendationJobStatus:
+    """Get the status of a recommendation job."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    return RecommendationJobStatus(
+        id=job['id'],
+        status=job['status'],
+        progress_message=job['progress_message'],
+        result=job['result'],
+        error=job['error']
+    )

@@ -1,14 +1,19 @@
 from fastapi import HTTPException, Cookie, Depends
 from database import validate_session, get_db_connection
 from typing import Optional, Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def get_current_user(token: Optional[str] = Cookie(None, alias="session_token")) -> Dict[str, Any]:
     """Dependency to get current authenticated user"""
     if not token:
+        logger.warning("Auth failed: No session token")
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     user_id = validate_session(token)
     if not user_id:
+        logger.warning(f"Auth failed: Invalid session token (token={token[:10]}...)")
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     
     conn = get_db_connection()
@@ -19,6 +24,7 @@ async def get_current_user(token: Optional[str] = Cookie(None, alias="session_to
     conn.close()
     
     if not user:
+        logger.error(f"Auth failed: User ID {user_id} from valid session not found in DB")
         raise HTTPException(status_code=401, detail="User not found")
     
     return dict(user)
