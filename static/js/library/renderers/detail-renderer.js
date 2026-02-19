@@ -23,6 +23,7 @@ export async function renderTitleDetailView() {
     seriesData = await apiGet(`/api/series/${encodeURIComponent(titleName)}`);
 
     if (seriesData.error) {
+      if (window.renderComicsView) window.renderComicsView();
       return;
     }
     state.currentSeries = seriesData;
@@ -242,6 +243,9 @@ export async function renderTitleDetailView() {
             <button class="btn-secondary" data-action="add-to-list" data-series-id="${seriesData.id}">
               <span>📋</span> Add to List
             </button>
+            <button class="btn-secondary" onclick="openRecipeMixerModal([${seriesData.id}])">
+              <span>🤖</span> AI Suggestions
+            </button>
           </div>
         </div>
       </div>
@@ -274,4 +278,5 @@ export async function renderTitleDetailView() {
   }
 
   renderChapters(document.getElementById('chapters-container'), seriesData.comics);
+  if (window.updateSelectionUI) window.updateSelectionUI();
 }

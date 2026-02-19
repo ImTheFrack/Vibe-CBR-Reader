@@ -41,6 +41,18 @@ SECRET_KEY = _secret_key
 # Supported Image Extensions
 IMG_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.jxl')
 
+# --- AI Configuration ---
+# AI provider (openai, anthropic, etc.)
+VIBE_AI_PROVIDER = os.environ.get("VIBE_AI_PROVIDER", "openai")
+# AI model to use (e.g., gpt-4o-mini, claude-3-haiku)
+VIBE_AI_MODEL = os.environ.get("VIBE_AI_MODEL", "gpt-4o-mini")
+# API key for AI provider (no default - must be set by user)
+VIBE_AI_API_KEY = os.environ.get("VIBE_AI_API_KEY")
+# Optional: Override base URL for API endpoints (useful for proxies/self-hosted)
+VIBE_AI_BASE_URL = os.environ.get("VIBE_AI_BASE_URL")
+# Enable web search by default for AI queries
+VIBE_AI_WEB_SEARCH_DEFAULT = os.environ.get("VIBE_AI_WEB_SEARCH_DEFAULT", "false").lower() == "true"
+
 def get_thumbnail_path(comic_id: str, ext: str = 'webp') -> Optional[str]:
     """
     Returns the full path for a thumbnail, including a subdirectory based on the

@@ -31,7 +31,17 @@ export async function apiPost(endpoint, data) {
             if (response.status === 403) {
                 return { error: 'Forbidden', status: 403 };
             }
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            // Try to get error details from response body
+            let errorDetail = response.statusText;
+            try {
+                const errorData = await response.json();
+                if (errorData.detail) {
+                    errorDetail = errorData.detail;
+                }
+            } catch (e) {
+                // If JSON parsing fails, use status text
+            }
+            throw new Error(`HTTP ${response.status}: ${errorDetail}`);
         }
         return await response.json();
     } catch (error) {

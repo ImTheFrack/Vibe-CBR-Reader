@@ -353,7 +353,7 @@ export async function handleForcedPasswordChange(event) {
         return;
     }
 
-    const result = await apiPut(`/api/admin/users/${state.currentUser.id}/password`, { new_password: newPassword });
+    const result = await apiPost('/api/users/me/password/force', { new_password: newPassword });
     
     if (result.error) {
         showToast(`Error: ${result.error}`, 'error');

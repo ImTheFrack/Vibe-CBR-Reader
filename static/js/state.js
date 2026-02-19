@@ -75,5 +75,8 @@ export const state = {
     readerNavigation: {
         prevComic: null,
         nextComic: null
-    }
+    },
+    // Lists state
+    lists: [],
+    currentList: null
 };

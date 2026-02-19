@@ -1,5 +1,6 @@
 import { apiGet, apiPut, apiPost, apiDelete } from './api.js';
 import { showToast } from './utils.js';
+import { loadAISettings, renderAISettingsForm, handleTestConnection, handleSaveSettings } from './admin/ai-settings.js';
 
 console.log('[DEBUG] admin.js module loading...');
 
@@ -40,6 +41,12 @@ export async function initAdminView() {
     console.log('initAdminView: About to call setupThumbnailSettings...');
     setupThumbnailSettings();
     console.log('initAdminView: setupThumbnailSettings done');
+    console.log('initAdminView: About to call renderAISettingsForm...');
+    renderAISettingsForm();
+    console.log('initAdminView: renderAISettingsForm done');
+    console.log('initAdminView: About to call loadAISettings...');
+    await loadAISettings();
+    console.log('initAdminView: loadAISettings done');
     initScanStatus();
     console.log('initAdminView: Complete!');
 }

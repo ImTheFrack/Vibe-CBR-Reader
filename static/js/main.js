@@ -28,6 +28,7 @@ import {
     toggleSelectionMode, clearSelection, handleBatchExport, handleCardClick, toggleItemSelection 
 } from './library/selection.js';
 import { showToast } from './utils.js';
+import { apiGet, apiPost, apiPut, apiDelete } from './api.js';
 import { initTagsView } from './tags.js';
 import * as router from './router.js?v=2';
 import { loadDiscoveryData, scrollCarousel, refreshSuggestions } from './discovery.js';
@@ -107,6 +108,10 @@ window.closePreferencesModal = closePreferencesModal;
 window.setPreference = setPreference;
 window.resetDefaultFilters = resetDefaultFilters;
 window.showToast = showToast;
+window.apiGet = apiGet;
+window.apiPost = apiPost;
+window.apiPut = apiPut;
+window.apiDelete = apiDelete;
 window.scrollCarousel = scrollCarousel;
 window.refreshSuggestions = refreshSuggestions;
 window.loadListsView = loadListsView;

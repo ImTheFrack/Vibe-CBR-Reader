@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from dependencies import get_current_user
 from database import get_db_connection
+from db.lists import get_user_lists, get_public_lists, get_list_items
 
 router = APIRouter(prefix="/api", tags=["discovery"])
 
@@ -224,3 +225,82 @@ async def get_suggestions(
     
     conn.close()
     return result
+
+
+@router.get("/discovery/my-lists")
+async def get_my_lists(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Returns user's lists with cover thumbnails.
+    Each list includes: id, name, description, item_count, cover_url
+    """
+    user_id = current_user['id']
+    lists = get_user_lists(user_id)
+    my_lists = [lst for lst in lists if lst['user_id'] == user_id]
+    
+    result = []
+    for lst in my_lists:
+        items = get_list_items(lst['id'])
+        cover_url = None
+        if items:
+            first_item = items[0]
+            cover_comic_id = first_item.get('cover_comic_id')
+            if cover_comic_id:
+                cover_url = f"/api/cover/{cover_comic_id}"
+        
+        result.append({
+            'id': lst['id'],
+            'name': lst['name'],
+            'description': lst.get('description', ''),
+            'item_count': len(items),
+            'cover_url': cover_url,
+            'is_public': lst.get('is_public', False)
+        })
+    
+    return {'items': result}
+
+
+@router.get("/discovery/public-lists")
+async def get_public_lists_discovery(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Returns public lists from all users (excluding current user's own lists).
+    Limited to 20 results.
+    Each list includes: id, name, description, item_count, cover_url, owner_username
+    """
+    user_id = current_user['id']
+    lists = get_public_lists(limit=20, offset=0)
+    other_public_lists = [lst for lst in lists if lst['user_id'] != user_id]
+    
+    conn = get_db_connection()
+    try:
+        result = []
+        for lst in other_public_lists:
+            user_row = conn.execute(
+                'SELECT username FROM users WHERE id = ?',
+                (lst['user_id'],)
+            ).fetchone()
+            owner_username = user_row['username'] if user_row else 'Unknown'
+            
+            items = get_list_items(lst['id'])
+            cover_url = None
+            if items:
+                first_item = items[0]
+                cover_comic_id = first_item.get('cover_comic_id')
+                if cover_comic_id:
+                    cover_url = f"/api/cover/{cover_comic_id}"
+            
+            result.append({
+                'id': lst['id'],
+                'name': lst['name'],
+                'description': lst.get('description', ''),
+                'item_count': len(items),
+                'cover_url': cover_url,
+                'owner_username': owner_username
+            })
+        
+        return {'items': result}
+    finally:
+        conn.close()

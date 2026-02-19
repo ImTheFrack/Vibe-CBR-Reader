@@ -257,7 +257,7 @@
                         <p class="section-subtitle">Your personal comic collections</p>
                     </div>
                     <button class="btn-primary" onclick="openRecipeMixerModal()">
-                        <span>🧪</span> Recipe Mixer
+                        <span>🤖</span> AI Suggestions
                     </button>
                 </div>
             </div>
@@ -282,8 +282,8 @@
                     <button class="btn-secondary" onclick="showEditListModal()">
                         <span>✏️</span> Edit
                     </button>
-                    <button class="btn-primary" onclick="showListAIRecommendations()">
-                        <span>🤖</span> AI Recommendations
+                    <button class="btn-primary" onclick="openRecipeMixerForCurrentList()">
+                        <span>🤖</span> AI Suggestions
                     </button>
                 </div>
             </div>
@@ -771,7 +771,7 @@
     <div id="recipe-mixer-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content modal-large">
             <div class="modal-header">
-                <h3>Recipe Mixer</h3>
+                <h3>AI Suggestions</h3>
                 <button class="modal-close" onclick="closeRecipeMixerModal()">&times;</button>
             </div>
             <div class="modal-body" id="recipe-mixer-modal-body">
@@ -1038,7 +1038,7 @@
     </div>
 
     <!-- Add to List Modal -->
-    <div id="add-to-list-modal" class="modal-overlay" style="display: none; z-index: 10003;">
+    <div id="add-to-list-modal" class="modal-overlay" style="z-index: 10003;">
         <div class="modal" style="max-width: 400px; padding: 2rem;">
             <div style="text-align: center; margin-bottom: 1.5rem;">
                 <h2 style="margin-bottom: 0.5rem; color: var(--accent);">📋 Add to List</h2>

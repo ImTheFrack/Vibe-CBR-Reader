@@ -18,7 +18,8 @@ import { navigate } from './router.js';
 
 // Re-export sub-module functions
 export { navigateToRoot, navigateToFolder, navigateUp, updateBreadcrumbs, navigateTitleComic } from './library/navigation.js';
-export { updateLibraryView, renderFolderGrid, renderTitleCards, renderComicsView, renderTitleDetailView, showView, renderTitleFan } from './library/view-renderers.js';
+export { updateLibraryView, renderFolderGrid, renderTitleCards, renderComicsView, showView, renderTitleFan } from './library/view-renderers.js';
+export { renderTitleDetailView } from './library/renderers/detail-renderer.js';
 export { handleSearch, toggleSearchScope, getSearchResults, renderSearchResults } from './library/search.js';
 
 // Import for internal use

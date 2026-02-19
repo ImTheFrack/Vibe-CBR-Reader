@@ -333,7 +333,7 @@ function createListCard(list, type) {
  */
 function openListDetail(listId) {
     if (window.routerNavigate) {
-        window.routerNavigate('list-detail', { listId: listId });
+        window.routerNavigate('list-detail', { id: listId });
     } else {
         console.error('No navigation method available');
     }
@@ -420,5 +420,5 @@ function openComic(comicId) {
      }
 }
 
-// Export functions for external use
-export { openComic, openSeries, refreshSuggestions };
+export { openComic, openSeries, refreshSuggestions, openListDetail };
+window.openListDetail = openListDetail;

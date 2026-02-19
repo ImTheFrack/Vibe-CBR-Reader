@@ -20,6 +20,9 @@ const mixerState = {
     meta_data: 0.5
   },
   useWebSearch: false,
+  ignoreCache: false,
+  useCustomWeights: false,
+  customRequest: '',
   isLoading: false,
   recommendations: []
 };
@@ -114,7 +117,7 @@ function handleEscapeKey(e) {
     const listModal = document.getElementById('recipe-add-to-list-modal');
     
     if (listModal && listModal.style.display === 'flex') {
-      closeAddToListModal();
+      closeRecipeAddToListModal();
       return;
     }
     
@@ -141,11 +144,31 @@ export function renderMixerUI() {
 
       <!-- Category Sliders -->
       <div class="mixer-section categories-section">
-        <h3 class="mixer-section-title">Attribute Weights</h3>
-        <p class="mixer-section-subtitle">Adjust sliders to emphasize what matters most to you</p>
-        <div class="category-cards-grid">
-          ${CATEGORIES.map(cat => createCategoryCard(cat)).join('')}
+        <div class="section-header-collapsible">
+          <label class="web-search-toggle" style="margin: 0;">
+            <input type="checkbox" id="custom-weights-checkbox" onchange="toggleCustomWeights()" ${mixerState.useCustomWeights ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">
+              <span>⚖️</span> Custom Attribute Weights
+            </span>
+          </label>
         </div>
+        <div id="attribute-weights-content" style="display: ${mixerState.useCustomWeights ? 'block' : 'none'};">
+          <p class="mixer-section-subtitle">Adjust sliders to emphasize what matters most to you</p>
+          <div class="category-cards-grid">
+            ${CATEGORIES.map(cat => createCategoryCard(cat)).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Request -->
+      <div class="mixer-section">
+        <label class="mixer-section-subtitle" for="custom-request-input" style="display: block; margin-bottom: 6px;">
+          Custom Instructions <span style="color: var(--text-tertiary); font-weight: normal;">(optional — overrides default request prompt)</span>
+        </label>
+        <textarea id="custom-request-input" class="custom-request-textarea" rows="3"
+          placeholder="e.g. Only recommend completed series with at least 10 volumes. Avoid anything with heavy fan-service."
+          oninput="updateCustomRequest()">${mixerState.customRequest || ''}</textarea>
       </div>
 
       <!-- Options Row -->
@@ -158,9 +181,40 @@ export function renderMixerUI() {
               <span>🌐</span> Enable Web Search
             </span>
           </label>
+          <label class="web-search-toggle">
+            <input type="checkbox" id="ignore-cache-checkbox" onchange="toggleIgnoreCache()" ${mixerState.ignoreCache ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">
+              <span>🔄</span> Ignore Cache
+            </span>
+          </label>
           <button class="btn-primary btn-large" onclick="getRecommendations()" id="get-recommendations-btn">
             <span>🎯</span> Get Recommendations
           </button>
+        </div>
+      </div>
+
+      <!-- AI Prompt/Response Debug Section -->
+      <div class="mixer-section debug-section" id="debug-section" style="display: none;">
+        <div class="section-header-collapsible" onclick="toggleDebugSection()">
+          <h3 class="mixer-section-title">🐛 AI Prompt & Response</h3>
+          <span class="collapse-icon" id="debug-section-icon">▶</span>
+        </div>
+        <div id="debug-section-content" style="display: none;">
+          <div class="debug-panel">
+            <div class="debug-subpanel">
+              <h4>System Prompt</h4>
+              <pre id="ai-system-prompt-display" class="debug-content">Waiting for request...</pre>
+            </div>
+            <div class="debug-subpanel">
+              <h4>User Prompt</h4>
+              <pre id="ai-user-prompt-display" class="debug-content">Waiting for request...</pre>
+            </div>
+            <div class="debug-subpanel">
+              <h4>Response</h4>
+              <pre id="ai-response-display" class="debug-content">No response yet...</pre>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -181,15 +235,22 @@ export function renderMixerUI() {
       <div class="modal-content">
         <div class="modal-header">
           <h3>Add to List</h3>
-          <button class="modal-close" onclick="closeAddToListModal()">&times;</button>
+          <button class="modal-close" onclick="closeRecipeAddToListModal()">&times;</button>
         </div>
         <div class="modal-body">
           <div id="user-lists-container" class="user-lists-list">
             <div class="loading">Loading your lists...</div>
           </div>
+          <div id="recipe-create-list-section" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-tertiary);">CREATE NEW LIST</label>
+            <input type="text" id="recipe-new-list-name" class="search-input" style="width: 100%; margin-bottom: 0.75rem;" placeholder="List name">
+            <input type="text" id="recipe-new-list-description" class="search-input" style="width: 100%; margin-bottom: 0.75rem;" placeholder="Description (optional)">
+            <button class="btn-primary" style="width: 100%;" onclick="handleRecipeCreateListAndAdd()">Create & Add</button>
+          </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" onclick="closeAddToListModal()">Cancel</button>
+        <div class="modal-footer" style="display: flex; gap: 0.75rem;">
+          <button class="btn-secondary" onclick="closeRecipeAddToListModal()" style="flex: 1;">Cancel</button>
+          <button class="btn-text" onclick="toggleRecipeCreateList()" style="font-size: 0.85rem; color: var(--accent);">+ Create new list</button>
         </div>
       </div>
     </div>
@@ -287,14 +348,108 @@ function renderSelectedBaseSeries() {
   `;
 }
 
-/**
- * Toggles web search enabled state
- */
+export function toggleAttributeWeights() {
+  const content = document.getElementById('attribute-weights-content');
+  if (content) {
+    const isHidden = content.style.display === 'none';
+    content.style.display = isHidden ? 'block' : 'none';
+  }
+}
+
+export function toggleCustomWeights() {
+  const checkbox = document.getElementById('custom-weights-checkbox');
+  if (checkbox) {
+    mixerState.useCustomWeights = checkbox.checked;
+    const content = document.getElementById('attribute-weights-content');
+    if (content) {
+      content.style.display = checkbox.checked ? 'block' : 'none';
+    }
+  }
+}
+
+export function toggleDebugSection() {
+  const content = document.getElementById('debug-section-content');
+  const icon = document.getElementById('debug-section-icon');
+  if (content && icon) {
+    const isHidden = content.style.display === 'none';
+    content.style.display = isHidden ? 'block' : 'none';
+    icon.textContent = isHidden ? '▼' : '▶';
+  }
+}
+
+export function showDebugSection() {
+  const section = document.getElementById('debug-section');
+  if (section) section.style.display = 'block';
+}
+
+export function hideDebugSection() {
+  const section = document.getElementById('debug-section');
+  if (section) section.style.display = 'none';
+}
+
+export function updateDebugPrompt(systemPrompt, userPrompt) {
+  const systemDisplay = document.getElementById('ai-system-prompt-display');
+  const userDisplay = document.getElementById('ai-user-prompt-display');
+  if (systemDisplay) systemDisplay.textContent = systemPrompt || 'Not available';
+  if (userDisplay) userDisplay.textContent = userPrompt || 'Not available';
+}
+
+export function updateDebugResponse(response) {
+  const display = document.getElementById('ai-response-display');
+  if (display) display.textContent = response;
+}
+
+export function updateCustomRequest() {
+  const textarea = document.getElementById('custom-request-input');
+  if (textarea) {
+    mixerState.customRequest = textarea.value;
+  }
+}
+
 export function toggleWebSearch() {
   const checkbox = document.getElementById('web-search-checkbox');
   if (checkbox) {
     mixerState.useWebSearch = checkbox.checked;
   }
+}
+
+export function toggleIgnoreCache() {
+  const checkbox = document.getElementById('ignore-cache-checkbox');
+  if (checkbox) {
+    mixerState.ignoreCache = checkbox.checked;
+  }
+}
+
+function buildAIPrompt() {
+  const seriesNames = mixerState.baseSeriesIds.map(id => {
+    if (state.comics && state.comics.length > 0) {
+      const comic = state.comics.find(c => c.series_id == id);
+      if (comic) return comic.series;
+    }
+    return `Series ${id}`;
+  });
+  
+  const activeAttributes = Object.entries(mixerState.attributes)
+    .filter(([key, value]) => value > 0)
+    .map(([key, value]) => {
+      const cat = CATEGORIES.find(c => c.key === key);
+      return `${cat ? cat.name : key}: ${Math.round(value * 100)}%`;
+    });
+  
+  let prompt = 'Recommend manga similar to';
+  if (seriesNames.length > 0) {
+    prompt += `: ${seriesNames.join(', ')}`;
+  }
+  
+  if (activeAttributes.length > 0) {
+    prompt += `\n\nAttribute weights:\n${activeAttributes.join('\n')}`;
+  }
+  
+  if (mixerState.useWebSearch) {
+    prompt += '\n\n(Web search enabled)';
+  }
+  
+  return prompt;
 }
 
 /**
@@ -308,6 +463,7 @@ export async function getRecommendations() {
   const grid = document.getElementById('recommendations-grid');
 
   mixerState.isLoading = true;
+  let loadingTimer;
 
   if (btn) {
     btn.disabled = true;
@@ -319,15 +475,42 @@ export async function getRecommendations() {
   }
 
   if (grid) {
-    grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>AI is cooking up recommendations...</p></div>';
+    grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p id="rec-loading-msg">AI is cooking up recommendations...</p></div>';
+    
+    // Start a timer to update the loading message for long-running requests
+    let seconds = 0;
+    loadingTimer = setInterval(() => {
+      seconds++;
+      const msgEl = document.getElementById('rec-loading-msg');
+      if (!msgEl) return;
+      
+      if (seconds === 5) {
+        msgEl.textContent = "Analyzing your request...";
+      } else if (seconds === 15) {
+        msgEl.textContent = "Searching through manga databases...";
+      } else if (seconds === 30) {
+        msgEl.textContent = "Still working! Web searches can take a moment...";
+      } else if (seconds === 60) {
+        msgEl.textContent = "Processing a lot of data, almost there...";
+      }
+    }, 1000);
   }
+
+  showDebugSection();
+  updateDebugPrompt('Sending request to AI...');
+  updateDebugResponse('Waiting for response...');
 
   try {
     const response = await apiPost('/api/ai/recommendations', {
       series_ids: mixerState.baseSeriesIds,
-      attributes: mixerState.attributes,
-      use_web_search: mixerState.useWebSearch
+      attributes: mixerState.useCustomWeights ? mixerState.attributes : {},
+      use_web_search: mixerState.useWebSearch,
+      ignore_cache: mixerState.ignoreCache || false,
+      custom_request: mixerState.customRequest || ''
     });
+
+    updateDebugPrompt(response.system_prompt, response.prompt);
+    updateDebugResponse(JSON.stringify(response.recommendations, null, 2));
 
     if (response.error) {
       throw new Error(response.error);
@@ -355,6 +538,7 @@ export async function getRecommendations() {
     showToast('Failed to get recommendations: ' + error.message, 'error');
   } finally {
     mixerState.isLoading = false;
+    if (loadingTimer) clearInterval(loadingTimer);
 
     if (btn) {
       btn.disabled = false;
@@ -387,48 +571,155 @@ export function renderRecommendations(results) {
     return;
   }
 
-  grid.innerHTML = results.map((rec, index) => createRecommendationCard(rec, index)).join('');
+  const batchBar = `
+    <div class="rec-batch-bar">
+      <label class="rec-select-all-label">
+        <input type="checkbox" id="rec-select-all" onchange="toggleSelectAllRecs()"> Select All
+      </label>
+      <button class="btn-primary btn-small" onclick="handleBatchAddToList()">
+        <span>➕</span> Add Selected to List
+      </button>
+    </div>
+  `;
+
+  grid.innerHTML = batchBar + results.map((rec, index) => createRecommendationCard(rec, index)).join('');
 }
 
 /**
  * Creates a single recommendation card HTML
  */
 function createRecommendationCard(rec, index) {
-  const coverUrl = rec.cover_comic_id ? `/api/cover/${rec.cover_comic_id}` : '/static/placeholder-cover.png';
-  const matchScore = rec.match_score ? Math.round(rec.match_score * 100) : 0;
-  const reasons = rec.match_reasons || [];
+  const matchScore = rec.match_score ? Math.round(rec.match_score) : 0;
+  const description = rec.why || rec.reason || rec.synopsis || 'No description available';
+  const inLibrary = rec.in_library === true;
+  const hasMultiple = rec.in_library === 'multiple';
+  const escapedTitle = (rec.series_name || rec.title || '').replace(/'/g, "\\'");
+
+  const notInLibrarySvg = `<svg viewBox="0 0 120 180" xmlns="http://www.w3.org/2000/svg" class="rec-no-match-svg">
+    <rect width="120" height="180" fill="var(--bg-tertiary)"/>
+    <rect x="4" y="4" width="112" height="172" rx="4" fill="none" stroke="var(--border-color)" stroke-width="1" stroke-dasharray="4 2"/>
+    <text x="60" y="80" text-anchor="middle" font-size="11" fill="var(--text-tertiary)" font-family="system-ui">Not in</text>
+    <text x="60" y="96" text-anchor="middle" font-size="11" fill="var(--text-tertiary)" font-family="system-ui">Library</text>
+    <text x="60" y="120" text-anchor="middle" font-size="24">📖</text>
+  </svg>`;
+
+  const multiMatchSvg = `<svg viewBox="0 0 120 180" xmlns="http://www.w3.org/2000/svg" class="rec-no-match-svg">
+    <rect width="120" height="180" fill="var(--bg-tertiary)"/>
+    <rect x="4" y="4" width="112" height="172" rx="4" fill="none" stroke="var(--accent-secondary, #f59e0b)" stroke-width="1.5" stroke-dasharray="4 2"/>
+    <text x="60" y="72" text-anchor="middle" font-size="11" fill="var(--text-secondary)" font-family="system-ui">Make a</text>
+    <text x="60" y="88" text-anchor="middle" font-size="11" fill="var(--text-secondary)" font-family="system-ui">Selection</text>
+    <text x="60" y="118" text-anchor="middle" font-size="28">?</text>
+  </svg>`;
+
+  let coverHtml;
+  if (rec.cover_comic_id) {
+    coverHtml = `<img src="/api/cover/${rec.cover_comic_id}" alt="${rec.title}" loading="lazy">`;
+  } else if (hasMultiple) {
+    coverHtml = multiMatchSvg;
+  } else {
+    coverHtml = notInLibrarySvg;
+  }
+
+  const canSelect = inLibrary && rec.series_id;
+  const checkboxHtml = canSelect
+    ? `<input type="checkbox" class="rec-checkbox" data-series-id="${rec.series_id}" onchange="updateBatchCount()">`
+    : '';
+
+  let actionsHtml;
+  if (inLibrary) {
+    actionsHtml = `
+      <button class="btn-secondary btn-small" onclick="viewSeriesNewTab('${escapedTitle}')">
+        <span>👁️</span> View
+      </button>
+    `;
+  } else if (hasMultiple) {
+    const matches = rec.library_matches || [];
+    actionsHtml = `
+      <div class="rec-multi-match">
+        <span class="rec-multi-label">${matches.length} matches found — pick one:</span>
+        <div class="rec-match-options">
+          ${matches.map(m => {
+            const eName = (m.name || '').replace(/'/g, "\\'");
+            return `
+              <button class="btn-secondary btn-small rec-match-option" onclick="selectRecMatch(this, ${m.id}, '${eName}', '${m.cover_comic_id || ''}')">
+                ${m.name}
+              </button>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  } else {
+    actionsHtml = '<span class="rec-not-in-library">Not in your library</span>';
+  }
+
+  let badgeHtml = '';
+  if (inLibrary) badgeHtml = '<span class="rec-library-badge-inline">In Library</span>';
+  else if (hasMultiple) badgeHtml = `<span class="rec-library-badge-inline rec-multi-badge">${(rec.library_matches || []).length} matches</span>`;
 
   return `
-    <div class="recommendation-card" style="animation-delay: ${index * 0.05}s">
+    <div class="recommendation-card" data-rec-index="${index}" style="animation-delay: ${index * 0.05}s">
+      ${checkboxHtml ? `<div class="rec-checkbox-col">${checkboxHtml}</div>` : ''}
       <div class="rec-card-cover">
-        <img src="${coverUrl}" alt="${rec.title}" loading="lazy">
-        <div class="rec-match-badge">${matchScore}% match</div>
+        ${coverHtml}
       </div>
       <div class="rec-card-info">
-        <h4 class="rec-title">${rec.title}</h4>
-        <p class="rec-synopsis">${rec.synopsis || 'No synopsis available'}</p>
-        ${reasons.length > 0 ? `
-          <div class="rec-reasons">
-            ${reasons.map(r => `<span class="rec-reason-tag">${r}</span>`).join('')}
-          </div>
-        ` : ''}
+        <div class="rec-title-row">
+          <h4 class="rec-title">${rec.title}${rec.author ? ` <span class="rec-author">by ${rec.author}</span>` : ''}</h4>
+          ${matchScore > 0 ? `<span class="rec-match-badge">${matchScore}%</span>` : ''}
+          ${badgeHtml}
+        </div>
+        <p class="rec-synopsis">${description}</p>
         <div class="rec-actions">
-          <button class="btn-primary btn-small" onclick="handleAddToList('${rec.series_id}')">
-            <span>➕</span> Add to List
-          </button>
-          <button class="btn-secondary btn-small" onclick="viewSeries('${rec.series_name}')">
-            <span>👁️</span> View
-          </button>
+          ${actionsHtml}
         </div>
       </div>
     </div>
   `;
 }
 
+function selectRecMatch(btn, seriesId, seriesName, coverComicId) {
+  const card = btn.closest('.recommendation-card');
+  if (!card) return;
+
+  if (coverComicId) {
+    const coverEl = card.querySelector('.rec-card-cover');
+    if (coverEl) {
+      coverEl.innerHTML = `<img src="/api/cover/${coverComicId}" alt="${seriesName}" loading="lazy">`;
+    }
+  }
+
+  if (!card.querySelector('.rec-checkbox-col')) {
+    const checkboxCol = document.createElement('div');
+    checkboxCol.className = 'rec-checkbox-col';
+    checkboxCol.innerHTML = `<input type="checkbox" class="rec-checkbox" data-series-id="${seriesId}" onchange="updateBatchCount()">`;
+    card.insertBefore(checkboxCol, card.firstChild);
+  }
+
+  const titleRow = card.querySelector('.rec-title-row');
+  if (titleRow) {
+    const oldBadge = titleRow.querySelector('.rec-multi-badge');
+    if (oldBadge) {
+      oldBadge.className = 'rec-library-badge-inline';
+      oldBadge.textContent = 'In Library';
+    }
+  }
+
+  const actionsEl = card.querySelector('.rec-actions');
+  if (actionsEl) {
+    const escaped = seriesName.replace(/'/g, "\\'");
+    actionsEl.innerHTML = `
+      <button class="btn-secondary btn-small" onclick="viewSeriesNewTab('${escaped}')">
+        <span>👁️</span> View
+      </button>
+    `;
+  }
+}
+
 /**
  * Handles adding a recommendation to a list
  */
-export async function handleAddToList(seriesId) {
+export async function handleRecipeAddToList(seriesId) {
   window._seriesToAdd = seriesId;
 
   const modal = document.getElementById('recipe-add-to-list-modal');
@@ -445,7 +736,7 @@ export async function handleAddToList(seriesId) {
       throw new Error(response.error);
     }
 
-    const lists = response.lists || [];
+    const lists = response.items || [];
     renderUserLists(lists);
   } catch (error) {
     console.error('Error loading lists:', error);
@@ -470,7 +761,7 @@ function renderUserLists(lists) {
       <div class="empty-state">
         <div class="empty-icon">📋</div>
         <div class="empty-title">No lists yet</div>
-        <div class="empty-subtitle">Create a list first to add series</div>
+        <div class="empty-subtitle">Use "+ Create new list" below to get started</div>
       </div>
     `;
     return;
@@ -492,20 +783,30 @@ function renderUserLists(lists) {
  * Adds the selected series to a specific list
  */
 export async function addSeriesToList(listId) {
-  const seriesId = window._seriesToAdd;
-  if (!seriesId) return;
+  const batchIds = window._seriesToAddBatch;
+  const singleId = window._seriesToAdd;
+
+  if (batchIds && batchIds.length > 0) {
+    let added = 0;
+    let failed = 0;
+    for (const sid of batchIds) {
+      try {
+        const response = await apiPost(`/api/lists/${listId}/items`, { series_id: sid });
+        if (response.error) { failed++; } else { added++; }
+      } catch { failed++; }
+    }
+    showToast(`Added ${added} series to list${failed > 0 ? ` (${failed} failed)` : ''}`);
+    closeRecipeAddToListModal();
+    return;
+  }
+
+  if (!singleId) return;
 
   try {
-    const response = await apiPost(`/api/lists/${listId}/items`, {
-      series_id: seriesId
-    });
-
-    if (response.error) {
-      throw new Error(response.error);
-    }
-
+    const response = await apiPost(`/api/lists/${listId}/items`, { series_id: singleId });
+    if (response.error) throw new Error(response.error);
     showToast('Added to list successfully');
-    closeAddToListModal();
+    closeRecipeAddToListModal();
   } catch (error) {
     console.error('Error adding to list:', error);
     showToast('Failed to add to list: ' + error.message, 'error');
@@ -515,31 +816,124 @@ export async function addSeriesToList(listId) {
 /**
  * Closes the add-to-list modal
  */
-export function closeAddToListModal() {
+export function closeRecipeAddToListModal() {
   const modal = document.getElementById('recipe-add-to-list-modal');
   if (modal) modal.style.display = 'none';
   window._seriesToAdd = null;
+  window._seriesToAddBatch = null;
+  const createSection = document.getElementById('recipe-create-list-section');
+  if (createSection) createSection.style.display = 'none';
 }
 
-/**
- * Navigates to a series detail view
- */
-function viewSeries(seriesName) {
-  if (window.routerNavigate) {
-    window.routerNavigate('series', { name: seriesName });
-  } else {
-    console.error('No navigation method available');
+function toggleRecipeCreateList() {
+  const section = document.getElementById('recipe-create-list-section');
+  if (!section) return;
+  section.style.display = section.style.display === 'none' ? 'block' : 'none';
+  if (section.style.display === 'block') {
+    const nameInput = document.getElementById('recipe-new-list-name');
+    if (nameInput) nameInput.focus();
   }
 }
 
-// Export all functions to window for HTML onclick handlers
+async function handleRecipeCreateListAndAdd() {
+  const nameInput = document.getElementById('recipe-new-list-name');
+  const descInput = document.getElementById('recipe-new-list-description');
+  const name = nameInput ? nameInput.value.trim() : '';
+
+  if (!name) {
+    showToast('Please enter a list name', 'error');
+    return;
+  }
+
+  try {
+    const createResult = await apiPost('/api/lists', {
+      name,
+      description: descInput ? descInput.value.trim() || null : null,
+      is_public: false,
+    });
+    if (createResult.error) throw new Error(createResult.error);
+
+    await addSeriesToList(createResult.id);
+    showToast(`Created "${name}" and added series`, 'success');
+  } catch (err) {
+    console.error('Failed to create list:', err);
+    showToast('Failed to create list: ' + err.message, 'error');
+  }
+}
+
+function viewSeriesNewTab(seriesName) {
+  window.open(`/#/series/${encodeURIComponent(seriesName)}`, '_blank');
+}
+
+function toggleSelectAllRecs() {
+  const selectAll = document.getElementById('rec-select-all');
+  if (!selectAll) return;
+  const checkboxes = document.querySelectorAll('.rec-checkbox');
+  checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+  updateBatchCount();
+}
+
+function updateBatchCount() {
+  const checked = document.querySelectorAll('.rec-checkbox:checked');
+  const btn = document.querySelector('.rec-batch-bar .btn-primary');
+  if (btn) {
+    const count = checked.length;
+    btn.innerHTML = `<span>➕</span> Add Selected to List${count > 0 ? ` (${count})` : ''}`;
+  }
+}
+
+async function handleBatchAddToList() {
+  const checked = document.querySelectorAll('.rec-checkbox:checked');
+  const seriesIds = [...checked].map(cb => parseInt(cb.dataset.seriesId)).filter(Boolean);
+
+  if (seriesIds.length === 0) {
+    showToast('Select at least one recommendation first', 'info');
+    return;
+  }
+
+  window._seriesToAddBatch = seriesIds;
+
+  const modal = document.getElementById('recipe-add-to-list-modal');
+  const container = document.getElementById('user-lists-container');
+  if (!modal || !container) return;
+
+  modal.style.display = 'flex';
+  container.innerHTML = '<div class="loading">Loading your lists...</div>';
+
+  try {
+    const response = await apiGet('/api/lists');
+    if (response.error) throw new Error(response.error);
+    renderUserLists(response.items || [], true);
+  } catch (error) {
+    console.error('Error loading lists:', error);
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <div class="empty-title">Failed to load lists</div>
+      </div>
+    `;
+  }
+}
+
 window.openRecipeMixerModal = openRecipeMixerModal;
 window.closeRecipeMixerModal = closeRecipeMixerModal;
 window.renderMixerUI = renderMixerUI;
 window.initCategorySliders = initCategorySliders;
 window.toggleWebSearch = toggleWebSearch;
+window.toggleIgnoreCache = toggleIgnoreCache;
+window.toggleCustomWeights = toggleCustomWeights;
+window.updateCustomRequest = updateCustomRequest;
 window.getRecommendations = getRecommendations;
 window.renderRecommendations = renderRecommendations;
-window.handleAddToList = handleAddToList;
+window.handleRecipeAddToList = handleRecipeAddToList;
+window.handleBatchAddToList = handleBatchAddToList;
 window.addSeriesToList = addSeriesToList;
-window.closeAddToListModal = closeAddToListModal;
+window.closeRecipeAddToListModal = closeRecipeAddToListModal;
+window.toggleRecipeCreateList = toggleRecipeCreateList;
+window.handleRecipeCreateListAndAdd = handleRecipeCreateListAndAdd;
+window.toggleAttributeWeights = toggleAttributeWeights;
+window.toggleDebugSection = toggleDebugSection;
+window.viewSeriesNewTab = viewSeriesNewTab;
+window.selectRecMatch = selectRecMatch;
+window.toggleSelectAllRecs = toggleSelectAllRecs;
+window.updateBatchCount = updateBatchCount;

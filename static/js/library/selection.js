@@ -384,16 +384,12 @@ export async function showAddToListModal() {
         btn.disabled = !selectEl.value;
     };
 
-    modal.style.display = 'flex';
-    setTimeout(() => modal.classList.add('active'), 10);
+    modal.classList.add('active');
 }
 
 export function closeAddToListModal() {
     const modal = document.getElementById('add-to-list-modal');
-    modal.classList.remove('active');
-    setTimeout(() => {
-        modal.style.display = 'none';
-    }, 300);
+    if (modal) modal.classList.remove('active');
 }
 
 export function toggleCreateListSection() {
@@ -443,6 +439,8 @@ export async function handleAddToList(listId, selectedIds) {
                 const seriesComics = allComics.filter((c) => c.series === selectedId);
                 if (seriesComics.length > 0 && seriesComics[0].series_id) {
                     seriesIds.add(seriesComics[0].series_id);
+                } else if (/^\d+$/.test(String(selectedId))) {
+                    seriesIds.add(parseInt(selectedId));
                 }
             }
         }

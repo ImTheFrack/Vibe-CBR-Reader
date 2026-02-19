@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel, field_validator
 from typing import List, Dict, Any, Optional
+import json
 import os
 import sys
 import re
@@ -10,6 +11,8 @@ from db.settings import get_all_settings, set_setting
 from db.connection import get_db_connection
 from scanner import fast_scan_library_task, rescan_library_task, thumbnail_rescan_task, metadata_rescan_task
 from config import COMICS_DIR
+import httpx
+from ai.client import AIClient
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -107,8 +110,15 @@ async def admin_reset_password(user_id: int, data: PasswordReset, admin_user: Di
     if len(data.new_password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
     
-    update_user_password(user_id, data.new_password, must_change=True)
-    return {"message": "Password reset successful, user must change it on next login"}
+    # If the admin is resetting THEIR OWN password, we clear the 'must_change' flag.
+    # If they are resetting someone ELSE's, we keep it True.
+    must_change = (user_id != admin_user['id'])
+    
+    update_user_password(user_id, data.new_password, must_change=must_change)
+    
+    if must_change:
+        return {"message": "Password reset successful, user must change it on next login"}
+    return {"message": "Password updated successfully"}
 
 @router.delete("/users/{user_id}")
 async def admin_delete_user(user_id: int, admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, str]:
@@ -378,3 +388,138 @@ async def system_restart(background_tasks: BackgroundTasks, admin_user: Dict[str
     """Gracefully restart the server process"""
     background_tasks.add_task(restart_server)
     return {"message": "Server restart initiated"}
+
+class AISettings(BaseModel):
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+
+class AISettingsResponse(BaseModel):
+    provider: str
+    model: str
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+
+@router.get("/ai-settings")
+async def get_ai_settings(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, Any]:
+    """Get AI configuration settings (admin only)"""
+    from db.settings import get_setting
+    
+    provider = get_setting('ai_provider') or 'openai'
+    model = get_setting('ai_model') or 'gpt-4o-mini'
+    api_key = get_setting('ai_api_key') or ''
+    base_url = get_setting('ai_base_url') or ''
+    
+    masked_key = ''
+    if api_key and len(api_key) >= 4:
+        masked_key = '*' * min(len(api_key) - 4, 20) + api_key[-4:]
+    
+    return {
+        "provider": provider,
+        "model": model,
+        "api_key": masked_key,
+        "base_url": base_url
+    }
+
+@router.put("/ai-settings")
+async def update_ai_settings(
+    data: AISettings,
+    admin_user: Dict[str, Any] = Depends(get_admin_user)
+) -> Dict[str, Any]:
+    """Update AI configuration settings (admin only)"""
+    from db.settings import set_setting, get_setting
+    
+    if data.provider is not None:
+        set_setting('ai_provider', data.provider)
+    
+    if data.model is not None:
+        set_setting('ai_model', data.model)
+    
+    if data.api_key is not None and data.api_key.strip():
+        set_setting('ai_api_key', data.api_key.strip())
+    
+    if data.base_url is not None:
+        set_setting('ai_base_url', data.base_url)
+    
+    provider = get_setting('ai_provider') or 'openai'
+    model = get_setting('ai_model') or 'gpt-4o-mini'
+    api_key = get_setting('ai_api_key') or ''
+    base_url = get_setting('ai_base_url') or ''
+    
+    masked_key = ''
+    if api_key and len(api_key) >= 4:
+        masked_key = '*' * min(len(api_key) - 4, 20) + api_key[-4:]
+    
+    return {
+        "provider": provider,
+        "model": model,
+        "api_key": masked_key,
+        "base_url": base_url
+    }
+
+@router.post("/ai-settings/test")
+async def test_ai_connection(
+    data: AISettings,
+    admin_user: Dict[str, Any] = Depends(get_admin_user)
+) -> Dict[str, Any]:
+    """Test AI connection with provided settings (admin only)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    provider = data.provider or 'openai'
+    logger.info(f"AI Test: provider={provider}, model={data.model}, base_url={data.base_url}")
+    
+    # Handle masked API key
+    from db.settings import get_setting
+    stored_key = get_setting('ai_api_key') or ''
+    api_key_to_use = data.api_key
+
+    # Check if key is masked (matches stored key pattern)
+    if api_key_to_use and stored_key and len(stored_key) >= 4:
+        masked_stored = '*' * min(len(stored_key) - 4, 20) + stored_key[-4:]
+        if api_key_to_use == masked_stored:
+            api_key_to_use = stored_key
+            logger.info("AI Test: Using stored API key (unmasked)")
+
+    # Ollama doesn't require an API key, but OpenAI SDK needs a non-empty string
+    if not api_key_to_use and provider == 'ollama':
+        api_key_to_use = 'ollama'  # Dummy key for Ollama
+        logger.info("AI Test: Using dummy API key for Ollama")
+    elif not api_key_to_use:
+        logger.error("AI Test: No API key provided")
+        raise HTTPException(status_code=400, detail="API key is required for this provider")
+    
+    model = data.model or ('llama2' if provider == 'ollama' else 'gpt-4o-mini')
+
+    # Handle Base URL for Ollama (append /v1 if missing)
+    base_url = data.base_url
+    if provider == 'ollama' and base_url and not base_url.endswith('/v1'):
+        base_url = base_url.rstrip('/') + '/v1'
+        logger.info(f"AI Test: Appended /v1 to Ollama URL: {base_url}")
+
+    client = AIClient(
+        api_key=api_key_to_use,
+        model=model,
+        base_url=base_url,
+    )
+    client.provider = provider
+
+    try:
+        await client._post_chat(  # pyright: ignore[reportPrivateUsage]
+            messages=[{'role': 'user', 'content': 'Say "Connection successful"'}],
+            max_tokens=10,
+        )
+        return {"success": True, "message": "Connection successful"}
+    except httpx.HTTPStatusError as e:
+        status_code = e.response.status_code if e.response else 400
+        detail = e.response.text[:300] if e.response and e.response.text else "No response body"
+        logger.error(f"AI Test: HTTP {status_code}: {detail}")
+        raise HTTPException(status_code=400, detail=f"API returned HTTP {status_code}: {detail}")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=400, detail="Connection timed out")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI Test: Exception - {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Connection test error: {str(e)}")

@@ -167,3 +167,170 @@ def test_series_rating_roundtrip(test_client, test_user, test_db):
     assert "series" in data
     assert data["series"]["avg_rating"] == 5.0
     assert data["series"]["rating_count"] == 1
+
+
+def test_api_create_list(test_client, test_user, test_db):
+    """Test POST /api/lists creates a list and returns 201"""
+    test_db.execute("DELETE FROM user_list_items")
+    test_db.execute("DELETE FROM user_lists")
+    test_db.commit()
+    
+    login_response = test_client.post("/api/auth/login", json={
+        "username": test_user["username"],
+        "password": test_user["password"]
+    })
+    assert login_response.status_code == 200
+    
+    response = test_client.post("/api/lists", json={
+        "name": "My Test List",
+        "description": "A test list",
+        "is_public": False
+    })
+    assert response.status_code == 201
+    data = response.json()
+    assert "id" in data
+    assert data["name"] == "My Test List"
+    assert data["description"] == "A test list"
+    assert data["is_public"] is False
+    
+    test_client.post("/api/auth/logout")
+
+
+def test_api_get_lists(test_client, test_user, test_db):
+    """Test GET /api/lists returns user's lists"""
+    test_db.execute("DELETE FROM user_list_items")
+    test_db.execute("DELETE FROM user_lists")
+    test_db.commit()
+    
+    login_response = test_client.post("/api/auth/login", json={
+        "username": test_user["username"],
+        "password": test_user["password"]
+    })
+    assert login_response.status_code == 200
+    
+    test_db.execute(
+        "INSERT INTO user_lists (user_id, name, description, is_public) VALUES (?, ?, ?, ?)",
+        (test_user["id"], "Test List 1", "Description 1", 0)
+    )
+    test_db.execute(
+        "INSERT INTO user_lists (user_id, name, description, is_public) VALUES (?, ?, ?, ?)",
+        (test_user["id"], "Test List 2", "Description 2", 1)
+    )
+    test_db.commit()
+    
+    response = test_client.get("/api/lists")
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert data["total"] >= 2
+    
+    test_client.post("/api/auth/logout")
+
+
+def test_api_unauthorized_access(test_client, test_user, admin_user, test_db):
+    """Test private list returns 404 for non-owner"""
+    test_db.execute("DELETE FROM user_list_items")
+    test_db.execute("DELETE FROM user_lists")
+    test_db.commit()
+    
+    test_db.execute(
+        "INSERT INTO user_lists (user_id, name, description, is_public) VALUES (?, ?, ?, ?)",
+        (admin_user["id"], "Admin Private List", "Private", 0)
+    )
+    test_db.commit()
+    
+    login_response = test_client.post("/api/auth/login", json={
+        "username": test_user["username"],
+        "password": test_user["password"]
+    })
+    assert login_response.status_code == 200
+    
+    response = test_client.get("/api/lists/1")
+    assert response.status_code == 404
+    
+    test_client.post("/api/auth/logout")
+
+
+def test_api_add_series(test_client, test_user, test_db):
+    """Test POST adds series to list"""
+    test_db.execute("DELETE FROM user_list_items")
+    test_db.execute("DELETE FROM user_lists")
+    test_db.execute("DELETE FROM series")
+    test_db.commit()
+    
+    test_db.execute(
+        "INSERT INTO series (id, name, category, title) VALUES (?, ?, ?, ?)",
+        (1, "Test Series", "Test Category", "Test Title")
+    )
+    test_db.execute(
+        "INSERT INTO user_lists (user_id, name, description, is_public) VALUES (?, ?, ?, ?)",
+        (test_user["id"], "My List", "Test", 0)
+    )
+    test_db.commit()
+    
+    lst = test_db.execute("SELECT * FROM user_lists").fetchone()
+    list_id = lst["id"]
+    
+    login_response = test_client.post("/api/auth/login", json={
+        "username": test_user["username"],
+        "password": test_user["password"]
+    })
+    assert login_response.status_code == 200
+    
+    response = test_client.post(f"/api/lists/{list_id}/items", json={
+        "series_id": 1
+    })
+    assert response.status_code == 200
+    
+    get_response = test_client.get(f"/api/lists/{list_id}")
+    assert get_response.status_code == 200
+    data = get_response.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["series_id"] == 1
+    
+    test_client.post("/api/auth/logout")
+
+
+def test_api_bulk_add(test_client, test_user, test_db):
+    """Test bulk add works for selection mode"""
+    test_db.execute("DELETE FROM user_list_items")
+    test_db.execute("DELETE FROM user_lists")
+    test_db.execute("DELETE FROM series")
+    test_db.commit()
+    
+    test_db.execute(
+        "INSERT INTO series (id, name, category, title) VALUES (?, ?, ?, ?)",
+        (1, "Series 1", "Cat", "Title 1")
+    )
+    test_db.execute(
+        "INSERT INTO series (id, name, category, title) VALUES (?, ?, ?, ?)",
+        (2, "Series 2", "Cat", "Title 2")
+    )
+    test_db.execute(
+        "INSERT INTO series (id, name, category, title) VALUES (?, ?, ?, ?)",
+        (3, "Series 3", "Cat", "Title 3")
+    )
+    test_db.execute(
+        "INSERT INTO user_lists (user_id, name, description, is_public) VALUES (?, ?, ?, ?)",
+        (test_user["id"], "Bulk List", "Test", 0)
+    )
+    test_db.commit()
+    
+    lst = test_db.execute("SELECT * FROM user_lists").fetchone()
+    list_id = lst["id"]
+    
+    login_response = test_client.post("/api/auth/login", json={
+        "username": test_user["username"],
+        "password": test_user["password"]
+    })
+    assert login_response.status_code == 200
+    
+    response = test_client.post(f"/api/lists/{list_id}/items/bulk", json={
+        "series_ids": [1, 2, 3]
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["added"] == 3
+    assert data["skipped"] == 0
+    
+    test_client.post("/api/auth/logout")

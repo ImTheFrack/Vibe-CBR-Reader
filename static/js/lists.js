@@ -690,6 +690,22 @@ export async function addRecommendationToList(seriesId, title) {
   }
 }
 
+export function openRecipeMixerForCurrentList() {
+  const listData = state.currentListData;
+  if (!listData || !listData.items || listData.items.length === 0) {
+    showToast('Add some series to your list first', 'info');
+    return;
+  }
+  
+  const seriesIds = listData.items.map(item => item.series_id);
+  
+  if (window.openRecipeMixerModal) {
+    window.openRecipeMixerModal(seriesIds);
+  } else {
+    showToast('Recipe Mixer not available', 'error');
+  }
+}
+
 // Export all public functions to window for HTML onclick handlers
 window.loadListsView = loadListsView;
 window.renderListsGrid = renderListsGrid;
@@ -707,3 +723,4 @@ window.handleEditListSubmit = handleEditListSubmit;
 window.showListAIRecommendations = showListAIRecommendations;
 window.closeListAIRecommendations = closeListAIRecommendations;
 window.addRecommendationToList = addRecommendationToList;
+window.openRecipeMixerForCurrentList = openRecipeMixerForCurrentList;

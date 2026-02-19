@@ -48,6 +48,9 @@ class PasswordChange(BaseModel):
     current_password: str
     new_password: str
 
+class ForcedPasswordChange(BaseModel):
+    new_password: str
+
 # --- User Account Routes ---
 
 @router.post("/users/me/password")
@@ -62,6 +65,21 @@ async def change_password(data: PasswordChange, current_user: Dict[str, Any] = D
     
     # Update to new password
     update_user_password(current_user['id'], data.new_password)
+    return {"message": "Password updated successfully"}
+
+@router.post("/users/me/password/force")
+async def force_change_password(data: ForcedPasswordChange, current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, str]:
+    """Change current user's password when forced (must_change_password=True)"""
+    from db.users import update_user_password
+    
+    if not current_user.get('must_change_password'):
+        raise HTTPException(status_code=400, detail="Forced password change not required")
+    
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Update to new password and clear the flag
+    update_user_password(current_user['id'], data.new_password, must_change=False)
     return {"message": "Password updated successfully"}
 
 @router.get("/users/me/stats")

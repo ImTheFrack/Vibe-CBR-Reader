@@ -4,3 +4,4 @@ export { loadAdminTags, filterAdminTags, openTagModModal, updateTagModUI, filter
 export { setupScanButtons, initScanStatus, startScanPolling, stopScanPolling } from './scan.js';
 export { loadSettings, loadApprovalSetting, setupApprovalToggle, setupThumbnailSettings } from './settings.js';
 export { loadGapsReport } from './system.js';
+export { loadAISettings, renderAISettingsForm, handleTestConnection, handleSaveSettings } from './ai-settings.js';

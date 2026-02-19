@@ -4,7 +4,7 @@ from datetime import datetime
 from config import DB_PATH
 
 # Schema version for migration tracking
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -360,6 +360,45 @@ def init_db() -> None:
         )
     ''')
     
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS user_lists (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            is_public BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(user_id, name)
+        )
+    ''')
+    
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS user_list_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            list_id INTEGER NOT NULL,
+            series_id INTEGER NOT NULL,
+            position INTEGER DEFAULT 0,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (list_id) REFERENCES user_lists(id) ON DELETE CASCADE,
+            FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE CASCADE,
+            UNIQUE(list_id, series_id)
+        )
+    ''')
+    
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS ai_recommendation_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            request_hash TEXT NOT NULL,
+            recommendations TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    
     if current_version < 4:
         # Migration 4: Create page_annotations table
         conn.execute('''
@@ -448,7 +487,12 @@ def init_db() -> None:
             ('thumb_width', '225'),
             ('thumb_height', '350'),
             ('thumb_format', 'webp'),
-            ('require_approval', '0')
+            ('require_approval', '0'),
+            ('ai_provider', 'openai'),
+            ('ai_model', 'gpt-4o-mini'),
+            ('ai_api_key', ''),
+            ('ai_base_url', ''),
+            ('ai_web_search_default', 'false')
         ]
         for key, value in default_settings:
             conn.execute(
@@ -528,6 +572,13 @@ def init_db() -> None:
                 conn.execute(f'ALTER TABLE series ADD COLUMN {col} TEXT')
             except sqlite3.OperationalError:
                 pass
+    
+    if current_version < 14:
+        # Migration 14: Add ai_web_search_enabled to user_preferences
+        try:
+            conn.execute('ALTER TABLE user_preferences ADD COLUMN ai_web_search_enabled BOOLEAN DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
     
     if current_version < SCHEMA_VERSION:
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
