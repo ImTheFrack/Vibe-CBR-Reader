@@ -4,7 +4,7 @@ from datetime import datetime
 from config import DB_PATH
 
 # Schema version for migration tracking
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -124,6 +124,7 @@ def init_db() -> None:
             tone_value REAL DEFAULT 0.0,
             tone_mode TEXT DEFAULT 'sepia',
             auto_advance_interval INTEGER DEFAULT 10,
+            nsfw_mode TEXT DEFAULT 'off' CHECK(nsfw_mode IN ('off', 'filter', 'blur')),
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
@@ -210,6 +211,8 @@ def init_db() -> None:
             cover_comic_id TEXT,
             category TEXT,
             subcategory TEXT,
+            is_adult BOOLEAN DEFAULT 0,
+            is_nsfw BOOLEAN DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -580,6 +583,36 @@ def init_db() -> None:
         except sqlite3.OperationalError:
             pass
     
+    if current_version < 15:
+        # Migration 15: Add NSFW content filtering schema
+        # Add columns to series table
+        for col, col_type in [('is_adult', 'BOOLEAN DEFAULT 0'), ('is_nsfw', 'BOOLEAN DEFAULT 0')]:
+            try:
+                conn.execute(f'ALTER TABLE series ADD COLUMN {col} {col_type}')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+        
+        # Add nsfw_mode to user_preferences
+        try:
+            conn.execute("ALTER TABLE user_preferences ADD COLUMN nsfw_mode TEXT DEFAULT 'off' CHECK(nsfw_mode IN ('off', 'filter', 'blur'))")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Create index on is_nsfw for efficient filtering
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_series_is_nsfw ON series(is_nsfw)')
+        
+        # Insert default NSFW admin settings
+        default_nsfw_settings = [
+            ('nsfw_categories', '[]'),
+            ('nsfw_subcategories', '[]'),
+            ('nsfw_tag_patterns', '[]')
+        ]
+        for key, value in default_nsfw_settings:
+            conn.execute(
+                'INSERT OR IGNORE INTO admin_settings (key, value) VALUES (?, ?)',
+                (key, value)
+            )
+     
     if current_version < SCHEMA_VERSION:
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     

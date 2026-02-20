@@ -720,6 +720,58 @@
     font-size: 1rem;
 }
 
+/* NSFW Content Blur */
+.nsfw-content .comic-cover img,
+.nsfw-content .list-cover img,
+.nsfw-content .detailed-cover img,
+.nsfw-content .carousel-image img,
+.nsfw-content .folder-fan img {
+    filter: blur(15px) brightness(0.7);
+    transition: filter 0.3s ease;
+}
+
+.nsfw-content:hover .comic-cover img,
+.nsfw-content:hover .list-cover img,
+.nsfw-content:hover .detailed-cover img,
+.nsfw-content:hover .carousel-image img,
+.nsfw-content:hover .folder-fan img {
+    filter: blur(8px) brightness(0.8);
+}
+
+img.nsfw-blur {
+    filter: blur(15px) brightness(0.7);
+    transition: filter 0.3s ease;
+}
+
+*:hover > .folder-fan img.nsfw-blur,
+.folder-fan:hover img.nsfw-blur {
+    filter: blur(8px) brightness(0.8);
+}
+
+.nsfw-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: #ff4444;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 14px;
+    z-index: 10;
+    pointer-events: none;
+    border: 2px solid #ff4444;
+}
+
+.nsfw-content .comic-cover,
+.nsfw-content .list-cover,
+.nsfw-content .detailed-cover,
+.nsfw-content .carousel-image,
+.nsfw-content .folder-fan {
+    position: relative;
+}
+
 /* Forms */
 .form-group {
     margin-bottom: 20px;

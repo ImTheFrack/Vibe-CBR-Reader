@@ -1,4 +1,4 @@
-import { apiGet, apiPut } from '../api.js';
+import { apiGet, apiPut, apiPost } from '../api.js';
 import { showToast } from '../utils.js';
 
 export async function loadSettings() {
@@ -100,5 +100,84 @@ export function setupThumbnailSettings() {
         showToast('Error saving settings', 'error');
       }
     });
+  }
+}
+
+export async function loadNSFWConfig() {
+  const container = document.getElementById('nsfw-config-content');
+  if (!container) return;
+
+  const data = await apiGet('/api/admin/nsfw-config');
+  if (data.error) {
+    container.innerHTML = `<p style="color: var(--danger);">Failed to load NSFW config: ${data.error}</p>`;
+    return;
+  }
+
+  const { categories = [], subcategories = [], tag_patterns = [], available_categories = [], available_subcategories = [] } = data;
+
+  const buildMultiSelect = (id, available, selected) => {
+    const options = available
+      .map(
+        (val) =>
+          `<option value="${val}"${selected.includes(val) ? ' selected' : ''}>${val}</option>`
+      )
+      .join('');
+    return `<select id="${id}" multiple class="admin-select nsfw-multi-select" style="height: 140px; width: 100%;">${options}</select>`;
+  };
+
+  container.innerHTML = `
+    <div class="admin-grid-2col" style="gap: 16px;">
+      <div>
+        <label class="admin-form-label">NSFW Categories</label>
+        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px;">Hold Ctrl/Cmd to select multiple</p>
+        ${buildMultiSelect('nsfw-categories-select', available_categories, categories)}
+      </div>
+      <div>
+        <label class="admin-form-label">NSFW Subcategories</label>
+        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px;">Hold Ctrl/Cmd to select multiple</p>
+        ${buildMultiSelect('nsfw-subcategories-select', available_subcategories, subcategories)}
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <label class="admin-form-label">Tag Patterns (one per line)</label>
+        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px;">Series matching any of these tags will be flagged as NSFW</p>
+        <textarea id="nsfw-tag-patterns-textarea" class="search-input" rows="8" style="width: 100%; resize: vertical; font-family: monospace; font-size: 0.85rem;">${tag_patterns.join('\n')}</textarea>
+      </div>
+    </div>
+  `;
+}
+
+export async function saveNSFWConfig() {
+  const categoriesEl = document.getElementById('nsfw-categories-select');
+  const subcategoriesEl = document.getElementById('nsfw-subcategories-select');
+  const tagPatternsEl = document.getElementById('nsfw-tag-patterns-textarea');
+
+  if (!categoriesEl || !subcategoriesEl || !tagPatternsEl) {
+    showToast('NSFW config form not loaded', 'error');
+    return;
+  }
+
+  const categories = Array.from(categoriesEl.selectedOptions).map((o) => o.value);
+  const subcategories = Array.from(subcategoriesEl.selectedOptions).map((o) => o.value);
+  const tag_patterns = tagPatternsEl.value
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const result = await apiPut('/api/admin/nsfw-config', { categories, subcategories, tag_patterns });
+  if (!result.error) {
+    showToast('NSFW config saved successfully');
+    await loadNSFWConfig();
+  } else {
+    showToast(`Error saving NSFW config: ${result.error}`, 'error');
+  }
+}
+
+export async function loadDefaultNSFWTags() {
+  const result = await apiPost('/api/admin/nsfw-config/load-defaults', {});
+  if (!result.error) {
+    showToast('Default NSFW tag patterns loaded');
+    await loadNSFWConfig();
+  } else {
+    showToast(`Error loading defaults: ${result.error}`, 'error');
   }
 }

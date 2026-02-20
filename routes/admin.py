@@ -7,7 +7,7 @@ import sys
 import re
 from database import get_all_users, delete_user, update_user_role, update_user_password, approve_user, get_running_scan_job, get_latest_scan_job, stop_running_scan_job, create_scan_job
 from dependencies import get_admin_user
-from db.settings import get_all_settings, set_setting
+from db.settings import get_all_settings, set_setting, get_setting
 from db.connection import get_db_connection
 from scanner import fast_scan_library_task, rescan_library_task, thumbnail_rescan_task, metadata_rescan_task
 from config import COMICS_DIR
@@ -252,6 +252,11 @@ async def stop_scan(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dic
     
     return {"message": "Scan cancellation requested"}
 
+class NSFWConfig(BaseModel):
+    categories: Optional[List[str]] = None
+    subcategories: Optional[List[str]] = None
+    tag_patterns: Optional[List[str]] = None
+
 class TagAction(BaseModel):
     tag: str
     display: Optional[str] = None
@@ -296,6 +301,130 @@ async def admin_remove_modification(norm: str, admin_user: Dict[str, Any] = Depe
     if remove_tag_modification(norm):
         return {"message": "Tag modification removed"}
     raise HTTPException(status_code=400, detail="Failed to remove modification")
+
+@router.get("/nsfw-config")
+async def get_nsfw_config(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, Any]:
+    """Get current NSFW configuration with available options (admin only)"""
+    from db.nsfw import get_nsfw_config as get_config
+    
+    # Get current config
+    config = get_config()
+    
+    # Get available categories and subcategories from database
+    conn = get_db_connection()
+    try:
+        available_categories = conn.execute(
+            'SELECT DISTINCT category FROM series WHERE category IS NOT NULL ORDER BY category'
+        ).fetchall()
+        available_subcategories = conn.execute(
+            'SELECT DISTINCT subcategory FROM series WHERE subcategory IS NOT NULL ORDER BY subcategory'
+        ).fetchall()
+    finally:
+        conn.close()
+    
+    return {
+        'categories': config.get('categories', []),
+        'subcategories': config.get('subcategories', []),
+        'tag_patterns': config.get('tag_patterns', []),
+        'available_categories': [row['category'] for row in available_categories],
+        'available_subcategories': [row['subcategory'] for row in available_subcategories],
+    }
+
+@router.put("/nsfw-config")
+async def update_nsfw_config(
+    data: NSFWConfig,
+    admin_user: Dict[str, Any] = Depends(get_admin_user)
+) -> Dict[str, Any]:
+    """Save NSFW configuration and recompute flags (admin only)"""
+    from db.nsfw import recompute_nsfw_flags
+    
+    # Save only provided (non-None) fields
+    if data.categories is not None:
+        set_setting('nsfw_categories', json.dumps(data.categories))
+    
+    if data.subcategories is not None:
+        set_setting('nsfw_subcategories', json.dumps(data.subcategories))
+    
+    if data.tag_patterns is not None:
+        set_setting('nsfw_tag_patterns', json.dumps(data.tag_patterns))
+    
+    # Recompute NSFW flags for all series
+    recompute_nsfw_flags()
+    
+    # Return updated config
+    from db.nsfw import get_nsfw_config as get_config
+    config = get_config()
+    
+    conn = get_db_connection()
+    try:
+        available_categories = conn.execute(
+            'SELECT DISTINCT category FROM series WHERE category IS NOT NULL ORDER BY category'
+        ).fetchall()
+        available_subcategories = conn.execute(
+            'SELECT DISTINCT subcategory FROM series WHERE subcategory IS NOT NULL ORDER BY subcategory'
+        ).fetchall()
+    finally:
+        conn.close()
+    
+    return {
+        'categories': config.get('categories', []),
+        'subcategories': config.get('subcategories', []),
+        'tag_patterns': config.get('tag_patterns', []),
+        'available_categories': [row['category'] for row in available_categories],
+        'available_subcategories': [row['subcategory'] for row in available_subcategories],
+    }
+
+@router.post("/nsfw-config/load-defaults")
+async def load_default_nsfw_config(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, Any]:
+    """Load default NSFW tag patterns and merge with existing (admin only)"""
+    from db.nsfw import get_default_nsfw_tag_patterns, recompute_nsfw_flags
+    
+    # Get current config
+    current_patterns = get_setting('nsfw_tag_patterns') or '[]'
+    try:
+        current_list = json.loads(current_patterns)
+    except (json.JSONDecodeError, TypeError):
+        current_list = []
+    
+    # Get default patterns
+    default_patterns = get_default_nsfw_tag_patterns()
+    
+    # Merge without duplicates (case-insensitive)
+    merged = list(current_list)
+    current_lower = [p.lower() for p in current_list]
+    
+    for pattern in default_patterns:
+        if pattern.lower() not in current_lower:
+            merged.append(pattern)
+    
+    # Save merged patterns
+    set_setting('nsfw_tag_patterns', json.dumps(merged))
+    
+    # Recompute NSFW flags
+    recompute_nsfw_flags()
+    
+    # Return updated config
+    from db.nsfw import get_nsfw_config as get_config
+    config = get_config()
+    
+    conn = get_db_connection()
+    try:
+        available_categories = conn.execute(
+            'SELECT DISTINCT category FROM series WHERE category IS NOT NULL ORDER BY category'
+        ).fetchall()
+        available_subcategories = conn.execute(
+            'SELECT DISTINCT subcategory FROM series WHERE subcategory IS NOT NULL ORDER BY subcategory'
+        ).fetchall()
+    finally:
+        conn.close()
+    
+    return {
+        'categories': config.get('categories', []),
+        'subcategories': config.get('subcategories', []),
+        'tag_patterns': config.get('tag_patterns', []),
+        'available_categories': [row['category'] for row in available_categories],
+        'available_subcategories': [row['subcategory'] for row in available_subcategories],
+    }
 
 @router.get("/scan/status")
 async def get_scan_status(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, Any]:

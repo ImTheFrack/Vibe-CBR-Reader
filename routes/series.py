@@ -18,6 +18,7 @@ async def list_series(
     """List all series with optional filtering and pagination"""
     limit = max(1, min(limit, 500))
     offset = max(0, offset)
+    nsfw_mode = current_user.get('nsfw_mode', 'off')
     
     # Get total count with filters
     from database import get_db_connection
@@ -32,12 +33,14 @@ async def list_series(
     if subcategory:
         count_query += ' AND subcategory = ?'
         params.append(subcategory)
+    if nsfw_mode == 'filter':
+        count_query += ' AND is_nsfw = 0'
     
     total = conn.execute(count_query, params).fetchone()['total']
     conn.close()
     
     # Get paginated series list
-    series_list = get_all_series(category=category, subcategory=subcategory, limit=limit, offset=offset)
+    series_list = get_all_series(category=category, subcategory=subcategory, limit=limit, offset=offset, nsfw_mode=nsfw_mode)
     
     return {
         "items": series_list,
@@ -82,15 +85,20 @@ class TagFilterRequest(BaseModel):
 async def filter_series_by_tags(request: TagFilterRequest, current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """Filter series by tags and return stats/results"""
     from database import get_series_by_tags
-    return get_series_by_tags(request.selected_tags)
+    nsfw_mode = current_user.get('nsfw_mode', 'off')
+    return get_series_by_tags(request.selected_tags, nsfw_mode=nsfw_mode)
 
 @router.get("/{series_name}")
 async def get_series_detail(series_name: str, current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """Get full series details including all comics and user progress"""
     user_id = current_user['id']
+    nsfw_mode = current_user.get('nsfw_mode', 'off')
     series = get_series_with_comics(series_name, user_id=user_id)
     
     if not series:
+        raise HTTPException(status_code=404, detail="Series not found")
+    
+    if nsfw_mode == 'filter' and series.get('is_nsfw'):
         raise HTTPException(status_code=404, detail="Series not found")
     
     # Add prev/next references for each comic

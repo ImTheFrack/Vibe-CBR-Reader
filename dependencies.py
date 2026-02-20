@@ -18,7 +18,7 @@ async def get_current_user(token: Optional[str] = Cookie(None, alias="session_to
     
     conn = get_db_connection()
     user = conn.execute(
-        'SELECT id, username, email, role, must_change_password FROM users WHERE id = ?',
+        'SELECT u.id, u.username, u.email, u.role, u.must_change_password, COALESCE(up.nsfw_mode, \'off\') as nsfw_mode FROM users u LEFT JOIN user_preferences up ON u.id = up.user_id WHERE u.id = ?',
         (user_id,)
     ).fetchone()
     conn.close()

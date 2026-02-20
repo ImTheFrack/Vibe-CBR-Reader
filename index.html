@@ -650,6 +650,26 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Section 5: NSFW Content Filtering -->
+                <div class="admin-section">
+                    <div class="admin-section-header">
+                        <h3 class="section-title">🔞 NSFW Content Filtering</h3>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-secondary" onclick="loadDefaultNSFWTags()">📋 Load Defaults</button>
+                            <button class="btn-primary" onclick="saveNSFWConfig()">💾 Save</button>
+                        </div>
+                    </div>
+                    <p class="section-subtitle section-subtitle-spacing">Configure which categories, subcategories, and tags are flagged as NSFW content</p>
+
+                    <div id="nsfw-settings-container" class="settings-section">
+                        <div id="nsfw-config-content">
+                            <div class="empty-state">
+                                <p>Loading NSFW configuration...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 

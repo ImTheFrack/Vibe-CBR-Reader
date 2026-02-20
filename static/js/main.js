@@ -7,11 +7,12 @@ import {
 } from './auth.js';
 import { 
      loadLibrary, navigateToRoot, navigateToFolder, 
-     navigateUp, toggleFlattenMode, setViewMode, handleSort, 
-     handleSearch, toggleSearchScope, showView, 
-     toggleMobileSidebar, navigateTitleComic, renderTitleFan, toggleMeta, continueReading,
-     handleLibraryClick
- } from './library.js';
+      navigateUp, toggleFlattenMode, setViewMode, handleSort, 
+      handleSearch, toggleSearchScope, showView, 
+      toggleMobileSidebar, navigateTitleComic, renderTitleFan, toggleMeta, continueReading,
+      handleLibraryClick
+  } from './library.js';
+import { updateLibraryView } from './library/view-renderers.js';
 import { 
     setupKeyboardShortcuts, startReading, closeReader, 
     prevPage, nextPage, jumpToPage, handleSliderInput, toggleBookmark, 
@@ -326,6 +327,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     registerAllActions();
+
+    document.addEventListener('preferences-updated', async (event) => {
+        const key = event.detail?.key;
+        if (key === 'nsfw_mode') {
+            if (!state.isAuthenticated) return;
+            await loadLibrary();
+            if (state.currentView === 'library') {
+                updateLibraryView();
+            } else if (state.currentView === 'recent') {
+                await loadRecentReads();
+            } else if (state.currentView === 'discovery') {
+                await loadDiscoveryData();
+            } else if (state.currentView === 'tags') {
+                const route = router.parseHash(location.hash);
+                await initTagsView(route.params);
+            }
+        } else if (key === 'title_card_style' && state.currentView === 'library') {
+            updateLibraryView();
+        }
+    });
 
     document.addEventListener('click', (event) => {
         const actionElement = event.target.closest('[data-action]');

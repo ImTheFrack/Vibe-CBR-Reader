@@ -197,7 +197,8 @@ async def get_config() -> Dict[str, str]:
 async def search(q: str, current_user: Dict[str, Any] = Depends(get_current_user)) -> List[Dict[str, Any]]:
     """Search for series using FTS5"""
     from db.series import search_series
-    return search_series(q)
+    nsfw_mode = current_user.get('nsfw_mode', 'off')
+    return search_series(q, nsfw_mode=nsfw_mode)
 
 @router.get("/books")
 async def list_books(
@@ -206,27 +207,46 @@ async def list_books(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> Dict[str, Any]:
     offset = max(0, offset)
-    
+    nsfw_mode = current_user.get('nsfw_mode', 'off')
+
     conn = get_db_connection()
-    
-    count_query = 'SELECT COUNT(*) as total FROM comics'
+
+    if nsfw_mode == 'filter':
+        count_query = (
+            'SELECT COUNT(*) as total FROM comics c '
+            'LEFT JOIN series s ON c.series_id = s.id '
+            'WHERE (s.is_nsfw = 0 OR s.is_nsfw IS NULL)'
+        )
+        nsfw_select = ''
+        nsfw_where = 'WHERE (s.is_nsfw = 0 OR s.is_nsfw IS NULL)'
+    elif nsfw_mode == 'blur':
+        count_query = 'SELECT COUNT(*) as total FROM comics'
+        nsfw_select = ', s.is_nsfw'
+        nsfw_where = ''
+    else:
+        count_query = 'SELECT COUNT(*) as total FROM comics'
+        nsfw_select = ''
+        nsfw_where = ''
+
     total = conn.execute(count_query).fetchone()['total']
-    
+
     if limit == 0:
-        query = '''
-            SELECT c.*, s.genres, s.status as series_status, s.tags, s.authors
+        query = f'''
+            SELECT c.*, s.genres, s.status as series_status, s.tags, s.authors{nsfw_select}
             FROM comics c
             LEFT JOIN series s ON c.series_id = s.id
+            {nsfw_where}
             ORDER BY c.category, c.series, c.volume, c.chapter, c.filename
         '''
         books = conn.execute(query).fetchall()
         limit = total
     else:
         limit = max(1, min(limit, 500))
-        query = '''
-            SELECT c.*, s.genres, s.status as series_status, s.tags, s.authors
+        query = f'''
+            SELECT c.*, s.genres, s.status as series_status, s.tags, s.authors{nsfw_select}
             FROM comics c
             LEFT JOIN series s ON c.series_id = s.id
+            {nsfw_where}
             ORDER BY c.category, c.series, c.volume, c.chapter, c.filename
             LIMIT ? OFFSET ?
         '''

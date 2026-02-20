@@ -43,6 +43,7 @@ class PreferencesUpdate(BaseModel):
     tone_value: Optional[float] = None
     tone_mode: Optional[str] = None
     auto_advance_interval: Optional[int] = None
+    nsfw_mode: Optional[str] = None
 
 class PasswordChange(BaseModel):
     current_password: str

@@ -69,6 +69,7 @@ def create_or_update_series(name: str, metadata: Optional[Dict[str, Any]] = None
                 banner_image = COALESCE(?, banner_image),
                 category = COALESCE(?, category),
                 subcategory = COALESCE(?, subcategory),
+                is_adult = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE name = ?
         ''', (
@@ -93,6 +94,7 @@ def create_or_update_series(name: str, metadata: Optional[Dict[str, Any]] = None
             metadata.get('banner_image'),
             category,
             subcategory,
+            1 if metadata.get('is_adult') else 0,
             name
         ))
         series_id = int(existing['id'])
@@ -103,8 +105,8 @@ def create_or_update_series(name: str, metadata: Optional[Dict[str, Any]] = None
                 name, title, title_english, title_japanese, synonyms, authors,
                 synopsis, genres, tags, demographics, status, total_volumes,
                 total_chapters, release_year, mal_id, anilist_id, cover_comic_id,
-                illumination, cover_image, banner_image, category, subcategory
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                illumination, cover_image, banner_image, category, subcategory, is_adult
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             name,
             metadata.get('title'),
@@ -127,7 +129,8 @@ def create_or_update_series(name: str, metadata: Optional[Dict[str, Any]] = None
             metadata.get('cover_image'),
             metadata.get('banner_image'),
             category,
-            subcategory
+            subcategory,
+            1 if metadata.get('is_adult') else 0
         ))
         assert cursor.lastrowid is not None
         series_id = cursor.lastrowid
@@ -254,7 +257,7 @@ def rename_or_merge_series(series_id: int, new_name: str, conn: Optional[sqlite3
         conn.close()
     return series_id
 
-def get_all_series(category: Optional[str] = None, subcategory: Optional[str] = None, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+def get_all_series(category: Optional[str] = None, subcategory: Optional[str] = None, limit: int = 100, offset: int = 0, nsfw_mode: str = 'off') -> List[Dict[str, Any]]:
     """Get all series with optional filtering"""
     conn = get_db_connection()
     
@@ -267,6 +270,8 @@ def get_all_series(category: Optional[str] = None, subcategory: Optional[str] = 
     if subcategory:
         query += ' AND subcategory = ?'
         params.append(subcategory)
+    if nsfw_mode == 'filter':
+        query += ' AND is_nsfw = 0'
     
     query += ' ORDER BY name LIMIT ? OFFSET ?'
     params.extend([limit, offset])
@@ -734,7 +739,7 @@ def force_rebuild_fts() -> bool:
     finally:
         conn.close()
 
-def search_series(query: str, limit: int = 50) -> List[Dict[str, Any]]:
+def search_series(query: str, limit: int = 50, nsfw_mode: str = 'off') -> List[Dict[str, Any]]:
     """Search for series using FTS5 with fallback to LIKE"""
     if not query or not query.strip():
         return []
@@ -744,38 +749,43 @@ def search_series(query: str, limit: int = 50) -> List[Dict[str, Any]]:
     
     results = []
     try:
-        # Prepare query for FTS5
-        # 1. Remove special FTS5 characters to prevent syntax errors
-        # 2. Split into words and add * to each for prefix matching
         clean_query = re.sub(r'[^\w\s]', ' ', query).strip()
         words = clean_query.split()
         if not words:
             return []
             
-        # Format: "word1"* "word2"*
         fts_query = ' '.join([f'"{w}"*' for w in words])
-        
-        rows = conn.execute('''
+
+        fts_nsfw_clause = 'AND (s.is_nsfw = 0 OR s.is_nsfw IS NULL)' if nsfw_mode == 'filter' else ''
+
+        rows = conn.execute(f'''
             SELECT s.*, rank
             FROM series_fts f
             JOIN series s ON s.id = f.rowid
             WHERE series_fts MATCH ?
+            {fts_nsfw_clause}
             ORDER BY rank
             LIMIT ?
         ''', (fts_query, limit)).fetchall()
         results = [dict(r) for r in rows]
     except sqlite3.OperationalError:
-        # FTS table might not exist or FTS not supported
         pass
 
     if not results:
-        # Fallback to LIKE (simple substring match)
         like_query = f'%{query}%'
-        rows = conn.execute('''
-            SELECT * FROM series 
-            WHERE name LIKE ? OR title LIKE ? OR title_english LIKE ? OR synopsis LIKE ? OR authors LIKE ?
-            LIMIT ?
-        ''', (like_query, like_query, like_query, like_query, like_query, limit)).fetchall()
+        if nsfw_mode == 'filter':
+            rows = conn.execute('''
+                SELECT * FROM series 
+                WHERE (name LIKE ? OR title LIKE ? OR title_english LIKE ? OR synopsis LIKE ? OR authors LIKE ?)
+                AND (is_nsfw = 0 OR is_nsfw IS NULL)
+                LIMIT ?
+            ''', (like_query, like_query, like_query, like_query, like_query, limit)).fetchall()
+        else:
+            rows = conn.execute('''
+                SELECT * FROM series 
+                WHERE name LIKE ? OR title LIKE ? OR title_english LIKE ? OR synopsis LIKE ? OR authors LIKE ?
+                LIMIT ?
+            ''', (like_query, like_query, like_query, like_query, like_query, limit)).fetchall()
         results = [dict(r) for r in rows]
     
     conn.close()
@@ -910,7 +920,7 @@ def get_series_metadata() -> Dict[str, List[str]]:
         "genres": genres
     }
 
-def get_series_by_tags(selected_tags: Optional[List[str]] = None) -> Dict[str, Any]:
+def get_series_by_tags(selected_tags: Optional[List[str]] = None, nsfw_mode: str = 'off') -> Dict[str, Any]:
     """Get series stats filtered by tags/genres"""
     if selected_tags is None:
         selected_tags = []
@@ -926,10 +936,11 @@ def get_series_by_tags(selected_tags: Optional[List[str]] = None) -> Dict[str, A
     # Resolve selected tags to their final canonical norms
     selected_norms = [resolve_norm(normalize_tag(t), modifications) for t in selected_tags if normalize_tag(t)]
     
-    rows = conn.execute('''
-        SELECT s.id, s.name, s.title, s.genres, s.tags, s.demographics, s.synopsis, s.cover_comic_id, s.total_chapters, s.status, s.category,
+    nsfw_where = ' WHERE s.is_nsfw = 0' if nsfw_mode == 'filter' else ''
+    rows = conn.execute(f'''
+        SELECT s.id, s.name, s.title, s.genres, s.tags, s.demographics, s.synopsis, s.cover_comic_id, s.total_chapters, s.status, s.category, s.is_nsfw,
                (SELECT COUNT(*) FROM comics WHERE series_id = s.id) as actual_count
-        FROM series s
+        FROM series s{nsfw_where}
     ''').fetchall()
     
     processed_series = []
@@ -947,7 +958,8 @@ def get_series_by_tags(selected_tags: Optional[List[str]] = None) -> Dict[str, A
             'actual_count': row['actual_count'],
             'status': row['status'],
             'category': row['category'],
-            'genres': s_genres
+            'genres': s_genres,
+            'is_nsfw': row['is_nsfw'] or 0,
         })
 
     matching_series = []
@@ -1003,14 +1015,17 @@ def get_series_by_tags(selected_tags: Optional[List[str]] = None) -> Dict[str, A
                                 series_all_norms.add(resolve_norm(parent, modifications))
         
         if all(sel in series_all_norms for sel in selected_norms):
-            matching_series.append({
+            entry = {
                 'id': series['id'], 'name': series['name'], 'title': series['title'],
                 'cover_comic_id': series['cover_comic_id'], 'count': series['actual_count'],
                 'comics': comics_by_series.get(series['id'], []),
                 'status': series['status'],
                 'category': series['category'],
-                'genres': series['genres']
-            })
+                'genres': series['genres'],
+            }
+            if nsfw_mode == 'blur':
+                entry['is_nsfw'] = series['is_nsfw']
+            matching_series.append(entry)
             for tag_norm in series_all_norms:
                 if tag_norm not in selected_norms:
                     if tag_norm not in tag_counts:

@@ -144,7 +144,8 @@ def update_user_preferences(user_id: int, **kwargs: Any) -> bool:
     """Update user preferences"""
     allowed_fields = ['theme', 'ereader', 'default_view_mode', 'default_nav_mode', 'default_sort_by', 
                       'reader_direction', 'reader_display', 'reader_zoom', 'title_card_style',
-                      'brightness', 'contrast', 'saturation', 'invert', 'tone_value', 'tone_mode', 'auto_advance_interval']
+                      'brightness', 'contrast', 'saturation', 'invert', 'tone_value', 'tone_mode', 'auto_advance_interval',
+                      'nsfw_mode']
     
     updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
     if not updates:

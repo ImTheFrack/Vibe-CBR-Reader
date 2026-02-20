@@ -76,6 +76,7 @@ export async function loadUserData() {
         if (prefsResult.tone_value !== undefined) state.settings.toneValue = prefsResult.tone_value;
         if (prefsResult.tone_mode !== undefined) state.settings.toneMode = prefsResult.tone_mode;
         if (prefsResult.auto_advance_interval !== undefined) state.settings.autoAdvanceInterval = prefsResult.auto_advance_interval;
+        if (prefsResult.nsfw_mode !== undefined) state.settings.nsfwMode = prefsResult.nsfw_mode;
 
         if (prefsResult.theme && prefsResult.theme !== state.theme) {
             state.theme = prefsResult.theme;

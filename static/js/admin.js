@@ -1,6 +1,7 @@
 import { apiGet, apiPut, apiPost, apiDelete } from './api.js';
 import { showToast } from './utils.js';
 import { loadAISettings, renderAISettingsForm, handleTestConnection, handleSaveSettings } from './admin/ai-settings.js';
+import { loadNSFWConfig, saveNSFWConfig, loadDefaultNSFWTags } from './admin/settings.js';
 
 console.log('[DEBUG] admin.js module loading...');
 
@@ -48,6 +49,7 @@ export async function initAdminView() {
     await loadAISettings();
     console.log('initAdminView: loadAISettings done');
     initScanStatus();
+    await loadNSFWConfig();
     console.log('initAdminView: Complete!');
 }
 
@@ -489,6 +491,8 @@ export async function loadGapsReport() {
 }
 
 window.loadGapsReport = loadGapsReport;
+window.saveNSFWConfig = saveNSFWConfig;
+window.loadDefaultNSFWTags = loadDefaultNSFWTags;
 
 // Task 8: Scan buttons, thumbnail settings, and scan status
 let scanPollingInterval = null;

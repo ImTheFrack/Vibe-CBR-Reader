@@ -9,7 +9,7 @@
  * @returns {string} HTML string
  */
 export function renderFan(coverIds, options = {}) {
-    const { containerClass = 'folder-fan', max = 3 } = options;
+    const { containerClass = 'folder-fan', max = 3, nsfwFlags = null } = options;
     const count = Math.min(coverIds.length, max);
     
     if (count === 0) {
@@ -25,12 +25,11 @@ export function renderFan(coverIds, options = {}) {
     let html = `<div class="${containerClass}">`;
     
     for (let i = 0; i < count; i++) {
-        // If we have more images than classes, default to just piling them or ignoring?
-        // The CSS likely only supports these 3 specific classes.
         if (i >= positionClasses.length) break;
         
         const posClass = positionClasses[i];
-        html += `<img src="/api/cover/${coverIds[i]}" class="folder-fan-img ${posClass}" loading="lazy" alt="Cover">`;
+        const blurClass = (nsfwFlags && nsfwFlags[i]) ? ' nsfw-blur' : '';
+        html += `<img src="/api/cover/${coverIds[i]}" class="folder-fan-img ${posClass}${blurClass}" loading="lazy" alt="Cover">`;
     }
     
     html += `</div>`;
@@ -129,4 +128,56 @@ export function getFolderCoverIds(folder) {
     }
 
     return selectedComics.map(c => c.id);
+}
+
+/**
+ * Extract cover comics from a Folder object (Random selection)
+ * Returns full comic objects so callers can access is_nsfw etc.
+ * @param {Object} folder - Folder object
+ * @returns {Array<Object>} Array of comic objects
+ */
+export function getFolderCoverComics(folder) {
+    const allTitles = [];
+    function traverse(node) {
+        if (node.titles) {
+            Object.values(node.titles).forEach(title => {
+                if (title.comics && title.comics.length > 0) allTitles.push(title);
+            });
+        }
+        if (node.subcategories) Object.values(node.subcategories).forEach(sub => traverse(sub));
+        if (node.categories) Object.values(node.categories).forEach(cat => traverse(cat));
+    }
+    traverse(folder);
+
+    if (allTitles.length === 0) return [];
+
+    for (let i = allTitles.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allTitles[i], allTitles[j]] = [allTitles[j], allTitles[i]];
+    }
+
+    const selectedComics = [];
+    for (let i = 0; i < Math.min(3, allTitles.length); i++) {
+        const title = allTitles[i];
+        const randomIdx = Math.floor(Math.random() * title.comics.length);
+        selectedComics.push(title.comics[randomIdx]);
+    }
+
+    if (selectedComics.length < 3 && allTitles.length > 0) {
+        const allComics = [];
+        allTitles.forEach(t => allComics.push(...t.comics));
+        const pickedIds = new Set(selectedComics.map(c => c.id));
+        const available = allComics.filter(c => !pickedIds.has(c.id));
+
+        for (let i = available.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [available[i], available[j]] = [available[j], available[i]];
+        }
+
+        for (let i = 0; i < Math.min(3 - selectedComics.length, available.length); i++) {
+            selectedComics.push(available[i]);
+        }
+    }
+
+    return selectedComics;
 }

@@ -194,6 +194,10 @@ def sync_library_task(job_id: Optional[int] = None) -> Tuple[int, int]:
     # Invalidate tag cache so new metadata is reflected immediately
     from database import invalidate_tag_cache
     invalidate_tag_cache()
+    
+    # Recompute NSFW flags based on updated metadata
+    from db.nsfw import recompute_nsfw_flags
+    recompute_nsfw_flags()
 
     conn.close()
     return len(new_comics) + len(changed_comics), deleted_count
@@ -487,6 +491,10 @@ def metadata_rescan_task(job_id: Optional[int] = None) -> None:
         # Invalidate tag cache so new metadata is reflected immediately
         from database import invalidate_tag_cache
         invalidate_tag_cache()
+        
+        # Recompute NSFW flags based on updated metadata
+        from db.nsfw import recompute_nsfw_flags
+        recompute_nsfw_flags()
         
         conn.commit()
         conn.close()

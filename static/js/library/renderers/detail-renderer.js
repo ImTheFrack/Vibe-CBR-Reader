@@ -277,6 +277,6 @@ export async function renderTitleDetailView() {
     }
   }
 
-  renderChapters(document.getElementById('chapters-container'), seriesData.comics);
+  renderChapters(document.getElementById('chapters-container'), seriesData.comics, seriesData.is_nsfw);
   if (window.updateSelectionUI) window.updateSelectionUI();
 }

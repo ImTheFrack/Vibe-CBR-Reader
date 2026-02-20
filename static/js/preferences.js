@@ -3,6 +3,13 @@ import { apiPut } from './api.js';
 import { showToast } from './utils.js';
 import { initTheme } from './theme.js';
 
+function emitPreferenceUpdated(key, value) {
+    const event = new CustomEvent('preferences-updated', {
+        detail: { key, value },
+    });
+    document.dispatchEvent(event);
+}
+
 export function showPreferences() {
     // Close user menu
     const dropdown = document.getElementById('user-dropdown');
@@ -69,6 +76,17 @@ export function showPreferences() {
                         <button class="setting-btn" data-pref="reader_zoom" data-value="width" onclick="setPreference('reader_zoom', 'width')">↔️ W</button>
                         <button class="setting-btn" data-pref="reader_zoom" data-value="height" onclick="setPreference('reader_zoom', 'height')">↕️ H</button>
                     </div>
+                </div>
+                <div class="form-group horizontal">
+                    <label>NSFW Content</label>
+                    <div class="setting-options">
+                        <button class="setting-btn" data-pref="nsfw_mode" data-value="off" onclick="setPreference('nsfw_mode', 'off')">🔒 Off</button>
+                        <button class="setting-btn" data-pref="nsfw_mode" data-value="filter" onclick="setPreference('nsfw_mode', 'filter')">🚫 Filter</button>
+                        <button class="setting-btn" data-pref="nsfw_mode" data-value="blur" onclick="setPreference('nsfw_mode', 'blur')">👁️ Blur</button>
+                    </div>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin: -8px 0 8px 0;">
+                    Filter: Hide NSFW content entirely. Blur: Show with blurred covers.
                 </div>
 
                 <div class="setting-group" style="border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md); margin-top: 16px;">
@@ -170,7 +188,8 @@ export function updatePreferencesUI() {
         'invert': () => state.settings.invert,
         'tone_value': () => state.settings.toneValue,
         'tone_mode': () => state.settings.toneMode,
-        'auto_advance_interval': () => state.settings.autoAdvanceInterval
+        'auto_advance_interval': () => state.settings.autoAdvanceInterval,
+        'nsfw_mode': () => state.settings.nsfwMode || 'off',
     };
 
     // Update buttons
@@ -230,6 +249,9 @@ export async function setPreference(key, value, updateUI = true, persist = true,
             state.settings.toneMode = value;
         } else if (key === 'auto_advance_interval') {
             state.settings.autoAdvanceInterval = value;
+        } else if (key === 'nsfw_mode') {
+            state.settings.nsfwMode = value;
+            emitPreferenceUpdated('nsfw_mode', value);
         }
 
         // Apply filters immediately if reader is active
@@ -277,9 +299,7 @@ export async function setPreference(key, value, updateUI = true, persist = true,
     } else if (key === 'title_card_style') {
         state.settings.titleCardStyle = value;
         if (state.userPreferences) state.userPreferences.title_card_style = value;
-        // Trigger re-render of library view if we are there
-        const event = new Event('preferences-updated');
-        document.dispatchEvent(event);
+        emitPreferenceUpdated('title_card_style', value);
     } else if (key === 'brightness') {
         state.settings.brightness = value;
         if (state.userPreferences) state.userPreferences.brightness = value;
@@ -301,6 +321,10 @@ export async function setPreference(key, value, updateUI = true, persist = true,
     } else if (key === 'auto_advance_interval') {
         state.settings.autoAdvanceInterval = value;
         if (state.userPreferences) state.userPreferences.auto_advance_interval = value;
+    } else if (key === 'nsfw_mode') {
+        state.settings.nsfwMode = value;
+        if (state.userPreferences) state.userPreferences.nsfw_mode = value;
+        emitPreferenceUpdated('nsfw_mode', value);
     }
 
     // Apply filters immediately if reader is active

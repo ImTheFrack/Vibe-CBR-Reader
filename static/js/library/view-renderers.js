@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { apiPut } from '../api.js';
 import { 
-    renderItems, renderFan, getTitleCoverIds, getFolderCoverIds 
+    renderItems, renderFan, getTitleCoverIds, getFolderCoverIds, getFolderCoverComics 
 } from '../components/index.js';
 import { calculateComicProgress, aggregateProgress } from '../utils/progress.js';
 import { 
@@ -153,16 +153,27 @@ export function renderFolderGrid(folders) {
         const escapedName = folder.name.replace(/'/g, "\\'");
         
         const allTitlesWithCount = [];
+        const nsfwBlur = state.settings.nsfwMode === 'blur';
+        let totalComics = 0;
+        let nsfwComics = 0;
         function collectTitles(node) {
             if (node.titles) {
                 Object.values(node.titles).forEach(t => {
                     allTitlesWithCount.push({ name: t.name, count: t.comics ? t.comics.length : 0 });
+                    if (nsfwBlur && t.comics) {
+                        t.comics.forEach(c => {
+                            totalComics++;
+                            if (c.is_nsfw) nsfwComics++;
+                        });
+                    }
                 });
             }
             if (node.subcategories) Object.values(node.subcategories).forEach(sub => collectTitles(sub));
         }
         collectTitles(folder);
         const allTitleNames = allTitlesWithCount.map(t => t.name);
+        const nsfwRatio = totalComics > 0 ? nsfwComics / totalComics : 0;
+        const folderMostlyNsfw = nsfwBlur && nsfwRatio > 0.8;
 
         if (state.currentLevel === 'root') {
             clickHandler = `window.routerNavigate('library', { category: \`${escapedName}\` })`;
@@ -177,7 +188,16 @@ export function renderFolderGrid(folders) {
             typeLabel = 'Subcategory';
         }
         
-        const coverIds = getFolderCoverIds(folder);
+        let coverIds;
+        let coverHtml = undefined;
+        if (nsfwBlur && nsfwComics > 0 && !folderMostlyNsfw) {
+            const coverComics = getFolderCoverComics(folder);
+            coverIds = coverComics.map(c => c.id);
+            const nsfwFlags = coverComics.map(c => !!c.is_nsfw);
+            coverHtml = renderFan(coverIds, { nsfwFlags });
+        } else {
+            coverIds = getFolderCoverIds(folder);
+        }
 
         const shuffled = [...allTitleNames].sort(() => Math.random() - 0.5);
         const sampleNames = shuffled.slice(0, 2);
@@ -190,9 +210,10 @@ export function renderFolderGrid(folders) {
 
         return {
             title: folderName,
-            coverIds: coverIds,
+            coverIds: folderMostlyNsfw ? undefined : coverIds,
+            coverHtml: folderMostlyNsfw ? renderFan(coverIds, { nsfwFlags: coverIds.map(() => true) }) : coverHtml,
             isFolder: false,
-            extraClasses: 'folder-cover-card',
+            extraClasses: folderMostlyNsfw ? 'folder-cover-card nsfw-content' : 'folder-cover-card',
             badgeText: `${itemCount} titles`,
             metaText: `<span class="comic-chapter">${typeLabel}</span><span>${sampleText || meta}</span>`,
             metaItems: [typeLabel, sampleText || meta],
@@ -250,6 +271,8 @@ export function renderTitleCards() {
         const escapedName = title.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
         const displayTitle = title.name.replace(/"/g, '&quot;');
         const coverIds = getTitleCoverIds(title);
+        const nsfwBlur = state.settings.nsfwMode === 'blur';
+        const isNsfw = nsfwBlur && title.comics.some(c => c.is_nsfw);
 
         let onClick;
         if (state.currentLocation.category && state.currentLocation.subcategory) {
@@ -261,21 +284,30 @@ export function renderTitleCards() {
         const titleCardStyle = state.settings.titleCardStyle;
         let itemCoverIds = coverIds;
         let itemCoverUrl = undefined;
+        let titleCoverHtml = undefined;
         
         if (titleCardStyle === 'single' && coverIds.length > 0) {
             itemCoverIds = undefined;
             itemCoverUrl = `/api/cover/${coverIds[0]}`;
+            if (isNsfw) {
+                titleCoverHtml = `<img src="${itemCoverUrl}" alt="${title.name}" loading="lazy" class="nsfw-blur">`;
+            }
+        } else if (isNsfw) {
+            const nsfwFlags = coverIds.map(() => true);
+            titleCoverHtml = renderFan(coverIds, { nsfwFlags });
+            itemCoverIds = undefined;
         }
 
         return {
             title: title.name,
             coverIds: itemCoverIds,
-            coverUrl: itemCoverUrl,
+            coverUrl: isNsfw ? undefined : itemCoverUrl,
+            coverHtml: titleCoverHtml,
             progressPercent: progressStats.percent,
             badgeText: `${comicCount} ch`,
             metaText: `<span class="comic-chapter">${comicCount} chapter${comicCount !== 1 ? 's' : ''}</span>${state.currentLevel === 'root' ? `<span>${firstComic.category || 'Uncategorized'}</span>` : ''}`,
             dataAttrs: `data-title-name="${displayTitle}"`,
-            extraClasses: 'title-card',
+            extraClasses: isNsfw ? 'title-card nsfw-content' : 'title-card',
             metaItems: [
                 `${comicCount} chapters`,
                 firstComic.category,

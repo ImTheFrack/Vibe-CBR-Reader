@@ -37,6 +37,9 @@ export function renderTitleCards() {
     const escapedName = title.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     const displayTitle = title.name.replace(/"/g, '&quot;');
     const coverIds = getTitleCoverIds(title);
+    const nsfwBlur = state.settings.nsfwMode === 'blur';
+    const isNsfw = nsfwBlur && title.comics.some(c => c.is_nsfw);
+    const nsfwOverlay = isNsfw ? '<div class="nsfw-overlay">18+</div>' : '';
 
     let onClick;
     if (state.currentLocation.category && state.currentLocation.subcategory) {
@@ -62,7 +65,7 @@ export function renderTitleCards() {
       badgeText: `${comicCount} ch`,
       metaText: `<span class="comic-chapter">${comicCount} chapter${comicCount !== 1 ? 's' : ''}</span>${state.currentLevel === 'root' ? `<span>${firstComic.category || 'Uncategorized'}</span>` : ''}`,
       dataAttrs: `data-title-name="${displayTitle}"`,
-      extraClasses: 'title-card',
+      extraClasses: isNsfw ? 'title-card nsfw-content' : 'title-card',
       metaItems: [
         `${comicCount} chapters`,
         firstComic.category,

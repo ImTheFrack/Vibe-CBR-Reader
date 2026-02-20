@@ -58,8 +58,10 @@ const CARD_SCHEMAS = {
             const metaHtml = data.metaItems.map(item => `<span>${item}</span>`).join('<span>•</span>');
             const itemId = data.id || data.title;
 
+            const listClass = `list-item ${data.extraClasses || ''}`.trim();
+
             return `
-                <div class="list-item" data-action="card-click" data-id="${itemId}">
+                <div class="${listClass}" data-action="card-click" data-id="${itemId}">
                     <div class="list-cover" style="display:flex;align-items:center;justify-content:center;">
                         ${!data.isFolder ? `<div class="selection-checkbox" data-action="toggle-selection" data-id="${itemId}"></div>` : ''}
                         ${coverHtml}
@@ -98,8 +100,10 @@ const CARD_SCHEMAS = {
 
             const itemId = data.id || data.title;
 
+            const detailedClass = `detailed-card ${data.extraClasses || ''}`.trim();
+
             return `
-                <div class="detailed-card" data-action="card-click" data-id="${itemId}">
+                <div class="${detailedClass}" data-action="card-click" data-id="${itemId}">
                     <div class="detailed-cover" style="display:flex;align-items:center;justify-content:center;">
                         ${!data.isFolder ? `<div class="selection-checkbox" data-action="toggle-selection" data-id="${itemId}"></div>` : ''}
                         ${coverHtml}

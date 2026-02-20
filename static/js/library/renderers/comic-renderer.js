@@ -26,6 +26,8 @@ export function renderComicsView() {
   const items = sortedComics.map(comic => {
     const progressStats = calculateComicProgress(comic, state.readingProgress);
     const chapterText = comic.chapter ? `Ch. ${comic.chapter}` : (comic.volume ? `Vol. ${comic.volume}` : 'One-shot');
+    const isNsfw = comic.is_nsfw || false;
+    const nsfwOverlay = isNsfw ? '<div class="nsfw-overlay">18+</div>' : '';
 
     return {
       id: comic.id,
@@ -61,14 +63,16 @@ export function renderComicsView() {
         { text: progressStats.hasProgress ? '▶ Continue Reading' : '▶ Start Reading', class: 'primary', onClick: `startReading('${comic.id}')` },
         { text: '📖 View Details', class: 'secondary', onClick: `window.routerNavigate('series', { name: \`${comic.series.replace(/'/g, "\\'")}\` })` }
       ],
-      onClick: `window.routerNavigate('series', { name: \`${comic.series.replace(/'/g, "\\'")}\` })`
+      onClick: `window.routerNavigate('series', { name: \`${comic.series.replace(/'/g, "\\'")}\` })`,
+      extraClasses: isNsfw ? 'nsfw-content' : '',
+      coverHtml: isNsfw ? `<img src="/api/cover/${comic.id}" alt="${comic.title}" loading="lazy">${nsfwOverlay}` : undefined
     };
   });
 
   renderItems(container, items, state.viewMode);
 }
 
-export function renderChapters(container, comics) {
+export function renderChapters(container, comics, seriesIsNsfw = false) {
   if (!container || !comics) return;
 
   if (comics.length === 0) {
@@ -87,10 +91,13 @@ export function renderChapters(container, comics) {
   });
 
   const sortedComics = sortItems(comics, state.sortBy, COMIC_SORT_ACCESSORS(state.readingProgress));
+  const nsfwBlur = state.settings.nsfwMode === 'blur';
 
   const items = sortedComics.map(comic => {
     const progressStats = calculateComicProgress(comic, state.readingProgress);
     const chapterText = comic.chapter ? `Ch. ${comic.chapter}` : (comic.volume ? `Vol. ${comic.volume}` : 'One-shot');
+    const isNsfw = nsfwBlur && (comic.is_nsfw || seriesIsNsfw);
+    const nsfwOverlay = isNsfw ? '<div class="nsfw-overlay">18+</div>' : '';
 
     return {
       id: comic.id,
@@ -125,7 +132,9 @@ export function renderChapters(container, comics) {
       buttons: [
         { text: progressStats.hasProgress ? '▶ Continue Reading' : '▶ Start Reading', class: 'primary', onClick: `startReading('${comic.id}')` }
       ],
-      onClick: `startReading('${comic.id}')`
+      onClick: `startReading('${comic.id}')`,
+      extraClasses: isNsfw ? 'nsfw-content' : '',
+      coverHtml: isNsfw ? `<img src="/api/cover/${comic.id}" alt="${comic.title || comic.filename}" loading="lazy">${nsfwOverlay}` : undefined
     };
   });
 
