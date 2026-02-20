@@ -246,6 +246,11 @@ export async function renderTitleDetailView() {
             <button class="btn-secondary" onclick="openRecipeMixerModal([${seriesData.id}])">
               <span>🤖</span> AI Suggestions
             </button>
+            ${state.currentUser && state.currentUser.role === 'admin' ? `
+            <button class="btn-secondary" onclick="showNsfwOverrideForSeries(${seriesData.id})" title="Override NSFW status">
+              <span>🔞</span> ${seriesData.nsfw_override === 1 ? 'NSFW (forced)' : seriesData.nsfw_override === 0 ? 'Safe (forced)' : seriesData.is_nsfw ? 'NSFW (auto)' : 'Safe (auto)'}
+            </button>
+            ` : ''}
           </div>
         </div>
       </div>

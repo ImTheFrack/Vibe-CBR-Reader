@@ -1,6 +1,6 @@
 import { state } from '../state.js';
 import { showToast, findTitleInTree } from '../utils.js';
-import { apiGet, apiPost, apiDelete } from '../api.js';
+import { apiGet, apiPost, apiPut, apiDelete } from '../api.js';
 
 let currentExportJobId = null;
 
@@ -325,6 +325,11 @@ function updateSelectionUI() {
     } else {
         bar.classList.remove('active');
     }
+
+    const isAdmin = state.currentUser && state.currentUser.role === 'admin';
+    bar.querySelectorAll('.admin-only-btn').forEach(btn => {
+        btn.style.display = isAdmin ? '' : 'none';
+    });
     // Update individual cards (both library title cards and series chapter cards)
     document.querySelectorAll('.comic-card, .chapter-card').forEach(card => {
         const id = card.dataset.id;
@@ -503,8 +508,90 @@ export function showAddToListModalForSeries(seriesId) {
     showAddToListModal();
 }
 
+function resolveSeriesIds(selectedIds) {
+    const seriesIds = new Set();
+    const allComics = state.comics || [];
+
+    for (const selectedId of selectedIds) {
+        const comic = allComics.find(c => c.id === selectedId || String(c.id) === String(selectedId));
+        if (comic && comic.series_id) {
+            seriesIds.add(comic.series_id);
+        } else {
+            const titleObj = findTitleInTree(selectedId);
+            if (titleObj && titleObj.id) {
+                seriesIds.add(titleObj.id);
+            } else {
+                const seriesComics = allComics.filter(c => c.series === selectedId);
+                if (seriesComics.length > 0 && seriesComics[0].series_id) {
+                    seriesIds.add(seriesComics[0].series_id);
+                } else if (/^\d+$/.test(String(selectedId))) {
+                    seriesIds.add(parseInt(selectedId));
+                }
+            }
+        }
+    }
+    return seriesIds;
+}
+
+export function showNsfwOverrideModal() {
+    if (!state.currentUser || state.currentUser.role !== 'admin') return;
+    if (!state.selectedIds || state.selectedIds.size === 0) {
+        showToast('No items selected', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('nsfw-override-modal');
+    const countText = document.getElementById('nsfw-override-count-text');
+    countText.textContent = `Set NSFW status for ${state.selectedIds.size} selected item${state.selectedIds.size !== 1 ? 's' : ''}:`;
+    modal.classList.add('active');
+}
+
+export function closeNsfwOverrideModal() {
+    const modal = document.getElementById('nsfw-override-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+export async function applyNsfwOverride(override) {
+    const seriesIds = resolveSeriesIds(state.selectedIds);
+
+    if (seriesIds.size === 0) {
+        showToast('No valid series found in selection', 'error');
+        return;
+    }
+
+    try {
+        const result = await apiPut('/api/admin/nsfw-override', {
+            series_ids: Array.from(seriesIds),
+            override: override
+        });
+
+        if (result.error) throw new Error(result.error);
+
+        closeNsfwOverrideModal();
+        const label = override === 1 ? 'NSFW' : override === 0 ? 'Safe' : 'Auto';
+        showToast(`Set ${result.updated} series to ${label}`, 'success');
+        clearSelection();
+
+        state.currentSeries = null;
+        if (window.loadLibrary) await window.loadLibrary();
+        if (window.updateLibraryView) window.updateLibraryView();
+    } catch (err) {
+        showToast('Failed to set NSFW override: ' + err.message, 'error');
+    }
+}
+
+export function showNsfwOverrideForSeries(seriesId) {
+    if (!state.currentUser || state.currentUser.role !== 'admin') return;
+    state.selectedIds = new Set([String(seriesId)]);
+    showNsfwOverrideModal();
+}
+
 window.showAddToListModal = showAddToListModal;
 window.closeAddToListModal = closeAddToListModal;
 window.toggleCreateListSection = toggleCreateListSection;
 window.handleAddToListConfirm = handleAddToListConfirm;
 window.showAddToListModalForSeries = showAddToListModalForSeries;
+window.showNsfwOverrideModal = showNsfwOverrideModal;
+window.closeNsfwOverrideModal = closeNsfwOverrideModal;
+window.applyNsfwOverride = applyNsfwOverride;
+window.showNsfwOverrideForSeries = showNsfwOverrideForSeries;

@@ -682,6 +682,7 @@ async function removeSingleHistory(comicId) {
 }
 
 // Global Exports for HTML
+window.loadLibrary = loadLibrary;
 window.getRawTitlesInLocation = getRawTitlesInLocation;
 window.getFoldersAtLevel = getFoldersAtLevel;
 window.getTitlesInLocation = getTitlesInLocation;

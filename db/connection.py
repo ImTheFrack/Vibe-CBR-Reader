@@ -4,7 +4,7 @@ from datetime import datetime
 from config import DB_PATH
 
 # Schema version for migration tracking
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -613,6 +613,12 @@ def init_db() -> None:
                 (key, value)
             )
      
+    if current_version < 16:
+        try:
+            conn.execute('ALTER TABLE series ADD COLUMN nsfw_override INTEGER DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass
+
     if current_version < SCHEMA_VERSION:
         conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     

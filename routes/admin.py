@@ -426,6 +426,60 @@ async def load_default_nsfw_config(admin_user: Dict[str, Any] = Depends(get_admi
         'available_subcategories': [row['subcategory'] for row in available_subcategories],
     }
 
+class NsfwOverrideRequest(BaseModel):
+    series_ids: List[int]
+    override: Optional[int] = None  # null=auto, 1=always NSFW, 0=always safe
+
+    @field_validator('override')
+    @classmethod
+    def validate_override(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v not in (0, 1):
+            raise ValueError('override must be null, 0, or 1')
+        return v
+
+@router.put("/nsfw-override")
+async def set_nsfw_override(
+    request: NsfwOverrideRequest,
+    admin_user: Dict[str, Any] = Depends(get_admin_user)
+) -> Dict[str, Any]:
+    if not request.series_ids:
+        raise HTTPException(status_code=400, detail="No series IDs provided")
+
+    conn = get_db_connection()
+    try:
+        placeholders = ','.join(['?'] * len(request.series_ids))
+
+        if request.override is not None:
+            # Forced override: set both nsfw_override and is_nsfw directly
+            conn.execute(
+                f'UPDATE series SET nsfw_override = ?, is_nsfw = ? WHERE id IN ({placeholders})',
+                [request.override, request.override] + request.series_ids
+            )
+            conn.commit()
+        else:
+            # Auto mode: clear override, then recompute only these series
+            conn.execute(
+                f'UPDATE series SET nsfw_override = NULL WHERE id IN ({placeholders})',
+                request.series_ids
+            )
+            conn.commit()
+
+            from db.nsfw import get_nsfw_config, determine_series_nsfw
+            nsfw_config = get_nsfw_config()
+            rows = conn.execute(
+                f'SELECT id, is_adult, category, subcategory, genres, tags, demographics FROM series WHERE id IN ({placeholders})',
+                request.series_ids
+            ).fetchall()
+            for row in rows:
+                is_nsfw = 1 if determine_series_nsfw(row, nsfw_config) else 0
+                conn.execute('UPDATE series SET is_nsfw = ? WHERE id = ?', (is_nsfw, row['id']))
+            conn.commit()
+    finally:
+        conn.close()
+
+    label = {None: 'auto', 1: 'NSFW', 0: 'safe'}[request.override]
+    return {'updated': len(request.series_ids), 'override': label}
+
 @router.get("/scan/status")
 async def get_scan_status(admin_user: Dict[str, Any] = Depends(get_admin_user)) -> Dict[str, Any]:
     """Get current scan progress"""

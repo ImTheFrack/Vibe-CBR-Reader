@@ -783,7 +783,26 @@
         <div class="selection-actions">
             <button class="btn-primary" onclick="handleBatchExport()">📦 Export as CBZ</button>
             <button class="btn-primary" onclick="showAddToListModal()">📋 Add to List</button>
+            <button class="btn-primary admin-only-btn" onclick="showNsfwOverrideModal()" style="display:none;">🔞 NSFW Override</button>
             <button class="btn-secondary" onclick="clearSelection()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- NSFW Override Modal -->
+    <div id="nsfw-override-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>NSFW Override</h3>
+                <button class="modal-close" onclick="closeNsfwOverrideModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="nsfw-override-count-text" style="margin-bottom: 1rem;"></p>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button class="btn-primary" onclick="applyNsfwOverride(1)" style="width: 100%;">🔞 Always NSFW</button>
+                    <button class="btn-primary" onclick="applyNsfwOverride(0)" style="width: 100%;">✅ Always Safe</button>
+                    <button class="btn-secondary" onclick="applyNsfwOverride(null)" style="width: 100%;">🔄 Auto (System Decides)</button>
+                </div>
+            </div>
         </div>
     </div>
 

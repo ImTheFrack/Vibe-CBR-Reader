@@ -107,13 +107,17 @@ def recompute_nsfw_flags(conn: sqlite3.Connection | None = None) -> None:
 
     nsfw_config = get_nsfw_config()
     rows: list[sqlite3.Row] = conn.execute(
-        'SELECT id, is_adult, category, subcategory, genres, tags, demographics FROM series'
+        'SELECT id, is_adult, category, subcategory, genres, tags, demographics, nsfw_override FROM series'
     ).fetchall()
 
     updates: list[tuple[int, int]] = []
     flagged = 0
     for row in rows:
-        is_nsfw = 1 if determine_series_nsfw(row, nsfw_config) else 0
+        override = row['nsfw_override']
+        if override is not None:
+            is_nsfw = int(override)
+        else:
+            is_nsfw = 1 if determine_series_nsfw(row, nsfw_config) else 0
         updates.append((is_nsfw, row['id']))
         if is_nsfw:
             flagged += 1
